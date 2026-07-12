@@ -1,0 +1,14 @@
+name: stack_avg_uniform__mtlch4m_x_stldr
+kind: stack
+
+ensemble:
+  strategy: average
+  bases:
+    - mtl_chemeleon_molformer_unimol2_graphmvp
+    - stl_dmpnn_rdkit
+  # weights 미지정 → 균등 1/K (K=2 → 0.5 / 0.5)
+
+notes: |
+  chemeleon 4-modality MTL + chemprop+RDKit STL
+  Uniform 1/K average. winning pair (mtl_dmpnn_grouped + stl_dmpnn_rdkit) 의 70/30
+  weight 가 다른 pair 에서도 최적인지 모르므로 fair baseline 으로 uniform 부터.

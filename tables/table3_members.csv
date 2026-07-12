@@ -1,0 +1,6 @@
+Member,Solo (within),Solo (cross),LOO Δ (within),LOO Δ (cross),Shapley (within),Shapley (cross)
+D-MPNN·MTL,0.605,0.685,+0.0577,+0.0605,0.208,0.209
+MoLFormer·MTL,0.554,0.644,+0.0592,+0.0468,0.185,0.189
+CheMeleon·STL,0.633,0.730,+0.0417,+0.0182,0.196,0.197
+MAP·STL,0.605,0.774,+0.0220,+0.0088,0.176,0.203
+GraphMVP·STL,0.416,0.524,-0.0051,-0.0130,0.088,0.099

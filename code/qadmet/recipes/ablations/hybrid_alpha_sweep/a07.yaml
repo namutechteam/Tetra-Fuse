@@ -1,0 +1,27 @@
+name: stack_hybrid_blend_a07
+kind: stack
+
+ensemble:
+  strategy: hybrid_blend
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  kwargs:
+    fit_split: val
+    split: test
+    alpha: 0.7
+    primary: smart_fallback
+    primary_kwargs:
+      winner_threshold: 0.5
+      fallback: average
+      eps: 1.0e-12
+      global_fit: false
+      unfit_strategy: uniform
+    secondary: average
+    secondary_kwargs:
+      weights: [0.7, 0.3]
+
+notes: |
+  Hybrid blend alpha sweep (alpha=0.7) — primary(=smart_fallback) 무게가 큼.
+  비교 대상: a03 / a05 (default, 옛 v6).
+  실행: qadmet stack --recipe recipes/ablations/hybrid_alpha_sweep/a07.yaml

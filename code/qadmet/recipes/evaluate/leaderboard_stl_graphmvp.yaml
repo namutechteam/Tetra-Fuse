@@ -1,0 +1,23 @@
+name: leaderboard_stl_graphmvp
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: stl_graphmvp_adaptivegnn_paper
+    target_kind: train
+    target_run_id: 35cabcde2605
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+  STL GraphMVP + AdapterGNN paper-faithful 런의 TDC leaderboard 랭킹 산출.
+  leaderboard_summary.ipynb 가 자동 수집하도록 leaderboard.csv 를 생성한다.
+  target = stl_graphmvp_adaptivegnn_paper / run=35cabcde2605 (유일 런, 22-task 완본).
+  산출물: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top 점수).

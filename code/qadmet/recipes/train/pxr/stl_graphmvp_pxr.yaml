@@ -1,0 +1,41 @@
+name: stl_graphmvp_pxr
+kind: train
+
+dataset: !include ../../_base/dataset/pxr_pec50_scaffold.yaml
+
+features:
+  graph: graphmvp
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: graphmvp
+    kwargs:
+      d_h: 300
+      checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+      num_layer: 5
+      emb_dim: 300
+      JK: last
+      adapter_kind: paper
+      adapter_bottleneck: 64
+      adapter_dropout: 0.0
+      use_edge_attr: true
+      pool: mean
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include ../../_base/loss/single_task.yaml
+
+trainer:
+  seeds: [1, 2, 3, 4, 5]
+  max_epochs: 30
+  patience: 5
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2

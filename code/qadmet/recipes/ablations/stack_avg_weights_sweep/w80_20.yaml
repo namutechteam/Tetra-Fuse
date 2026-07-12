@@ -1,0 +1,16 @@
+name: stack_average_80_20
+kind: stack
+
+ensemble:
+  strategy: average
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  kwargs:
+    split: test
+    weights: [0.8, 0.2]
+
+notes: |
+  Stack average weights sweep — MTL 강조 (80/20).
+  비교 대상: w50_50 / default ``stack_average_70_30``.
+  실행: qadmet stack --recipe recipes/ablations/stack_avg_weights_sweep/w80_20.yaml

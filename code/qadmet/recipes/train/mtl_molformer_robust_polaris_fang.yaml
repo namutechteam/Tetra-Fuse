@@ -1,0 +1,60 @@
+name: mtl_molformer_robust_polaris_fang
+kind: train
+# MoLFormer-LoRA MTL — Polaris ADME-Fang 6-task.
+# ★ molformer_tokens parquet 선행 필요: precompute_polaris_fang_molformer_tokens 실행 후 symlink.
+
+dataset: !include _base/dataset/polaris_fang_6_molformer.yaml
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: [molformer_tokens]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: molformer_lora
+    consumes: [molformer_tokens]
+    kwargs:
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.1
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 15
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  lr_lora: 0.00005
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  MoLFormer-LoRA MTL, Polaris ADME-Fang 6-task.
+  ⚠ molformer_tokens parquet 필요 (precompute 선행). MoLFormer-XL 84M base ckpt 필요.

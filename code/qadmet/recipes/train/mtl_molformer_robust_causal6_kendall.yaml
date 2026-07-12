@@ -1,0 +1,81 @@
+name: mtl_molformer_robust_causal6_kendall
+kind: train
+
+# MoLFormer-LoRA uni-backbone + Kendall UW (mixed_task_uncertainty) + causal6.
+#
+# mtl_chemeleon_robust_causal6_kendall.yaml 의 backbone 만 MoLFormer-LoRA 로 교체한 짝.
+# per-modality uni-backbone Kendall 비교 세트 (ch / gm / um / mf) 의 molformer 축.
+# loss / head / dataset / trainer 레짐은 ch/gm 과 동일 (20ep, patience 5).
+#
+# backbone kwargs 는 mtl_molformer_lora_gradnorm_lastlinear_causal6.yaml 에서 carry.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← 6-group causal
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: [molformer_tokens]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: molformer_lora
+    consumes: [molformer_tokens]
+    kwargs:
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.1
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4                 # ← ch recipe 와 동일 (robust_causal6 carry)
+
+loss:
+  type: mixed_task_uncertainty     # Kendall UW
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 20                   # mf best epoch 2~5 관측 (가장 빠른 수렴) → 20 넉넉
+  patience: 5
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16                   # ch recipe 와 동일 축 정렬 (molformer 는 상향 가능한 free knob)
+  lr: 0.0005                       # constant LR (head / GroupedHead trunk / Kendall log_vars)
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  lr_lora: 0.00005                 # MoLFormer LoRA q/v (분리 lr 유지)
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  MoLFormer-LoRA uni-backbone + Kendall UW + causal6 6-group.
+  per-modality 비교 세트의 molformer 축 (ch / gm / um / mf 중 mf).
+
+  수렴/예산 근거:
+    - mtl_molformer_lora_gradnorm_lastlinear_causal6 관측 best epoch = 5/2/5/4/2
+      (mean 3.6). 4 modality 중 가장 빨리 수렴 → 즉시 overfit 진입 경향.
+      20ep + patience 5 + head dropout 0.4 로 조기 종료가 핵심 (예산보다 정규화 중요).
+    - 단, 위는 GradNorm/Noam 런 — 본건 Kendall/const-LR 이라 수렴 시점 이동 가능.
+
+  ⚠ MoLFormer 84M base ckpt 필요 (molformer_lora backbone 내부 로드).
+
+  DDP (2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_molformer_robust_causal6_kendall.yaml \
+      --devices 2 --strategy ddp
+    - Kendall 단일 backward + MoLFormer 정적 forward → 추가 플래그 불필요
+      (gradnorm sibling 도 DDP 특이 플래그 요구 없었음). 이상 시 --find-unused-parameters.

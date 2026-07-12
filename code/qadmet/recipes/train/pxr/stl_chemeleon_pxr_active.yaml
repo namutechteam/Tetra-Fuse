@@ -1,0 +1,37 @@
+name: stl_chemeleon_pxr_active
+kind: train
+
+dataset: !include ../../_base/dataset/pxr_pec50_active.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_kind: paper
+      adapter_bottleneck: 128
+      adapter_dropout: 0.0
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include ../../_base/loss/single_task.yaml
+
+trainer:
+  seeds: [1, 2, 3, 4, 5]
+  max_epochs: 30
+  patience: 5
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2

@@ -1,0 +1,18 @@
+name: stack_bs_k5_smart__mtlchfilm_stlch_stlu2_stlmf_stlgm
+kind: stack
+ensemble:
+  strategy: smart_fallback
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+    - stl_unimol2_lora
+    - stl_molformer_lora
+    - stl_graphmvp_adaptivegnn
+  kwargs:
+    fit_split: val
+    split: test
+    winner_threshold: 0.5
+    fallback: average
+    eps: 1.0e-12
+    global_fit: false
+    unfit_strategy: uniform

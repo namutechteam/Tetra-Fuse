@@ -1,0 +1,50 @@
+name: stl_unimol2_lora
+kind: train
+
+dataset:
+  name: tdc_admet_22
+  split: scaffold_5seed
+  seeds: [1, 2, 3, 4, 5]
+  kwargs:
+    lmdb_path: data/embeddings/unimol2_features.lmdb
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: unimol2_lora
+    kwargs:
+      ckpt_path: data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt
+      model_size: 84m
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.1
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [1, 2, 3, 4, 5]
+  max_epochs: 20
+  patience: 5
+  precision: 32-true
+  early_stopping: true
+  batch_size: 16
+  lr: 0.001          # head / non-LoRA params
+  lr_lora: 0.00005   # LoRA 가중치 — 옛 run_stl_unimol2_lora.py 와 동일
+  num_workers: 2
+
+notes: |
+  옛 phase4 STL Uni-Mol2 84M + LoRA (linear_q/linear_v rank=16) 동등.
+  입력: 옛 precompute LMDB (data/embeddings/unimol2_features.lmdb) — 분자 별 vendored
+  ``mol2unimolv2`` 결과 dict 가 pickle 로 저장된 형태.
+  ETKDG 실패 분자는 LMDB 에 None — collate 가 제거 (배치가 빈 batch 면 step skip).
+  보조 modality 없음. MEMORY 의 "LoRA 우선" 방침에 따라 정확 동작 우선.
+  Step 3.6c 부터: trainer.lr_lora=5e-5 / lr=1e-3 분리 적용.

@@ -1,0 +1,24 @@
+name: leaderboard_stl_unimol2
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: stl_unimol2_lora
+    target_kind: train
+    target_run_id: b7a38af99538
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+  STL UniMol2-84M + LoRA (rank=16) 런의 TDC leaderboard 랭킹 산출.
+  leaderboard_summary.ipynb 가 자동 수집하도록 leaderboard.csv 를 생성한다.
+  target = stl_unimol2_lora / run=b7a38af99538 (05-18, bottleneck head, 22-task 완본,
+  best.ckpt 110 + HIA_Hou seed_1~3 best-v1.ckpt shadow 3 — 재실행 흔적).
+  산출물: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top 점수).

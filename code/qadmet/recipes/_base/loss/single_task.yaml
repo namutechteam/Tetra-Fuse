@@ -1,0 +1,5 @@
+type: single_task
+classification: bce_with_logits
+regression: masked_mse
+task_weighting: null
+kwargs: {}

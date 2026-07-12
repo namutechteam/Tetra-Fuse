@@ -1,0 +1,60 @@
+name: stl_graphmvp_adaptivegnn
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: graphmvp
+    kwargs:
+      d_h: 300
+      checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+      num_layer: 5
+      emb_dim: 300
+      JK: last
+      adapter_bottleneck: 64
+      adapter_dropout: 0.0
+      use_edge_attr: true
+      pool: mean
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [1, 2, 3, 4, 5]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2
+
+notes: |
+  STL GraphMVP (frozen GraphMVP_hybrid GIN + AdaptorGNN trainable).
+  4-modality MTL recipe 와 동일 backbone 설정 (regression variant 가중치, OGB 9-d atom
+  / 3-d bond feat, JK=last, mean pool) → MTL ↔ STL fair 비교용.
+
+  graphmvp 는 STL 의 **primary** backbone — fusion 없음 → embeddings=[] 로 두고
+  ``consumes`` 도 비워둔다 (MTL 처럼 extra_backbone 으로 들어갈 때만 consumes 사용).
+  collate (``prepare_stl_graphmvp_loaders``) 가 SMILES → PyG Batch 를 ``batch['graphmvp_data']``
+  최상위 키에 넣고, graphmvp adapter 가 그걸 받는 구조.
+
+  graphmvp synthetic modality — collate 가 SMILES → PyG Batch 즉석 변환 (LMDB precompute
+  불필요). invalid SMILES 는 1-atom placeholder + presence=False (STL 단일 backbone 에선
+  presence mask 무의미; 어차피 forward 자체는 안전).
+
+  AdaptorGNN(Linear 300→300 + ReLU) + linear head 만 학습 → lr=1e-3 단일. 90K param
+  초소형 adaptor 라 학습 신호 약함 → 1차 30/5 학습에서 60% 미수렴 → max_epochs=100,
+  patience=20 (dmpnn STL default 와 동일) 으로 갱신 (2026-05-08).
+
+  ⚠ 가중치 다운로드 필요 (data/weights/graphmvp/graphmvp_hybrid.pth — 없으면 random-init).

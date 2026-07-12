@@ -1,0 +1,12 @@
+name: precompute_pxr_unimol2_lmdb
+kind: precompute
+dataset:
+  name: pxr_4task
+  split: scaffold_5seed
+  seeds: [1]
+features:
+  embeddings:
+    - unimol2_lmdb
+notes: |
+  PXR SMILES 의 Uni-Mol2 84M LoRA-ready feature LMDB.
+  ETKDG 실패 분자는 status sidecar 로 표시.

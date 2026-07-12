@@ -1,0 +1,1667 @@
+{
+  "t1": [
+    {
+      "group": "oral_uptake",
+      "dataset": "Caco2_Wang",
+      "n": "910",
+      "metric": "mae",
+      "mtl_dmpnn": {
+        "raw": 0.322,
+        "norm": 0.62
+      },
+      "mtl_chemeleon": {
+        "raw": 0.359,
+        "norm": 0.38
+      },
+      "mtl_graphmvp": {
+        "raw": 0.393,
+        "norm": 0.38
+      },
+      "mtl_molformer": {
+        "raw": 0.401,
+        "norm": 0.29
+      },
+      "stl_dmpnn": {
+        "raw": 0.463,
+        "norm": 0.25
+      },
+      "stl_chemeleon": {
+        "raw": 0.462,
+        "norm": 0.25
+      },
+      "stl_graphmvp": {
+        "raw": 0.432,
+        "norm": 0.29
+      },
+      "stl_molformer": {
+        "raw": 0.42,
+        "norm": 0.29
+      }
+    },
+    {
+      "group": "oral_uptake",
+      "dataset": "HIA_Hou",
+      "n": "578",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.991,
+        "norm": 0.95
+      },
+      "mtl_chemeleon": {
+        "raw": 0.988,
+        "norm": 0.8
+      },
+      "mtl_graphmvp": {
+        "raw": 0.929,
+        "norm": 0.2
+      },
+      "mtl_molformer": {
+        "raw": 0.981,
+        "norm": 0.6
+      },
+      "stl_dmpnn": {
+        "raw": 0.851,
+        "norm": 0.1
+      },
+      "stl_chemeleon": {
+        "raw": 0.958,
+        "norm": 0.35
+      },
+      "stl_graphmvp": {
+        "raw": 0.953,
+        "norm": 0.35
+      },
+      "stl_molformer": {
+        "raw": 0.977,
+        "norm": 0.55
+      }
+    },
+    {
+      "group": "oral_uptake",
+      "dataset": "Solubility_AqSolDB",
+      "n": "9982",
+      "metric": "mae",
+      "mtl_dmpnn": {
+        "raw": 0.822,
+        "norm": 0.61
+      },
+      "mtl_chemeleon": {
+        "raw": 0.95,
+        "norm": 0.28
+      },
+      "mtl_graphmvp": {
+        "raw": 0.983,
+        "norm": 0.28
+      },
+      "mtl_molformer": {
+        "raw": 0.916,
+        "norm": 0.39
+      },
+      "stl_dmpnn": {
+        "raw": 1.102,
+        "norm": 0.06
+      },
+      "stl_chemeleon": {
+        "raw": 0.828,
+        "norm": 0.5
+      },
+      "stl_graphmvp": {
+        "raw": 0.897,
+        "norm": 0.44
+      },
+      "stl_molformer": {
+        "raw": 0.868,
+        "norm": 0.44
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "BBB_Martins",
+      "n": "2030",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.897,
+        "norm": 0.54
+      },
+      "mtl_chemeleon": {
+        "raw": 0.909,
+        "norm": 0.73
+      },
+      "mtl_graphmvp": {
+        "raw": 0.889,
+        "norm": 0.38
+      },
+      "mtl_molformer": {
+        "raw": 0.903,
+        "norm": 0.62
+      },
+      "stl_dmpnn": {
+        "raw": 0.722,
+        "norm": 0.0
+      },
+      "stl_chemeleon": {
+        "raw": 0.892,
+        "norm": 0.5
+      },
+      "stl_graphmvp": {
+        "raw": 0.879,
+        "norm": 0.38
+      },
+      "stl_molformer": {
+        "raw": 0.864,
+        "norm": 0.31
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "Lipophilicity_AstraZeneca",
+      "n": "4200",
+      "metric": "mae",
+      "mtl_dmpnn": {
+        "raw": 0.516,
+        "norm": 0.71
+      },
+      "mtl_chemeleon": {
+        "raw": 0.58,
+        "norm": 0.29
+      },
+      "mtl_graphmvp": {
+        "raw": 0.603,
+        "norm": 0.29
+      },
+      "mtl_molformer": {
+        "raw": 0.639,
+        "norm": 0.14
+      },
+      "stl_dmpnn": {
+        "raw": 0.592,
+        "norm": 0.29
+      },
+      "stl_chemeleon": {
+        "raw": 0.471,
+        "norm": 0.86
+      },
+      "stl_graphmvp": {
+        "raw": 0.47,
+        "norm": 0.9
+      },
+      "stl_molformer": {
+        "raw": 0.564,
+        "norm": 0.38
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "PPBR_AZ",
+      "n": "2790",
+      "metric": "mae",
+      "mtl_dmpnn": {
+        "raw": 7.112,
+        "norm": 1.0
+      },
+      "mtl_chemeleon": {
+        "raw": 7.544,
+        "norm": 0.9
+      },
+      "mtl_graphmvp": {
+        "raw": 7.535,
+        "norm": 0.9
+      },
+      "mtl_molformer": {
+        "raw": 8.054,
+        "norm": 0.65
+      },
+      "stl_dmpnn": {
+        "raw": 10.253,
+        "norm": 0.1
+      },
+      "stl_chemeleon": {
+        "raw": 7.834,
+        "norm": 0.75
+      },
+      "stl_graphmvp": {
+        "raw": 7.957,
+        "norm": 0.7
+      },
+      "stl_molformer": {
+        "raw": 8.241,
+        "norm": 0.6
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "VDss_Lombardo",
+      "n": "1130",
+      "metric": "spearman",
+      "mtl_dmpnn": {
+        "raw": 0.624,
+        "norm": 0.79
+      },
+      "mtl_chemeleon": {
+        "raw": 0.606,
+        "norm": 0.74
+      },
+      "mtl_graphmvp": {
+        "raw": 0.582,
+        "norm": 0.68
+      },
+      "mtl_molformer": {
+        "raw": 0.574,
+        "norm": 0.68
+      },
+      "stl_dmpnn": {
+        "raw": 0.585,
+        "norm": 0.74
+      },
+      "stl_chemeleon": {
+        "raw": 0.669,
+        "norm": 0.89
+      },
+      "stl_graphmvp": {
+        "raw": 0.605,
+        "norm": 0.74
+      },
+      "stl_molformer": {
+        "raw": 0.605,
+        "norm": 0.74
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP2C9_Veith",
+      "n": "12092",
+      "metric": "auprc",
+      "mtl_dmpnn": {
+        "raw": 0.741,
+        "norm": 0.3
+      },
+      "mtl_chemeleon": {
+        "raw": 0.769,
+        "norm": 0.6
+      },
+      "mtl_graphmvp": {
+        "raw": 0.741,
+        "norm": 0.3
+      },
+      "mtl_molformer": {
+        "raw": 0.756,
+        "norm": 0.5
+      },
+      "stl_dmpnn": {
+        "raw": 0.717,
+        "norm": 0.2
+      },
+      "stl_chemeleon": {
+        "raw": 0.766,
+        "norm": 0.55
+      },
+      "stl_graphmvp": {
+        "raw": 0.746,
+        "norm": 0.35
+      },
+      "stl_molformer": {
+        "raw": 0.756,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP2D6_Veith",
+      "n": "13130",
+      "metric": "auprc",
+      "mtl_dmpnn": {
+        "raw": 0.67,
+        "norm": 0.58
+      },
+      "mtl_chemeleon": {
+        "raw": 0.681,
+        "norm": 0.63
+      },
+      "mtl_graphmvp": {
+        "raw": 0.647,
+        "norm": 0.47
+      },
+      "mtl_molformer": {
+        "raw": 0.65,
+        "norm": 0.53
+      },
+      "stl_dmpnn": {
+        "raw": 0.593,
+        "norm": 0.21
+      },
+      "stl_chemeleon": {
+        "raw": 0.64,
+        "norm": 0.37
+      },
+      "stl_graphmvp": {
+        "raw": 0.638,
+        "norm": 0.37
+      },
+      "stl_molformer": {
+        "raw": 0.642,
+        "norm": 0.37
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP3A4_Veith",
+      "n": "12328",
+      "metric": "auprc",
+      "mtl_dmpnn": {
+        "raw": 0.827,
+        "norm": 0.21
+      },
+      "mtl_chemeleon": {
+        "raw": 0.868,
+        "norm": 0.58
+      },
+      "mtl_graphmvp": {
+        "raw": 0.833,
+        "norm": 0.26
+      },
+      "mtl_molformer": {
+        "raw": 0.83,
+        "norm": 0.26
+      },
+      "stl_dmpnn": {
+        "raw": 0.823,
+        "norm": 0.16
+      },
+      "stl_chemeleon": {
+        "raw": 0.87,
+        "norm": 0.58
+      },
+      "stl_graphmvp": {
+        "raw": 0.854,
+        "norm": 0.42
+      },
+      "stl_molformer": {
+        "raw": 0.834,
+        "norm": 0.26
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "Pgp_Broccatelli",
+      "n": "1218",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.909,
+        "norm": 0.56
+      },
+      "mtl_chemeleon": {
+        "raw": 0.923,
+        "norm": 0.62
+      },
+      "mtl_graphmvp": {
+        "raw": 0.92,
+        "norm": 0.62
+      },
+      "mtl_molformer": {
+        "raw": 0.908,
+        "norm": 0.5
+      },
+      "stl_dmpnn": {
+        "raw": 0.85,
+        "norm": 0.12
+      },
+      "stl_chemeleon": {
+        "raw": 0.937,
+        "norm": 0.94
+      },
+      "stl_graphmvp": {
+        "raw": 0.88,
+        "norm": 0.25
+      },
+      "stl_molformer": {
+        "raw": 0.902,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "hERG",
+      "n": "655",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.846,
+        "norm": 0.7
+      },
+      "mtl_chemeleon": {
+        "raw": 0.844,
+        "norm": 0.7
+      },
+      "mtl_graphmvp": {
+        "raw": 0.802,
+        "norm": 0.5
+      },
+      "mtl_molformer": {
+        "raw": 0.883,
+        "norm": 1.0
+      },
+      "stl_dmpnn": {
+        "raw": 0.769,
+        "norm": 0.45
+      },
+      "stl_chemeleon": {
+        "raw": 0.865,
+        "norm": 0.8
+      },
+      "stl_graphmvp": {
+        "raw": 0.77,
+        "norm": 0.45
+      },
+      "stl_molformer": {
+        "raw": 0.802,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP2C9_Substrate_CarbonMangels",
+      "n": "669",
+      "metric": "auprc",
+      "mtl_dmpnn": {
+        "raw": 0.477,
+        "norm": 1.0
+      },
+      "mtl_chemeleon": {
+        "raw": 0.429,
+        "norm": 0.75
+      },
+      "mtl_graphmvp": {
+        "raw": 0.457,
+        "norm": 0.95
+      },
+      "mtl_molformer": {
+        "raw": 0.419,
+        "norm": 0.75
+      },
+      "stl_dmpnn": {
+        "raw": 0.355,
+        "norm": 0.15
+      },
+      "stl_chemeleon": {
+        "raw": 0.427,
+        "norm": 0.75
+      },
+      "stl_graphmvp": {
+        "raw": 0.377,
+        "norm": 0.35
+      },
+      "stl_molformer": {
+        "raw": 0.392,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP2D6_Substrate_CarbonMangels",
+      "n": "667",
+      "metric": "auprc",
+      "mtl_dmpnn": {
+        "raw": 0.651,
+        "norm": 0.39
+      },
+      "mtl_chemeleon": {
+        "raw": 0.66,
+        "norm": 0.39
+      },
+      "mtl_graphmvp": {
+        "raw": 0.684,
+        "norm": 0.5
+      },
+      "mtl_molformer": {
+        "raw": 0.705,
+        "norm": 0.78
+      },
+      "stl_dmpnn": {
+        "raw": 0.549,
+        "norm": 0.17
+      },
+      "stl_chemeleon": {
+        "raw": 0.685,
+        "norm": 0.5
+      },
+      "stl_graphmvp": {
+        "raw": 0.566,
+        "norm": 0.17
+      },
+      "stl_molformer": {
+        "raw": 0.655,
+        "norm": 0.39
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP3A4_Substrate_CarbonMangels",
+      "n": "670",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.651,
+        "norm": 0.79
+      },
+      "mtl_chemeleon": {
+        "raw": 0.666,
+        "norm": 0.95
+      },
+      "mtl_graphmvp": {
+        "raw": 0.689,
+        "norm": 1.0
+      },
+      "mtl_molformer": {
+        "raw": 0.664,
+        "norm": 0.95
+      },
+      "stl_dmpnn": {
+        "raw": 0.579,
+        "norm": 0.11
+      },
+      "stl_chemeleon": {
+        "raw": 0.634,
+        "norm": 0.58
+      },
+      "stl_graphmvp": {
+        "raw": 0.604,
+        "norm": 0.26
+      },
+      "stl_molformer": {
+        "raw": 0.599,
+        "norm": 0.26
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "Clearance_Hepatocyte_AZ",
+      "n": "1213",
+      "metric": "spearman",
+      "mtl_dmpnn": {
+        "raw": 0.426,
+        "norm": 0.44
+      },
+      "mtl_chemeleon": {
+        "raw": 0.448,
+        "norm": 0.83
+      },
+      "mtl_graphmvp": {
+        "raw": 0.485,
+        "norm": 0.89
+      },
+      "mtl_molformer": {
+        "raw": 0.556,
+        "norm": 1.0
+      },
+      "stl_dmpnn": {
+        "raw": 0.382,
+        "norm": 0.28
+      },
+      "stl_chemeleon": {
+        "raw": 0.464,
+        "norm": 0.83
+      },
+      "stl_graphmvp": {
+        "raw": 0.417,
+        "norm": 0.39
+      },
+      "stl_molformer": {
+        "raw": 0.517,
+        "norm": 0.94
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "Clearance_Microsome_AZ",
+      "n": "1102",
+      "metric": "spearman",
+      "mtl_dmpnn": {
+        "raw": 0.595,
+        "norm": 0.65
+      },
+      "mtl_chemeleon": {
+        "raw": 0.616,
+        "norm": 0.75
+      },
+      "mtl_graphmvp": {
+        "raw": 0.608,
+        "norm": 0.75
+      },
+      "mtl_molformer": {
+        "raw": 0.607,
+        "norm": 0.75
+      },
+      "stl_dmpnn": {
+        "raw": 0.5,
+        "norm": 0.15
+      },
+      "stl_chemeleon": {
+        "raw": 0.605,
+        "norm": 0.75
+      },
+      "stl_graphmvp": {
+        "raw": 0.547,
+        "norm": 0.3
+      },
+      "stl_molformer": {
+        "raw": 0.562,
+        "norm": 0.45
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "AMES",
+      "n": "7278",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.821,
+        "norm": 0.3
+      },
+      "mtl_chemeleon": {
+        "raw": 0.848,
+        "norm": 0.65
+      },
+      "mtl_graphmvp": {
+        "raw": 0.82,
+        "norm": 0.3
+      },
+      "mtl_molformer": {
+        "raw": 0.823,
+        "norm": 0.3
+      },
+      "stl_dmpnn": {
+        "raw": 0.812,
+        "norm": 0.2
+      },
+      "stl_chemeleon": {
+        "raw": 0.84,
+        "norm": 0.45
+      },
+      "stl_graphmvp": {
+        "raw": 0.802,
+        "norm": 0.2
+      },
+      "stl_molformer": {
+        "raw": 0.821,
+        "norm": 0.3
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "DILI",
+      "n": "475",
+      "metric": "auroc",
+      "mtl_dmpnn": {
+        "raw": 0.929,
+        "norm": 0.95
+      },
+      "mtl_chemeleon": {
+        "raw": 0.904,
+        "norm": 0.65
+      },
+      "mtl_graphmvp": {
+        "raw": 0.905,
+        "norm": 0.65
+      },
+      "mtl_molformer": {
+        "raw": 0.896,
+        "norm": 0.6
+      },
+      "stl_dmpnn": {
+        "raw": 0.878,
+        "norm": 0.4
+      },
+      "stl_chemeleon": {
+        "raw": 0.902,
+        "norm": 0.65
+      },
+      "stl_graphmvp": {
+        "raw": 0.873,
+        "norm": 0.35
+      },
+      "stl_molformer": {
+        "raw": 0.901,
+        "norm": 0.65
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "LD50_Zhu",
+      "n": "7385",
+      "metric": "mae",
+      "mtl_dmpnn": {
+        "raw": 0.69,
+        "norm": 0.0
+      },
+      "mtl_chemeleon": {
+        "raw": 0.687,
+        "norm": 0.0
+      },
+      "mtl_graphmvp": {
+        "raw": 0.708,
+        "norm": 0.0
+      },
+      "mtl_molformer": {
+        "raw": 0.703,
+        "norm": 0.0
+      },
+      "stl_dmpnn": {
+        "raw": 0.689,
+        "norm": 0.0
+      },
+      "stl_chemeleon": {
+        "raw": 0.565,
+        "norm": 0.95
+      },
+      "stl_graphmvp": {
+        "raw": 0.621,
+        "norm": 0.73
+      },
+      "stl_molformer": {
+        "raw": 0.675,
+        "norm": 0.18
+      }
+    },
+    {
+      "group": "composite_exposure",
+      "dataset": "Half_Life_Obach",
+      "n": "667",
+      "metric": "spearman",
+      "mtl_dmpnn": {
+        "raw": 0.525,
+        "norm": 0.75
+      },
+      "mtl_chemeleon": {
+        "raw": 0.493,
+        "norm": 0.7
+      },
+      "mtl_graphmvp": {
+        "raw": 0.418,
+        "norm": 0.6
+      },
+      "mtl_molformer": {
+        "raw": 0.479,
+        "norm": 0.65
+      },
+      "stl_dmpnn": {
+        "raw": 0.373,
+        "norm": 0.55
+      },
+      "stl_chemeleon": {
+        "raw": 0.51,
+        "norm": 0.75
+      },
+      "stl_graphmvp": {
+        "raw": 0.383,
+        "norm": 0.55
+      },
+      "stl_molformer": {
+        "raw": 0.464,
+        "norm": 0.65
+      }
+    }
+  ],
+  "t3": [
+    {
+      "group": "oral_uptake",
+      "dataset": "Caco2_Wang",
+      "metric": "mae",
+      "mtl_map": {
+        "raw": 0.444,
+        "norm": 0.29
+      },
+      "mtl_mean": {
+        "raw": 0.384,
+        "norm": 0.38
+      },
+      "mtl_max": {
+        "raw": 0.359,
+        "norm": 0.38
+      },
+      "stl_map": {
+        "raw": 0.371,
+        "norm": 0.38
+      },
+      "stl_mean": {
+        "raw": 0.438,
+        "norm": 0.29
+      },
+      "stl_max": {
+        "raw": 0.42,
+        "norm": 0.29
+      }
+    },
+    {
+      "group": "oral_uptake",
+      "dataset": "HIA_Hou",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.987,
+        "norm": 0.8
+      },
+      "mtl_mean": {
+        "raw": 0.966,
+        "norm": 0.4
+      },
+      "mtl_max": {
+        "raw": 0.988,
+        "norm": 0.8
+      },
+      "stl_map": {
+        "raw": 0.97,
+        "norm": 0.4
+      },
+      "stl_mean": {
+        "raw": 0.963,
+        "norm": 0.35
+      },
+      "stl_max": {
+        "raw": 0.977,
+        "norm": 0.55
+      }
+    },
+    {
+      "group": "oral_uptake",
+      "dataset": "Solubility_AqSolDB",
+      "metric": "mae",
+      "mtl_map": {
+        "raw": 0.931,
+        "norm": 0.39
+      },
+      "mtl_mean": {
+        "raw": 0.95,
+        "norm": 0.28
+      },
+      "mtl_max": {
+        "raw": 0.916,
+        "norm": 0.39
+      },
+      "stl_map": {
+        "raw": 0.844,
+        "norm": 0.44
+      },
+      "stl_mean": {
+        "raw": 0.864,
+        "norm": 0.44
+      },
+      "stl_max": {
+        "raw": 0.828,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "BBB_Martins",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.911,
+        "norm": 0.77
+      },
+      "mtl_mean": {
+        "raw": 0.9,
+        "norm": 0.54
+      },
+      "mtl_max": {
+        "raw": 0.909,
+        "norm": 0.73
+      },
+      "stl_map": {
+        "raw": 0.893,
+        "norm": 0.5
+      },
+      "stl_mean": {
+        "raw": 0.878,
+        "norm": 0.38
+      },
+      "stl_max": {
+        "raw": 0.892,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "Lipophilicity_AstraZeneca",
+      "metric": "mae",
+      "mtl_map": {
+        "raw": 0.616,
+        "norm": 0.29
+      },
+      "mtl_mean": {
+        "raw": 0.607,
+        "norm": 0.29
+      },
+      "mtl_max": {
+        "raw": 0.58,
+        "norm": 0.29
+      },
+      "stl_map": {
+        "raw": 0.481,
+        "norm": 0.81
+      },
+      "stl_mean": {
+        "raw": 0.501,
+        "norm": 0.81
+      },
+      "stl_max": {
+        "raw": 0.47,
+        "norm": 0.9
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "PPBR_AZ",
+      "metric": "mae",
+      "mtl_map": {
+        "raw": 7.833,
+        "norm": 0.75
+      },
+      "mtl_mean": {
+        "raw": 7.711,
+        "norm": 0.8
+      },
+      "mtl_max": {
+        "raw": 7.535,
+        "norm": 0.9
+      },
+      "stl_map": {
+        "raw": 7.796,
+        "norm": 0.75
+      },
+      "stl_mean": {
+        "raw": 8.011,
+        "norm": 0.65
+      },
+      "stl_max": {
+        "raw": 7.834,
+        "norm": 0.75
+      }
+    },
+    {
+      "group": "distribution_cns",
+      "dataset": "VDss_Lombardo",
+      "metric": "spearman",
+      "mtl_map": {
+        "raw": 0.576,
+        "norm": 0.68
+      },
+      "mtl_mean": {
+        "raw": 0.587,
+        "norm": 0.74
+      },
+      "mtl_max": {
+        "raw": 0.606,
+        "norm": 0.74
+      },
+      "stl_map": {
+        "raw": 0.681,
+        "norm": 0.89
+      },
+      "stl_mean": {
+        "raw": 0.626,
+        "norm": 0.79
+      },
+      "stl_max": {
+        "raw": 0.669,
+        "norm": 0.89
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP2C9_Veith",
+      "metric": "auprc",
+      "mtl_map": {
+        "raw": 0.76,
+        "norm": 0.55
+      },
+      "mtl_mean": {
+        "raw": 0.755,
+        "norm": 0.5
+      },
+      "mtl_max": {
+        "raw": 0.769,
+        "norm": 0.6
+      },
+      "stl_map": {
+        "raw": 0.774,
+        "norm": 0.6
+      },
+      "stl_mean": {
+        "raw": 0.756,
+        "norm": 0.5
+      },
+      "stl_max": {
+        "raw": 0.766,
+        "norm": 0.55
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP2D6_Veith",
+      "metric": "auprc",
+      "mtl_map": {
+        "raw": 0.682,
+        "norm": 0.63
+      },
+      "mtl_mean": {
+        "raw": 0.66,
+        "norm": 0.53
+      },
+      "mtl_max": {
+        "raw": 0.681,
+        "norm": 0.63
+      },
+      "stl_map": {
+        "raw": 0.671,
+        "norm": 0.58
+      },
+      "stl_mean": {
+        "raw": 0.64,
+        "norm": 0.37
+      },
+      "stl_max": {
+        "raw": 0.642,
+        "norm": 0.37
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "CYP3A4_Veith",
+      "metric": "auprc",
+      "mtl_map": {
+        "raw": 0.857,
+        "norm": 0.47
+      },
+      "mtl_mean": {
+        "raw": 0.844,
+        "norm": 0.32
+      },
+      "mtl_max": {
+        "raw": 0.868,
+        "norm": 0.58
+      },
+      "stl_map": {
+        "raw": 0.862,
+        "norm": 0.47
+      },
+      "stl_mean": {
+        "raw": 0.853,
+        "norm": 0.42
+      },
+      "stl_max": {
+        "raw": 0.87,
+        "norm": 0.58
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "Pgp_Broccatelli",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.925,
+        "norm": 0.69
+      },
+      "mtl_mean": {
+        "raw": 0.917,
+        "norm": 0.56
+      },
+      "mtl_max": {
+        "raw": 0.923,
+        "norm": 0.62
+      },
+      "stl_map": {
+        "raw": 0.905,
+        "norm": 0.5
+      },
+      "stl_mean": {
+        "raw": 0.907,
+        "norm": 0.5
+      },
+      "stl_max": {
+        "raw": 0.937,
+        "norm": 0.94
+      }
+    },
+    {
+      "group": "interaction_liabilities",
+      "dataset": "hERG",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.866,
+        "norm": 0.8
+      },
+      "mtl_mean": {
+        "raw": 0.843,
+        "norm": 0.7
+      },
+      "mtl_max": {
+        "raw": 0.883,
+        "norm": 1.0
+      },
+      "stl_map": {
+        "raw": 0.825,
+        "norm": 0.5
+      },
+      "stl_mean": {
+        "raw": 0.812,
+        "norm": 0.5
+      },
+      "stl_max": {
+        "raw": 0.865,
+        "norm": 0.8
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP2C9_Substrate_CarbonMangels",
+      "metric": "auprc",
+      "mtl_map": {
+        "raw": 0.453,
+        "norm": 0.95
+      },
+      "mtl_mean": {
+        "raw": 0.435,
+        "norm": 0.8
+      },
+      "mtl_max": {
+        "raw": 0.457,
+        "norm": 0.95
+      },
+      "stl_map": {
+        "raw": 0.413,
+        "norm": 0.6
+      },
+      "stl_mean": {
+        "raw": 0.399,
+        "norm": 0.55
+      },
+      "stl_max": {
+        "raw": 0.427,
+        "norm": 0.75
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP2D6_Substrate_CarbonMangels",
+      "metric": "auprc",
+      "mtl_map": {
+        "raw": 0.671,
+        "norm": 0.39
+      },
+      "mtl_mean": {
+        "raw": 0.683,
+        "norm": 0.5
+      },
+      "mtl_max": {
+        "raw": 0.705,
+        "norm": 0.78
+      },
+      "stl_map": {
+        "raw": 0.649,
+        "norm": 0.39
+      },
+      "stl_mean": {
+        "raw": 0.635,
+        "norm": 0.39
+      },
+      "stl_max": {
+        "raw": 0.685,
+        "norm": 0.5
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "CYP3A4_Substrate_CarbonMangels",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.668,
+        "norm": 1.0
+      },
+      "mtl_mean": {
+        "raw": 0.673,
+        "norm": 1.0
+      },
+      "mtl_max": {
+        "raw": 0.689,
+        "norm": 1.0
+      },
+      "stl_map": {
+        "raw": 0.638,
+        "norm": 0.58
+      },
+      "stl_mean": {
+        "raw": 0.612,
+        "norm": 0.37
+      },
+      "stl_max": {
+        "raw": 0.634,
+        "norm": 0.58
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "Clearance_Hepatocyte_AZ",
+      "metric": "spearman",
+      "mtl_map": {
+        "raw": 0.561,
+        "norm": 1.0
+      },
+      "mtl_mean": {
+        "raw": 0.497,
+        "norm": 0.89
+      },
+      "mtl_max": {
+        "raw": 0.556,
+        "norm": 1.0
+      },
+      "stl_map": {
+        "raw": 0.502,
+        "norm": 0.94
+      },
+      "stl_mean": {
+        "raw": 0.466,
+        "norm": 0.83
+      },
+      "stl_max": {
+        "raw": 0.517,
+        "norm": 0.94
+      }
+    },
+    {
+      "group": "metabolic_turnover",
+      "dataset": "Clearance_Microsome_AZ",
+      "metric": "spearman",
+      "mtl_map": {
+        "raw": 0.614,
+        "norm": 0.75
+      },
+      "mtl_mean": {
+        "raw": 0.611,
+        "norm": 0.75
+      },
+      "mtl_max": {
+        "raw": 0.616,
+        "norm": 0.75
+      },
+      "stl_map": {
+        "raw": 0.599,
+        "norm": 0.75
+      },
+      "stl_mean": {
+        "raw": 0.572,
+        "norm": 0.45
+      },
+      "stl_max": {
+        "raw": 0.605,
+        "norm": 0.75
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "AMES",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.842,
+        "norm": 0.45
+      },
+      "mtl_mean": {
+        "raw": 0.831,
+        "norm": 0.4
+      },
+      "mtl_max": {
+        "raw": 0.848,
+        "norm": 0.65
+      },
+      "stl_map": {
+        "raw": 0.833,
+        "norm": 0.4
+      },
+      "stl_mean": {
+        "raw": 0.821,
+        "norm": 0.3
+      },
+      "stl_max": {
+        "raw": 0.84,
+        "norm": 0.45
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "DILI",
+      "metric": "auroc",
+      "mtl_map": {
+        "raw": 0.91,
+        "norm": 0.75
+      },
+      "mtl_mean": {
+        "raw": 0.902,
+        "norm": 0.65
+      },
+      "mtl_max": {
+        "raw": 0.905,
+        "norm": 0.65
+      },
+      "stl_map": {
+        "raw": 0.899,
+        "norm": 0.6
+      },
+      "stl_mean": {
+        "raw": 0.892,
+        "norm": 0.6
+      },
+      "stl_max": {
+        "raw": 0.902,
+        "norm": 0.65
+      }
+    },
+    {
+      "group": "distal_safety",
+      "dataset": "LD50_Zhu",
+      "metric": "mae",
+      "mtl_map": {
+        "raw": 0.703,
+        "norm": 0.0
+      },
+      "mtl_mean": {
+        "raw": 0.699,
+        "norm": 0.0
+      },
+      "mtl_max": {
+        "raw": 0.687,
+        "norm": 0.0
+      },
+      "stl_map": {
+        "raw": 0.559,
+        "norm": 0.95
+      },
+      "stl_mean": {
+        "raw": 0.62,
+        "norm": 0.73
+      },
+      "stl_max": {
+        "raw": 0.565,
+        "norm": 0.95
+      }
+    },
+    {
+      "group": "composite_exposure",
+      "dataset": "Half_Life_Obach",
+      "metric": "spearman",
+      "mtl_map": {
+        "raw": 0.471,
+        "norm": 0.65
+      },
+      "mtl_mean": {
+        "raw": 0.463,
+        "norm": 0.65
+      },
+      "mtl_max": {
+        "raw": 0.493,
+        "norm": 0.7
+      },
+      "stl_map": {
+        "raw": 0.511,
+        "norm": 0.75
+      },
+      "stl_mean": {
+        "raw": 0.452,
+        "norm": 0.65
+      },
+      "stl_max": {
+        "raw": 0.51,
+        "norm": 0.75
+      }
+    }
+  ],
+  "t4": [
+    {
+      "task": "HIA_Hou",
+      "metric": "auroc",
+      "within_score": 0.99177,
+      "within_norm": 0.95,
+      "within_rank": 2,
+      "cross_score": 0.993416,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "Pgp_Broccatelli",
+      "metric": "auroc",
+      "within_score": 0.935191,
+      "within_norm": 0.9375,
+      "within_rank": 2,
+      "cross_score": 0.939549,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "Bioavailability_Ma",
+      "metric": "auroc",
+      "within_score": 0.708946,
+      "within_norm": 0,
+      "within_rank": 21,
+      "cross_score": 0.709012,
+      "cross_norm": 0,
+      "cross_rank": 21
+    },
+    {
+      "task": "BBB_Martins",
+      "metric": "auroc",
+      "within_score": 0.912871,
+      "within_norm": 0.807692,
+      "within_rank": 6,
+      "cross_score": 0.915416,
+      "cross_norm": 0.884615,
+      "cross_rank": 4
+    },
+    {
+      "task": "CYP2C9_Veith",
+      "metric": "auprc",
+      "within_score": 0.785247,
+      "within_norm": 0.7,
+      "within_rank": 7,
+      "cross_score": 0.789991,
+      "cross_norm": 0.8,
+      "cross_rank": 5
+    },
+    {
+      "task": "CYP2D6_Veith",
+      "metric": "auprc",
+      "within_score": 0.713775,
+      "within_norm": 0.684211,
+      "within_rank": 7,
+      "cross_score": 0.722866,
+      "cross_norm": 0.842105,
+      "cross_rank": 4
+    },
+    {
+      "task": "CYP3A4_Veith",
+      "metric": "auprc",
+      "within_score": 0.877553,
+      "within_norm": 0.736842,
+      "within_rank": 6,
+      "cross_score": 0.881571,
+      "cross_norm": 0.789474,
+      "cross_rank": 5
+    },
+    {
+      "task": "CYP2C9_Substrate_CarbonMangels",
+      "metric": "auprc",
+      "within_score": 0.447329,
+      "within_norm": 0.95,
+      "within_rank": 2,
+      "cross_score": 0.439888,
+      "cross_norm": 0.9,
+      "cross_rank": 3
+    },
+    {
+      "task": "CYP2D6_Substrate_CarbonMangels",
+      "metric": "auprc",
+      "within_score": 0.698162,
+      "within_norm": 0.666667,
+      "within_rank": 7,
+      "cross_score": 0.696022,
+      "cross_norm": 0.666667,
+      "cross_rank": 7
+    },
+    {
+      "task": "CYP3A4_Substrate_CarbonMangels",
+      "metric": "auroc",
+      "within_score": 0.657414,
+      "within_norm": 0.842105,
+      "within_rank": 4,
+      "cross_score": 0.664331,
+      "cross_norm": 0.947368,
+      "cross_rank": 2
+    },
+    {
+      "task": "hERG",
+      "metric": "auroc",
+      "within_score": 0.877526,
+      "within_norm": 0.95,
+      "within_rank": 2,
+      "cross_score": 0.882769,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "AMES",
+      "metric": "auroc",
+      "within_score": 0.855833,
+      "within_norm": 0.8,
+      "within_rank": 5,
+      "cross_score": 0.860865,
+      "cross_norm": 0.8,
+      "cross_rank": 5
+    },
+    {
+      "task": "DILI",
+      "metric": "auroc",
+      "within_score": 0.934,
+      "within_norm": 0.95,
+      "within_rank": 2,
+      "cross_score": 0.937826,
+      "cross_norm": 0.95,
+      "cross_rank": 2
+    },
+    {
+      "task": "Caco2_Wang",
+      "metric": "mae",
+      "within_score": 0.307912,
+      "within_norm": 0.666667,
+      "within_rank": 9,
+      "cross_score": 0.298224,
+      "cross_norm": 0.666667,
+      "cross_rank": 9
+    },
+    {
+      "task": "Lipophilicity_AstraZeneca",
+      "metric": "mae",
+      "within_score": 0.451664,
+      "within_norm": 1,
+      "within_rank": 1,
+      "cross_score": 0.445075,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "Solubility_AqSolDB",
+      "metric": "mae",
+      "within_score": 0.774777,
+      "within_norm": 0.888889,
+      "within_rank": 3,
+      "cross_score": 0.760583,
+      "cross_norm": 0.944444,
+      "cross_rank": 2
+    },
+    {
+      "task": "PPBR_AZ",
+      "metric": "mae",
+      "within_score": 7.034619,
+      "within_norm": 1,
+      "within_rank": 1,
+      "cross_score": 6.942401,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "VDss_Lombardo",
+      "metric": "spearman",
+      "within_score": 0.686908,
+      "within_norm": 0.894737,
+      "within_rank": 3,
+      "cross_score": 0.692326,
+      "cross_norm": 0.894737,
+      "cross_rank": 3
+    },
+    {
+      "task": "Half_Life_Obach",
+      "metric": "spearman",
+      "within_score": 0.550741,
+      "within_norm": 0.85,
+      "within_rank": 4,
+      "cross_score": 0.559823,
+      "cross_norm": 0.9,
+      "cross_rank": 3
+    },
+    {
+      "task": "Clearance_Hepatocyte_AZ",
+      "metric": "spearman",
+      "within_score": 0.495275,
+      "within_norm": 0.888889,
+      "within_rank": 3,
+      "cross_score": 0.503428,
+      "cross_norm": 0.944444,
+      "cross_rank": 2
+    },
+    {
+      "task": "Clearance_Microsome_AZ",
+      "metric": "spearman",
+      "within_score": 0.629052,
+      "within_norm": 0.95,
+      "within_rank": 2,
+      "cross_score": 0.635766,
+      "cross_norm": 1,
+      "cross_rank": 1
+    },
+    {
+      "task": "LD50_Zhu",
+      "metric": "mae",
+      "within_score": 0.588429,
+      "within_norm": 0.818182,
+      "within_rank": 5,
+      "cross_score": 0.582675,
+      "cross_norm": 0.909091,
+      "cross_rank": 3
+    }
+  ],
+  "t2": [
+    {
+      "group": "Oral uptake",
+      "tasks": "Solubility_AqSolDB; Caco2_Wang; HIA_Hou; Bioavailability_Ma",
+      "rationale": "Solubility to intestinal absorption and systemic availability"
+    },
+    {
+      "group": "Distribution / CNS",
+      "tasks": "Lipophilicity_AstraZeneca; PPBR_AZ; BBB_Martins; VDss_Lombardo",
+      "rationale": "Physicochemical distribution and CNS exposure"
+    },
+    {
+      "group": "Interaction liabilities",
+      "tasks": "Pgp_Broccatelli; hERG; CYP(2C9/2D6/3A4)_Veith",
+      "rationale": "Transporter, ion-channel, and enzyme interaction risks"
+    },
+    {
+      "group": "Metabolic turnover",
+      "tasks": "CYP(2C9/2D6/3A4)_Substrate_CarboMangels; Clearance_(Hepatocyte/Microsome)_AZ",
+      "rationale": "Substrate recognition and hepatic elimination"
+    },
+    {
+      "group": "Distal safety",
+      "tasks": "AMES; DILI; LD50_Zhu",
+      "rationale": "Mutagenicity, organ toxicity, and acute toxicity"
+    },
+    {
+      "group": "Composite exposure",
+      "tasks": "Half_Life_Obach",
+      "rationale": "Composite endpoint isolated to reduce gradient conflict"
+    }
+  ]
+}

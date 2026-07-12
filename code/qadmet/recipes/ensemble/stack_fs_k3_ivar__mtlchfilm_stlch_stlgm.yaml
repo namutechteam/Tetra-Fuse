@@ -1,0 +1,15 @@
+name: stack_fs_k3_ivar__mtlchfilm_stlch_stlgm
+kind: stack
+ensemble:
+  strategy: inverse_variance
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+    - stl_graphmvp_adaptivegnn
+  kwargs:
+    fit_split: val
+    split: test
+    eps: 1.0e-6
+    global_fit: false
+    normalize_weights: true
+    unfit_strategy: uniform

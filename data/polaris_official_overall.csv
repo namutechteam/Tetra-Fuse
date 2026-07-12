@@ -1,0 +1,7 @@
+model,official_test_pearson
+mtl_dmpnn,0.8231
+ensemble,0.8187
+mtl_molformer,0.7908
+stl_map,0.7807
+stl_chemeleon,0.7667
+stl_graphmvp,0.6811

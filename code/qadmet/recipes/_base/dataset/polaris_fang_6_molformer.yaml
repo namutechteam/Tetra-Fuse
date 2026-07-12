@@ -1,0 +1,11 @@
+name: polaris_fang_6
+split: random_5seed
+seeds: [0, 1, 2, 3, 4]
+# molformer_tokens parquet 를 참조하는 변형 (MoLFormer / MAP backbone 용).
+# precompute_polaris_fang_molformer_tokens 실행 후 아래 symlink 생성 필요:
+#   ln -sf artifacts/precompute/precompute_polaris_fang_molformer_tokens/<hash>/data/molformer_tokens.parquet \
+#          data/embeddings/polaris_fang_molformer_tokens.parquet
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths:
+    molformer_tokens: data/embeddings/polaris_fang_molformer_tokens.parquet

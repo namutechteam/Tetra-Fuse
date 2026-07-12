@@ -1,0 +1,32 @@
+name: stack_per_task_grid
+kind: stack
+
+ensemble:
+  strategy: per_task_grid
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  kwargs:
+    fit_split: val          # base 의 val 잔차 위에서 task 별 w 격자 탐색 → honest holdout
+    split: test             # 학습된 (w, 1-w) 로 test 결합 (기본값이지만 명시)
+    grid_step: 0.1          # w ∈ [0, 1] 격자 간격 → 11 후보 (옛 v3 와 동일)
+    global_fit: false       # task 별 w (기본). true 면 전체 한 덩어리.
+    unfit_strategy: uniform # fit 단계에서 못 본 task 는 균등 평균 fallback
+    tie_breaker: smaller_w  # 동률 시 더 작은 w (첫 base 비중 보수적)
+    # base_kind: train      # base artifact kind. 기본 train
+    # base_run_ids: {...}   # 이름→run_id 명시 매핑
+
+notes: |
+  옛 phase3 v3 (run_stacking_v3_pertask) 의 honest holdout 변형.
+
+  옛 v3 와 차이:
+    - 옛 v3 는 *test set 위에서* TDC group.evaluate metric (auroc/mae) 으로
+      sweep → optimistic bias (test 위 hyperparameter tuning).
+    - 신규는 *val set 위에서* 잔차 MSE 로 sweep → honest. base 자체 val 예측만으로
+      self-contained (TDC 평가 함수 호출 없음).
+
+  K=2 전제. K≥3 base 는 별도 simplex strategy 로 분리할 예정.
+
+  사용자 환경 prereq:
+    - 두 base 의 train artifact 가 ``predictions.parquet`` 에 ``split="val"`` 행을
+      포함해야 한다 (Step 4.2 부터 MTL/STL runner 모두 val 작성).

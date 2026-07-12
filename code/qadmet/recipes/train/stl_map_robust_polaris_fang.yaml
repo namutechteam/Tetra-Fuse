@@ -1,0 +1,81 @@
+name: stl_map_robust_polaris_fang
+kind: train
+# MAP STL — joint 3-modality fusion (CheMeleon + MoLFormer-LoRA + GraphMVP) robust_attention,
+# per-task 학습. 원 논문 최종 앙상블의 MAP 축 = STL (joint-fusion STL, late-fusion 아님).
+# stl_4modality_robust_nounimol2_epoch100_seed01234 미러. ★ molformer_tokens parquet 필요.
+
+dataset: !include _base/dataset/polaris_fang_6_pertask_molformer.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.01
+    kwargs:
+      output_dim: 300
+      tau_init: 3.0
+      tau_min: 0.5
+      anneal_epochs: 15
+      modality_dropout: 0.2
+      residual: true
+      pre_norm: true
+      warmup_epochs: 1
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 15
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  lr_lora: 0.00005
+  lr_fusion: 0.0001
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  MAP STL joint 3-modality fusion (CheMeleon + MoLFormer-LoRA + GraphMVP), per-task.
+  stl_4modality_robust_nounimol2_epoch100_seed01234 미러 (UniMol2 제외).
+  ⚠ molformer_tokens parquet + chemeleon_mp.pt + graphmvp_hybrid.pth 모두 필요.
+  ⚠ STL joint-fusion 은 DDP 미지원 → 단일 GPU 순차 (6 task × 5 seed = 30 모델).

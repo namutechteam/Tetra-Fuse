@@ -1,0 +1,46 @@
+name: stack_oof_xgboost
+kind: stack
+
+ensemble:
+  strategy: oof_xgboost
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  meta_model: xgboost     # ↔ runners.stack 가 strategy 인자 meta_model_family 로 전달
+  kwargs:
+    fit_split: val        # base 의 val 잔차 위에서 task 별 meta-model 학습 (honest holdout)
+    split: test           # 학습된 meta 로 test 결합 (기본값이지만 명시)
+    task_set: tdc_admet_22  # TASK_SETS 에서 task 별 type (regression/classification) 자동 도출
+    # task_types:           # 또는 명시 dict — task_set 이 없거나 부분 override 시 사용
+    #   Caco2_Wang: regression
+    #   HIA_Hou: classification
+    meta_model_kwargs:    # 회귀/분류 추정기 양쪽에 동일하게 펼쳐진다
+      n_estimators: 100   # 옛 v4 기본값 — 회귀=XGBRegressor, 분류=XGBClassifier
+      max_depth: 4
+      learning_rate: 0.1
+      tree_method: hist
+    unfit_strategy: uniform  # fit 단계에서 못 본 task → K개 base 균등 평균 fallback
+    # base_kind: train      # 기본 train
+    # base_run_ids: {...}   # 이름→run_id 명시 매핑
+
+notes: |
+  옛 phase3 v4 (run_stacking_v4_oof_xgb.stack_one_task) 의 신규 등동.
+
+  옛 v4 와 차이:
+    - 옛 v4 는 ``meta_type ∈ {"xgb", "linear"}`` 로 두 추정기 페어를 직접 호출.
+      신규는 ``EnsembleSpec.meta_model`` 을 family 키 (``"xgboost"`` | ``"linear"``)
+      로 받아 ``META_MODELS`` registry 에서 회귀/분류를 dispatch.
+    - 옛 v4 는 base 별 JSON 파일을 직접 읽어 (val_preds, val_y, test_preds) 를 구성.
+      신규는 ``predictions.parquet`` (split ∈ {"val", "test"}) 를 ``MetaDataset``
+      으로 inner-join → 동일한 (seed, task, smiles) 키 정합성 검증 자동.
+    - task type 정보는 ``kwargs.task_set`` (TASK_SETS lookup) 또는 ``kwargs.task_types``
+      (명시 dict) 로 전달. recipe 가 22 task 모두 명시할 필요 없음.
+
+  사용자 환경 prereq:
+    - 두 base 의 train artifact 가 ``predictions.parquet`` 에 ``split="val"`` 행을
+      포함해야 한다. STL DMPNN 도 Step 4.4 부터 val 보존 (loaders.val_loaders 경로).
+    - meta 학습은 task × seed-pooled (옛 v4 와 동일) — task 당 한 번 fit.
+
+  tip:
+    - K=2 base 만 있는 경우는 ``per_task_grid`` 가 더 안정적 (옛 v3 honest 변형).
+    - K≥3 또는 base 간 비선형 상호작용을 모델링하려면 본 ``oof_xgboost`` 사용.

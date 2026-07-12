@@ -1,0 +1,47 @@
+name: stl_graphmvp_paper_polaris_fang
+kind: train
+# GraphMVP STL + AdapterGNN paper-faithful — Polaris ADME-Fang 6-task.
+# 원 논문 최종 앙상블의 GraphMVP 축 = STL. graphmvp synthetic featurize → parquet 불필요.
+
+dataset: !include _base/dataset/polaris_fang_6_pertask.yaml
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: graphmvp
+    kwargs:
+      d_h: 300
+      checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+      num_layer: 5
+      emb_dim: 300
+      JK: last
+      adapter_kind: paper
+      adapter_bottleneck: 64
+      adapter_dropout: 0.0
+      pool: mean
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 15
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2
+
+notes: |
+  GraphMVP STL (AdapterGNN paper r=64, 5-layer GIN frozen), Polaris ADME-Fang 6-task per-task.
+  stl_graphmvp_adaptivegnn_paper_epoch100_seed01234 프로토콜.
+  ⚠ data/weights/graphmvp/graphmvp_hybrid.pth 필요. feature parquet 불필요 (synthetic).

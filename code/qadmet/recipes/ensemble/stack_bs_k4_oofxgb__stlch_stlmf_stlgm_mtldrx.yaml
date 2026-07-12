@@ -1,0 +1,20 @@
+name: stack_bs_k4_oofxgb__stlch_stlmf_stlgm_mtldrx
+kind: stack
+ensemble:
+  strategy: oof_xgboost
+  bases:
+    - stl_chemeleon_adaptivegnn
+    - stl_molformer_lora
+    - stl_graphmvp_adaptivegnn
+    - mtl_dmpnn_rdkit_xtb
+  meta_model: xgboost
+  kwargs:
+    fit_split: val
+    split: test
+    task_set: tdc_admet_22
+    meta_model_kwargs:
+      n_estimators: 100
+      max_depth: 4
+      learning_rate: 0.1
+      tree_method: hist
+    unfit_strategy: uniform

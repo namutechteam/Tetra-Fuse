@@ -1,0 +1,10 @@
+name: stack_bs_k5_average__mtlchfilm_stlch_stlu2_stlmf_mtldrx
+kind: stack
+ensemble:
+  strategy: average
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+    - stl_unimol2_lora
+    - stl_molformer_lora
+    - mtl_dmpnn_rdkit_xtb

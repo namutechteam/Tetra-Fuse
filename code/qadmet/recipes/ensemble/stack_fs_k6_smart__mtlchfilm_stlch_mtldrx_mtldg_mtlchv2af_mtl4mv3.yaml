@@ -1,0 +1,19 @@
+name: stack_fs_k6_smart__mtlchfilm_stlch_mtldrx_mtldg_mtlchv2af_mtl4mv3
+kind: stack
+ensemble:
+  strategy: smart_fallback
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+    - mtl_dmpnn_rdkit_xtb
+    - mtl_dmpnn_grouped
+    - mtl_chemeleon_molformer_unimol2_lora_v2_alpha_freeze
+    - mtl_4modality_v3_capacity_min
+  kwargs:
+    fit_split: val
+    split: test
+    winner_threshold: 0.5
+    fallback: average
+    eps: 1.0e-12
+    global_fit: false
+    unfit_strategy: uniform

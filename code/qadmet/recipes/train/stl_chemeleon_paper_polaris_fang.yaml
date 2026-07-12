@@ -1,0 +1,44 @@
+name: stl_chemeleon_paper_polaris_fang
+kind: train
+# CheMeleon STL + AdapterGNN paper-faithful (Li et al. AAAI'24) — Polaris ADME-Fang 6-task.
+# 원 논문 최종 앙상블의 CheMeleon 축 = STL. graph=chemeleon synthetic → parquet 불필요.
+
+dataset: !include _base/dataset/polaris_fang_6_pertask.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_kind: paper
+      adapter_bottleneck: 128
+      adapter_dropout: 0.0
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 15
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2
+
+notes: |
+  CheMeleon STL (AdapterGNN paper r=128), Polaris ADME-Fang 6-task per-task.
+  stl_chemeleon_adaptivegnn_paper_epoch100_seed01234 프로토콜 (32-true/bs32/lr1e-3).
+  ⚠ data/weights/chemeleon_mp.pt 필요. feature parquet 불필요.

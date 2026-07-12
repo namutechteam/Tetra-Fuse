@@ -1,0 +1,71 @@
+name: mtl_chemeleon_molformer_lora
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+# 정책: CheMeleon(frozen mp/agg + trainable adaptor) + MoLFormer LoRA
+# descriptors 제외 (d_xd=0 — CheMeleon 만으로 충분).
+features:
+  graph: chemeleon
+  descriptors: []  # descriptor 사용 안 함 (chemeleon frozen 가중치가 충분)
+  embeddings: [molformer_tokens]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_bottleneck: 256
+      n_adapter_layers: 2
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+  fusion: !include _base/fusion/robust_attention.yaml
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001          # CheMeleon adaptor / fusion / GroupedHead
+  lr_lora: 0.00005   # LoRA-MoLFormer query/value
+  num_workers: 4
+
+notes: |
+  CheMeleon 사전학습 GNN(frozen) + AdaptorGNN(trainable) + LoRA-MoLFormer
+  + RobustAttentionFusion (Step E).
+
+  CheMeleon:
+    - BondMessagePassing + MeanAggregation (frozen, requires_grad=False).
+    - checkpoint_path: data/weights/chemeleon_mp.pt (34MB, Zenodo).
+    - AdaptorGNN: Linear(2048, 300) + ReLU 학습 가능.
+    - output_dim = 300.
+
+  Fusion (RobustAttention):
+    - K=2: CheMeleon output(300) + MoLFormer LoRA(768) → projected shared space.
+    - tau annealing, modality dropout, residual.
+    - entropy_weight=0.01.
+
+  Descriptor 정책:
+    - 구현: features.descriptors=[] (rdkit/xtb 제외).
+    - 이유: CheMeleon mp/agg frozen(사전학습) + adaptor(trainable) 조합이 descriptor
+      없이 descriptor-augmented DMPNN 수준 성능 기대.

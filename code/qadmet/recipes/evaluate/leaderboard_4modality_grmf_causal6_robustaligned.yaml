@@ -1,0 +1,22 @@
+name: leaderboard_4modality_grmf_causal6_robustaligned
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: mtl_4modality_grmf_causal6_robustaligned
+    target_kind: train
+    target_run_id: 5186d4ad02f6
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+  GR-MF fusion + robust_causal6 robustaligned 런의 TDC leaderboard 랭킹 산출.
+  predictions.parquet 는 data/_pred_seed0..4.parquet (5-seed) 를 concat 한 것.
+  산출물: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top 점수).

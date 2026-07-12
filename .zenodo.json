@@ -1,0 +1,16 @@
+{
+  "title": "Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction",
+  "upload_type": "software",
+  "description": "Code and reproduction bundle for the paper \"Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction\". Contains self-contained Jupyter notebooks that regenerate every main-text and supplementary figure and table from released ground-truth summary data (no GPU or network required), the qadmet training/evaluation engine, model recipes, and the Polaris ADME-Fang external-benchmark integration.",
+  "license": "MIT",
+  "access_right": "open",
+  "creators": [
+    {"name": "An, Taekyeong"},
+    {"name": "Han, Herim"},
+    {"name": "Lee, Jinhee"},
+    {"name": "Yeom, Minsun"}
+  ],
+  "keywords": ["ADMET", "molecular property prediction", "late fusion", "ensemble", "Therapeutics Data Commons", "Polaris"],
+  "version": "1.0.0"
+}
+

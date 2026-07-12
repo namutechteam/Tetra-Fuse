@@ -1,0 +1,32 @@
+name: stl_molformer_lora
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone:
+    type: molformer_lora
+    kwargs:
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.1
+  fusion: null
+  head:
+    type: bottleneck
+
+loss: !include _base/loss/single_task.yaml
+
+trainer: !include _base/trainer/stl_lora.yaml
+
+notes: |
+  옛 phase4 STL MoLFormer-XL + LoRA (q/v rank=16) 동등.
+  학습 입력: precomputed token_ids/attention_mask (molformer_tokens.parquet, MAX_LEN=202).
+  보조 modality 없음 (LoRA 단독). MEMORY 의 "LoRA 우선" 방침에 따라 정확 동작 우선 항목.
+  Step 3.6c 부터: trainer.lr_lora=5e-5 / lr=1e-3 분리 적용 (옛 run_stl_molformer_lora 와 동등).

@@ -1,0 +1,12 @@
+name: precompute_pxr_rdkit2d
+kind: precompute
+dataset:
+  name: pxr_4task
+  split: scaffold_5seed
+  seeds: [1]
+features:
+  descriptors:
+    - rdkit2d
+notes: |
+  PXR 챌린지 SMILES (train 4139 + test 513) 의 RDKit 2D 200-dim descriptor.
+  output: artifact dir 내 rdkit2d.parquet (정상 lookup 가능하도록 data/pxr_rdkit_2d.parquet 으로 심볼릭 링크 필요).

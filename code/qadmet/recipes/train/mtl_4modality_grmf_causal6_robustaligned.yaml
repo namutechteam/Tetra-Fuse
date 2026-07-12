@@ -1,0 +1,138 @@
+name: mtl_4modality_grmf_causal6_robustaligned
+kind: train
+
+# GR-MF fusion ablation — mtl_4modality_robust_causal6.yaml 와 "fusion 만 다르고 나머지는 동일".
+#
+# 목적: robust_attention vs GR-MF 의 **fusion 효과만 분리**.
+#   mtl_4modality_grmf_causal6.yaml 은 fusion 외에도 backbone-primary / loss / head /
+#   trainer 5개 축이 robust 와 달라 직접 비교가 불가했음 → 본 recipe 는 그 5개 축을
+#   전부 robust_causal6 에 맞추고 fusion 만 group_routed(GR-MF) 로 둠.
+#
+# robust_causal6 대비 유일한 의도 차이:
+#   - fusion.type: robust_attention → group_routed (GR-MF)
+#   - head.type: grouped → grouped_routed  (GR-MF 가 3D (B,6,D) 출력 → 강제 결합, kwargs 는 robust 와 동일)
+# 그 외(backbone primary=CheMeleon / lora_dropout 0.2 / Kendall UW / 20ep / lr 분리 등)는 robust 와 동일.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← robust
+
+features:
+  graph: chemeleon                                          # ← robust (CheMeleon bmg primary)
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]   # ← robust (동일 순서)
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:                                                 # ← robust: primary = CheMeleon (grmf 는 GraphMVP 였음)
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0                                  # adapter_kind 미명시 = backbone default (paper r256), robust 와 동일
+  extra_backbones:                                          # ← robust 와 동일 순서/설정
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2                                   # ← robust (grmf 는 0.1)
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2                                   # ← robust (grmf 는 0.1)
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0                                # ← robust (adapter_kind 미명시 = default)
+        pool: mean
+  fusion:
+    type: group_routed                                      # ★ 본 recipe 의 유일한 fusion 차이 (vs robust_attention)
+    entropy_weight: 0.0                                     # GR-MF 정적 gate → sample-별 entropy reg 무의미
+    gate_kl_weight: 0.01                                    # GR-MF group_alpha KL(α||uniform) reg (method-intrinsic)
+    kwargs:
+      output_dim: 300                                       # ← robust fusion output_dim 에 맞춤 (grmf 는 256). 300/heads(4)=75 OK
+      cross_modal_layers: 1                                 # GR-MF method-intrinsic
+      cross_modal_heads: 4
+      cross_modal_ffn_mult: 4
+      cross_modal_dropout: 0.1
+      gate_temperature: 1.0
+      gate_init_std: 0.02
+      pre_norm: true                                        # CheMeleon 2048 vs aux 768/768/300 scale 흡수
+      use_output_proj: true                                 # post-fusion Linear (300→300, identity-init). Kendall 에선 shared_layer 역할 없음, 무해
+  head:
+    type: grouped_routed                                    # ★ GR-MF 3D 출력 강제 결합 (robust 의 grouped 불가). kwargs 는 robust 와 동일
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128                                     # ← robust (grmf 는 96)
+      dropout: 0.4                                          # ← robust (grmf 는 0.5)
+
+loss:
+  type: mixed_task_uncertainty                              # ← robust (Kendall UW; grmf 는 GradNorm)
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null
+  kwargs:
+    freeze_log_vars: false                                  # ← robust
+    # grmf 의 shared_layer(fusion.output_proj) 는 GradNorm 전용 → Kendall 에선 제거.
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 20                                            # ← robust (grmf 는 100)
+  patience: 5                                               # ← robust (grmf 는 40)
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005                                                # ← robust (constant)
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  lr_lora: 0.00005                                          # ← robust (grmf 는 3e-5)
+  lr_fusion: 0.0001                                         # ← robust (grmf 는 5e-5)
+  num_workers: 4
+  predict_ckpt: best                                        # ← robust (grmf 는 last)
+  # grmf 의 head_warmup_epochs:5 제거 → robust 와 동일하게 head warmup 없음.
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  GR-MF fusion + robust_causal6 의 나머지 모든 축. robust_attention(mtl_4modality_robust_causal6)
+  과 fusion 만 다른 짝 → "fusion family 단독 ablation".
+
+  robust_causal6 와의 유일한 의도 차이 2가지:
+    1. fusion.type: robust_attention → group_routed (GR-MF). ★ 측정 대상.
+    2. head.type: grouped → grouped_routed. GR-MF 가 per-group (B, n_groups=6, D) 3D 를
+       내보내므로 grouped_routed head 가 필수 (구조적 결합, 회피 불가). head kwargs
+       (trunk_hidden 128 / dropout 0.4) 는 robust 와 동일하게 맞춤.
+  그 외 backbone(CheMeleon primary) / lora_dropout 0.2 / Kendall UW / 20ep·patience5 /
+  lr 5e-4 const · lr_lora 5e-5 · lr_fusion 1e-4 / predict_ckpt best 는 robust 와 동일.
+
+  GR-MF method-intrinsic 으로 유지한 것 (robust 에 대응 항목 없음):
+    - entropy_weight 0.0 + gate_kl_weight 0.01 (정적 gate 의 균일성 reg).
+    - cross_modal_layers/heads/ffn/dropout, gate_temperature/init_std, use_output_proj.
+    - output_dim 만 robust 값(300)으로 맞춤 (grmf 원본은 256).
+
+  ⚠ ckpt selection 리스크 (robust 정렬의 부작용):
+    - grmf 원본은 head_warmup_epochs=5 + predict_ckpt=last 로 "best.ckpt=epoch1,
+      val_loss epoch1 부터 악화" 패턴을 우회했음. 본 recipe 는 robust 정렬을 위해
+      head warmup 제거 + predict best 로 둠 → GR-MF gate 가 충분히 분리되기 전(epoch 1~2)
+      에 best 가 잡힐 수 있음. 학습 후 best epoch 가 1~2 로 너무 이르면, 이는 fusion
+      차이가 아니라 ckpt-selection artifact 이므로 head_warmup_epochs:5 / predict last
+      로 재실행 권장.
+
+  ⚠ 가중치: chemeleon_mp.pt / graphmvp_hybrid.pth / MoLFormer·UniMol2 84M.
+
+  DDP (2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_4modality_grmf_causal6_robustaligned.yaml \
+      --devices 2 --strategy ddp --find-unused-parameters --no-ddp-static-graph
+    - UniMol2 LoRA static_graph 비호환 → --no-ddp-static-graph 필수.
+    - fusion warmup 없음이지만 UniMol2 안전판으로 --find-unused-parameters 동반.

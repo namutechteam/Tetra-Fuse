@@ -1,0 +1,10 @@
+name: tdc_pxr_25_pertask
+split: scaffold_5seed
+seeds: [0, 1, 2, 3, 4]
+# plan_details.md §2.5b — STL-CheMeleon 용 (25-task singleton head). CheMeleon 은 graph
+# 즉석 featurize → parquet 불필요. molformer_tokens 는 STL-CheMeleon 미소비이나 다른
+# pertask 모델 확장 시 대비해 동일 경로 유지.
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths:
+    molformer_tokens: data/embeddings/molformer_tokens_tdcpxr.parquet

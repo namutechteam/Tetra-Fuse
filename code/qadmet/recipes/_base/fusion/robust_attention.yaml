@@ -1,0 +1,17 @@
+# Robust Attention Fusion fragment
+# 포함처: train 레벨 recipe 에서 fusion 필드로 !include 사용
+#
+# pre_norm: 각 modality 입력에 LayerNorm — CheMeleon(2048)/MoLFormer(768)/UniMol2(768)
+# 처럼 dim/scale 비대칭 시 fusion alpha 균형 보호.
+# output_dim: 768 (MoLFormer/UniMol2 native dim 과 일치 — CheMeleon 2048 → 768 squeeze).
+
+type: robust_attention
+entropy_weight: 0.01
+kwargs:
+  output_dim: 768
+  tau_init: 2.0
+  tau_min: 0.5
+  anneal_epochs: 50
+  modality_dropout: 0.1
+  residual: true
+  pre_norm: true

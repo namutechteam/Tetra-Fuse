@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+._*
+
+# large training artifacts (not part of the figure/table reproduction bundle)
+checkpoints*/
+lightning_logs/
+logs/
+

@@ -1,0 +1,213 @@
+name: mtl_4modality_grmf_causal6
+kind: train
+
+# Group-Routed Modality Fusion (GR-MF) — 4-modality + causal6 (2026-05-22).
+#
+# 문제의식:
+#   - FiLM 은 primary=GraphMVP 비대칭 구조라 task-마다-다른-primary 패턴 (HIA·Lipo=
+#     MoLFormer 등 stacking 결과) 을 표현 불가.
+#   - robust_attention 의 per-sample 동적 gate 는 alpha collapse 가 심함 (UniMol2
+#     같은 약한 modality 가 살고 CheMeleon 같은 강한 modality 가 죽음). tau anneal /
+#     dropout / warmup 으로도 RGR (rich-get-richer) 다이내믹은 못 막힘.
+#   - 4-modality fusion 이 single-modal 보다 *못한* 결과 (mtl_4modality_v2_reg_strong
+#     vs mtl_chemeleon_film_aux W/L/T=6/9/7 net-3). representation 단 fusion 자체의
+#     구조적 결함.
+#
+# GR-MF 의 설계:
+#   - per-group 정적 gate W ∈ R^{6×4} (24 param). sample 무관 → RGR 불가.
+#     "이 causal group 에는 어느 modality 가 좋은가" 를 group-level 평균 gradient 로
+#     안정 학습. softmax(W_g / τ) 로 modality 가중치 결정.
+#   - cross-modal enrichment: 1-layer TransformerEncoderLayer (modality-as-token,
+#     heads=4, d=256) — modality 간 정보 교환은 enrichment 단에서 *additive* 로만.
+#     어떤 modality 도 0 으로 꺾이지 않음.
+#   - presence mask: missing modality 의 gate logit -inf 로 차단 (sample 별).
+#     cross-modal layer 는 key_padding_mask 로 처리 → race condition 없음.
+#   - shared output_proj (Linear 256→256, identity-init) — GradNorm shared_layer.
+#     모든 22 task 의 forward 가 통과, 항상 trainable, cache-lock 안전.
+#
+# Fusion 출력: z (B, n_groups=6, D=256). grouped_routed head 가 group index 로 slice
+# 해서 per-group trunk + per-task head 적용.
+#
+# 비교 대상 (5-seed scaffold mean):
+#   - mtl_4modality_v2_reg_strong (robust_attention, 4-modal, kendall UW frozen).
+#   - mtl_graphmvp_film_aux_gradnorm_lastlinear_causal6 (FiLM, GraphMVP primary, GradNorm).
+#   - mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6_wclamp (single CheMeleon).
+#   - mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6 (single GraphMVP).
+#   - mtl_molformer_lora_gradnorm_lastlinear_causal6 / mtl_unimol2_lora_gradnorm_lastlinear_causal6.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml
+
+features:
+  graph: chemeleon                       # CheMeleon 의 bmg 입력
+  descriptors: []
+  embeddings: [graphmvp_data, molformer_tokens, unimol2_lmdb]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: graphmvp
+    consumes: [graphmvp_data]
+    kwargs:
+      d_h: 300
+      checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+      num_layer: 5
+      emb_dim: 300
+      JK: last
+      adapter_kind: paper
+      adapter_bottleneck: 64
+      adapter_dropout: 0.0
+      use_edge_attr: true
+      pool: mean
+  extra_backbones:
+    - type: chemeleon
+      kwargs:
+        d_h: 2048
+        checkpoint_path: data/weights/chemeleon_mp.pt
+        d_xd: 0
+        adapter_kind: paper
+        adapter_bottleneck: 128
+        adapter_dropout: 0.0
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+  fusion:
+    type: group_routed
+    entropy_weight: 0.0                  # gate 가 정적이라 sample-별 entropy reg 무의미
+    gate_kl_weight: 0.01                 # GR-MF group_alpha 의 KL(α || uniform_K) reg.
+                                         # 정적 gate 도 gradient-based concentration 으로
+                                         # one-hot sharpen 가능 (Switch-Tx / Aux-Loss-Free MoE 표준
+                                         # 결과). λ≈0.01 로 약하게 균일성 유지.
+    kwargs:
+      output_dim: 256                    # per-group fused dim D (head input dim)
+      cross_modal_layers: 1              # 1-layer modality-as-token self-attn
+      cross_modal_heads: 4               # 256 / 4 = 64 head_dim
+      cross_modal_ffn_mult: 4            # FFN hidden 1024
+      cross_modal_dropout: 0.1
+      gate_temperature: 1.0              # softmax(W / τ)
+      gate_init_std: 0.02                # 초기 α ≈ 1/K 균등 (학습으로 group 별 선호 발견)
+      pre_norm: true                     # GraphMVP 300 vs aux 2048/768/768 scale 흡수
+      use_output_proj: true              # post-fusion Linear (256→256, identity-init)
+                                         # GradNorm shared_layer 후보 — 모든 task forward
+                                         # 통과 + 항상 trainable + cache-lock 안전.
+                                         # lit_module 이 fusion.groups 를 자동 주입.
+  head:
+    type: grouped_routed                 # 3D Z (B, n_groups, D) 입력 받음
+    routing: taskset_grouping               # 코드 경로 게이트 — 실제 grouping 은 TaskSet
+    kwargs:
+      trunk_hidden: 96                   # 128 → 96. smoke3/4/5 sweep (2026-05-22~23) 에서
+                                         # 64 (smoke3): TDC mean rank 14.09 (underfit)
+                                         # 96 (smoke4): TDC mean rank 9.50 (best, top10=14, #1 on PPBR)
+                                         # 256 (smoke5): 9.77 but val 4.22→4.51 overfit cliff at ep4.
+                                         # 96 이 5-ep smoke 에서 underfit ↔ overfit 균형 최적.
+      dropout: 0.5                       # 0.4 → 0.5. smoke4 baseline.
+
+loss:
+  type: mixed_task_gradnorm
+  classification: bce_with_logits
+  regression: masked_mae                 # P1 (Huber 교체) 는 별도 recipe 로 분리.
+  task_weighting: null                   # GradNorm 동적
+  kwargs:
+    alpha: 1.5
+    shared_layer: fusion.output_proj     # GR-MF 의 post-fusion Linear (256→256).
+                                         # 모든 task 의 forward 가 통과하는 last shared W.
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 40
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005
+  lr_lora: 0.00003
+  lr_fusion: 0.00005                     # GR-MF projections / gate / cross-modal / output_proj
+  num_workers: 4
+  head_warmup_epochs: 5                  # epoch 0..4 동안 head freeze (gate+adapter+backbone 만 학습).
+                                         # smoke2 의 best.ckpt=epoch 1 / val_loss epoch 1 부터 악화
+                                         # 패턴 해소. ckpt selection 이 gate 분리 진행된 시점부터 시작.
+  predict_ckpt: last                     # ckpt monitor 가 epoch 1 에서 best 잡으면 gate 학습이
+                                         # 반영 안 됨. last.ckpt 로 평가 — 5+ epoch 의 gate 분리
+                                         # trajectory 가 metric 에 직접 반영.
+
+notes: |
+  Group-Routed Modality Fusion (GR-MF) — fusion 유지, 구조적 결함만 제거.
+
+  Backbone:
+    - primary = GraphMVP_hybrid (frozen GIN, AdapterGNN paper r=64, num_layer=5, d=300).
+    - aux[0] = CheMeleon (frozen + AdapterGNN paper r=128, d=2048).
+    - aux[1] = MoLFormer-XL + LoRA (q/v rank=16, d=768).
+    - aux[2] = UniMol2 84M + LoRA (linear_q/v rank=16, d=768).
+
+  Fusion (GR-MF):
+    1. per-modality LayerNorm + Linear (d_m → 256) → z'_m  (B, 256)
+    2. stack → (B, 4, 256) → TransformerEncoderLayer(1) → z''_m
+       (norm_first, gelu, FFN 1024, dropout 0.1).
+       presence_mask 가 있으면 key_padding_mask 로 missing modality 차단.
+    3. group_gate ∈ R^{6×4} (학습 가능, std=0.02 init).
+       presence 있으면 missing modality logit -inf, softmax(W/τ).
+       α ∈ (B, 6, 4).
+    4. z_group[b, g] = Σ_m α[b,g,m] · z''[b,m,:] ∈ R^256.
+    5. output_proj (Linear 256→256, identity-init).
+       → z (B, 6, 256). GR-MF 의 출력.
+
+  Routing:
+    - dataset = tdc_admet_22_causal6 (6-group causal chain).
+    - groups: oral_uptake(4) / distribution_cns(4) / interaction_liabilities(5) /
+      metabolic_turnover(5) / distal_safety(3) / composite_exposure(1).
+    - head 가 group_idx 로 z[:, g, :] 를 slice → per-group trunk → per-task linear.
+    - lit_module 이 동일 groups list 를 fusion 과 head 양쪽에 주입해 axis 정합.
+
+  왜 GR-MF 가 robust_attention / FiLM 보다 나은가:
+    - Alpha collapse: gate input 없음 (정적 W_g lookup). RGR 다이내믹 구조적 제거.
+    - Weak modality 가 strong 을 누름: 같은 이유. group-별 modality 선호가 batch-평균
+      gradient 로 안정 학습. UniMol2 가 임의로 살아남는 일이 없음.
+    - Task-마다-다른-modality 선호: per-group W_g 가 직접 표현. stacking 의 per-task
+      meta-learner 인사이트를 fusion 단에 옮긴 형태.
+    - UniMol2 3D 변환 실패 mask: cross-modal 의 key_padding_mask 와 group-gate 의
+      logit masked_fill 로 깔끔히 처리. cache 충돌 없음.
+    - GradNorm shared_layer: post-fusion Linear (256→256) 는 항상 trainable +
+      warmup 없음 → cache-lock 안전.
+
+  Loss / Optim:
+    - mixed_task_gradnorm (bce + masked_mae). α=1.5, w_k ∈ [0.3, 3.0].
+    - shared_layer = fusion.output_proj (post-GR-MF Linear).
+    - lr=5e-4 / lr_lora=3e-5 / lr_fusion=5e-5.
+    - precision=bf16-mixed, batch_size=16. effective batch 32 = DDP 2-rank × 16.
+
+  비교 대상 (5-seed scaffold):
+    - mtl_4modality_v2_reg_strong (robust_attention, kendall UW frozen, masked_mae).
+    - mtl_graphmvp_film_aux_gradnorm_lastlinear_causal6 (FiLM, GraphMVP primary).
+    - 동일 routing + 각 single backbone (4 recipe).
+
+  ⚠ 가중치 다운로드 필요:
+    - data/weights/graphmvp/graphmvp_hybrid.pth
+    - data/weights/chemeleon_mp.pt
+    - MoLFormer / UniMol2 84M ckpt.
+
+  DDP 권장 옵션:
+    - torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+        --recipe recipes/train/mtl_4modality_grmf_causal6.yaml \
+        --devices 2 --strategy ddp \
+        --find-unused-parameters --no-ddp-static-graph
+    - find-unused-parameters: GradNorm manual_opt 의 trainable subset 변동.
+    - no-ddp-static-graph: UniMol2 LoRA 는 static_graph 비호환 (reducer.cpp:1603).
+
+  기대 시그널:
+    - group_alpha 로깅 (fusion.last_group_alpha) 으로 group 별 modality 선호 추적.
+      - distal_safety (AMES/DILI/LD50): CheMeleon → 1 예상.
+      - interaction_liabilities (CYP_Veith 류): MoLFormer/UniMol2 비중 ↑ 예상.
+      - composite_exposure (Half_Life): noisy → α 가 균등 근처일 가능성.
+    - reg-task TDC primary (Half_Life/VDss Spearman, Sol/Lipo/Caco2/PPBR/LD50 MAE):
+      v2_reg_strong 대비 회복 여부 1차 확인.
+    - alpha_max_mean / alpha_min_mean 곡선 — robust_attention 의 collapse 패턴
+      (max≈1, min≈0) 이 GR-MF 에서 사라지는지.

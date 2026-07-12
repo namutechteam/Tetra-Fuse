@@ -1,0 +1,65 @@
+name: mtl_dmpnn_molformer_lora
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+# molformer_tokens 는 LoRA backbone 의 토큰 입력으로 소비됨 — fusion modality 에서 자동 제외.
+features:
+  graph: dmpnn
+  descriptors: [rdkit2d, xtb]
+  embeddings: [molformer_tokens]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+  fusion:
+    type: attention
+    fallback: gated
+    kwargs:
+      output_dim: 300
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001          # D-MPNN / fusion projections / GroupedHead
+  lr_lora: 0.00005   # LoRA-MoLFormer query/value
+  num_workers: 4
+
+notes: |
+  옛 phase1.4a 실험 (D-MPNN + LoRA-MoLFormer 동시 학습, RDKit2D/xTB 보조 modality)
+  의 신규 spec 표현.
+
+  데이터 경로 (Step B, 2026-05-01):
+    descriptors (rdkit2d 200 + xtb 4 = 204) → DMPNN X_d concat → primary backbone
+      output = d_h(300) + 204 = 504.
+    embeddings (molformer_tokens) → consumes 매칭 → LoRA-MoLFormer token 입력으로
+      직접 흐름 (fusion modality 에서 빠짐). LoRA-MoLFormer output = 768.
+    AttentionFusion(K=2) 입력 = [DMPNN-fp(504), MoLFormer-LoRA(768)] → output 300.
+    → GroupedHead(7-group) 로 task 별 예측.
+
+  consumes: [molformer_tokens] — embeddings 에 적힌 molformer_tokens parquet 의
+  (B, 2L) modality 가 LoRA-MoLFormer 의 token_ids/attention_mask 입력으로 분리
+  소비되며 fusion modality stack 에서는 빠진다.
+
+  trainer.lr_lora 분리 (5e-5 vs 1e-3) — 옛 ``pipeline_mtl.configure_optimizers``
+  (line 1131-1145) 동등 동작.

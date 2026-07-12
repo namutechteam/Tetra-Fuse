@@ -1,0 +1,30 @@
+# mechanism-aligned 7-group 재편 (routing.md, 2026-05-14).
+# 원래 tdc_admet_22 의 7-group 은 outcome/liability/물성축이 한 그룹에 섞여 negative
+# transfer 가설이 강했음. 본 재편은 4가지 충돌 원인 (level mismatch, sign-opposed,
+# distribution confusion, composite outcome) 을 그룹 경계로 분리:
+#   - Pgp/hERG → CYP_Veith 와 같은 결합·저해 liability (transporter outcome 아님)
+#   - Half_Life = ln(2)·V/CL composite outcome → singleton (CL 그룹 hard-share 금지)
+#   - PPBR/VDss → 분포 축 (solubility/clearance 가 아님)
+#   - Solubility ↔ Lipophilicity 는 같은 물성 축이지만 sign 반대 → 같은 그룹이되 PCGrad
+#     동반 권고 (2차 step)
+# task list 는 tdc_admet_22 와 동일 — grouping 만 교체.
+name: tdc_admet_22_mech
+tasks: tdc_admet_22
+notes: >-
+  TDC ADMET leaderboard 22-task, mechanism-aligned 7-group (routing.md, 2026-05-14).
+  기존 tdc_admet_22 와 task list 는 동일 — grouping 만 교체.
+groups:
+  partitioning_physchem:
+    [Solubility_AqSolDB, Lipophilicity_AstraZeneca]
+  oral_uptake:
+    [Caco2_Wang, HIA_Hou, Bioavailability_Ma]
+  distribution_cns:
+    [BBB_Martins, PPBR_AZ, VDss_Lombardo]
+  interaction_liabilities:
+    [Pgp_Broccatelli, hERG, CYP2C9_Veith, CYP2D6_Veith, CYP3A4_Veith]
+  metabolic_turnover:
+    [CYP2C9_Substrate_CarbonMangels, CYP2D6_Substrate_CarbonMangels, CYP3A4_Substrate_CarbonMangels, Clearance_Hepatocyte_AZ, Clearance_Microsome_AZ]
+  distal_safety:
+    [AMES, DILI, LD50_Zhu]
+  composite_exposure:
+    [Half_Life_Obach]

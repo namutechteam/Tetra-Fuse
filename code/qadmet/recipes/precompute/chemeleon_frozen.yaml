@@ -1,0 +1,10 @@
+name: precompute_chemeleon_frozen
+kind: precompute
+features:
+  embeddings:
+    - chemeleon_frozen
+notes: |
+  TDC ADMET 22 union SMILES 의 CheMeleon frozen pooled embedding (2048-dim).
+  frozen message_passing → frozen agg → frozen bn (pre-adapter / pre-projection).
+  data/weights/chemeleon_mp.pt 사전학습 GNN 사용, adapter/proj 미포함.
+  frozen-backbone ablation (4-modality, LoRA 미학습, fusion+head 만) 용 입력.

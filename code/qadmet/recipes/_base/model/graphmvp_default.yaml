@@ -1,0 +1,12 @@
+type: graphmvp
+consumes: [graphmvp_data]
+kwargs:
+  d_h: 300
+  checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+  num_layer: 5
+  emb_dim: 300
+  JK: last
+  adapter_bottleneck: 64
+  adapter_dropout: 0.0
+  use_edge_attr: true
+  pool: mean

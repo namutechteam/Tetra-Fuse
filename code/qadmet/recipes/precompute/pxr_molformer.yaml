@@ -1,0 +1,11 @@
+name: precompute_pxr_molformer
+kind: precompute
+dataset:
+  name: pxr_4task
+  split: scaffold_5seed
+  seeds: [1]
+features:
+  embeddings:
+    - molformer
+notes: |
+  PXR SMILES 의 MoLFormer-XL frozen 768-dim CLS embedding (lookup용 STL+MTL fusion).

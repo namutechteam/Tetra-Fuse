@@ -1,0 +1,6 @@
+type: dmpnn
+kwargs:
+  d_h: 300
+  depth: 3
+  dropout: 0.0
+  agg_norm: 100.0

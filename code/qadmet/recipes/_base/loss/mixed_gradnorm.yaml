@@ -1,0 +1,7 @@
+type: mixed_task_gradnorm
+classification: bce_with_logits
+regression: masked_mae
+task_weighting: null            # GradNorm 동적 학습 → uniform 강제 (runner 가 검증)
+kwargs:
+  alpha: 1.5                    # restoring force (Chen 2018 ADMET asymmetric 권장)
+  shared_layer: null            # null → backbone 마지막 nn.Linear auto-detect

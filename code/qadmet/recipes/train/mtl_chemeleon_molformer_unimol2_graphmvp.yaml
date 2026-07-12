@@ -1,0 +1,99 @@
+name: mtl_chemeleon_molformer_unimol2_graphmvp
+kind: train
+
+# 4-modality MTL (CheMeleon + MoLFormer-LoRA + UniMol2-LoRA + GraphMVP-frozen+adaptor).
+#   - GraphMVP_hybrid (Eq.8) regression variant 가중치를 frozen GIN 으로 로드,
+#     AdaptorGNN(Linear→ReLU) 만 학습 → CheMeleon 동일 패턴 → alpha collapse 면역.
+#   - graphmvp_data 는 synthetic modality — collate 가 SMILES → PyG Batch 즉석 생성.
+#     (LMDB precompute 불필요)
+#   - 기존 v2 (mtl_chemeleon_molformer_unimol2_lora_v2.yaml) 의 alpha collapse 대응
+#     (lr_fusion=1e-4, warmup_epochs=5) 를 그대로 계승.
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.01
+    kwargs:
+      output_dim: 768
+      tau_init: 2.0
+      tau_min: 0.5
+      anneal_epochs: 50
+      modality_dropout: 0.1
+      residual: true
+      pre_norm: true
+      warmup_epochs: 5
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: kendall_uncertainty
+  kwargs:
+    freeze_log_vars: true   # σ=1 고정 (Kendall 자유도 무력화 — sanity 에서 압도적 효과)
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.001
+  lr_lora: 0.00005
+  lr_fusion: 0.0001
+  num_workers: 4
+  kwargs:
+    accumulate_grad_batches: 2
+
+notes: |
+  v2 + GraphMVP 추가 (4 modality).
+    - graphmvp_data 는 synthetic modality (collate 가 SMILES → PyG Batch 즉석 변환).
+    - graphmvp 가중치 파일이 없으면 random-init smoke (warning 로그). 다운로드:
+      https://drive.google.com/drive/folders/1uPsBiQF3bfeCAXSDd4JfyXiTh-qxYfu6
+      → pretraining_model/GraphMVP_hybrid/<regression-variant>.pth
+      → data/weights/graphmvp/graphmvp_hybrid.pth

@@ -1,0 +1,41 @@
+name: mtl_with_molformer
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: dmpnn
+  descriptors: [rdkit2d, xtb]
+  embeddings: [molformer]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml
+  fusion:
+    type: attention
+    fallback: gated
+    kwargs:
+      output_dim: 300
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer: !include _base/trainer/default.yaml
+
+notes: |
+  옛 phase1.4a variantA: D-MPNN + frozen MoLFormer-XL pooler embedding (768-dim).
+
+  데이터 경로 (Step B, 2026-05-01):
+    descriptors (rdkit2d 200 + xtb 4 = 204) → DMPNN X_d concat → backbone output
+      = d_h(300) + 204 = 504.
+    embeddings (molformer 768) → fusion modality.
+    AttentionFusion(K=2) 입력 = [DMPNN-fp(504), MoLFormer(768)] → output 300.
+
+  LoRA fine-tune 변종은 ``mtl_dmpnn_molformer_lora.yaml`` 참조 (사용자 우선 — frozen
+  embedding 보다 LoRA path 가 권장됨).

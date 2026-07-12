@@ -1,0 +1,9 @@
+seeds: [1, 2, 3, 4, 5]
+max_epochs: 30
+patience: 5
+precision: 32-true
+early_stopping: true
+batch_size: 32
+lr: 0.001          # head / non-LoRA params
+lr_lora: 0.00005   # LoRA 가중치 — 옛 run_stl_*_lora.py 와 동일
+num_workers: 2

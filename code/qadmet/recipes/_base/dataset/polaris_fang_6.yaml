@@ -1,0 +1,10 @@
+name: polaris_fang_6
+split: random_5seed          # Polaris ADME-Fang: train_val random split (val_frac=0.125), seed별
+seeds: [0, 1, 2, 3, 4]
+# Polaris ADME-Fang 6-task 외부 벤치마크 (독립 MTL 블록, TDC-22와 분리).
+# D-MPNN/GraphMVP/CheMeleon graph backbone은 synthetic featurize → parquet 불필요.
+# MoLFormer/MAP 등 parquet 필요 modality는 아래 precompute 후 경로 추가:
+#   molformer_tokens: data/embeddings/molformer_tokens_fang.parquet
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths: {}

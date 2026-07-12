@@ -1,0 +1,65 @@
+name: mtl_chemeleon_unimol2_lora
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+# CheMeleon(frozen) + UniMol2 LoRA (descriptor 제외).
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [unimol2_lmdb]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+  fusion: !include _base/fusion/robust_attention.yaml
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001          # CheMeleon adaptor / fusion / GroupedHead
+  lr_lora: 0.00005   # UniMol2 LoRA query/value
+  num_workers: 4
+
+notes: |
+  CheMeleon 사전학습 GNN(frozen) + UniMol2 LoRA + RobustAttentionFusion (Step E).
+
+  UniMol2:
+    - LMDB-backed embedding (unimol2_lmdb modality).
+    - LoRA fine-tuning: rank=16, alpha=32.
+    - output_dim=768 (또는 기본값).
+
+  Fusion (RobustAttention):
+    - K=2: CheMeleon(300) + UniMol2-LoRA(768).
+    - RobustAttention으로 modality 균형 학습.
+
+  비교 기준선:
+    - mtl_dmpnn_molformer_lora_robust: D-MPNN + MoLFormer (Step D 기본).
+    - mtl_chemeleon_molformer_lora: CheMeleon + MoLFormer (새 frozen GNN).
+    - mtl_chemeleon_unimol2_lora: CheMeleon + UniMol2 (frozen GNN + 다른 LM).

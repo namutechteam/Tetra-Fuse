@@ -1,0 +1,85 @@
+name: mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6_wclamp
+kind: train
+
+# mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6 의 w_k clamp 재학습 분기 (2026-05-20).
+#
+# lit_module._gradnorm_training_step 에 w_k clamp [0.3, 3.0] 추가됨 (renormalize
+# 전후 두 번 clamp). yaml 자체에는 차이 없지만 동일 run_id 충돌 방지 + baseline
+# artifact (1eeb6309b6cf, clamp 이전) 보존을 위해 name 만 분리.
+#
+# 변경 사항 요약:
+#   - 코드: lit_module.py 의 _gradnorm_training_step step (8) 만 변경됨.
+#   - yaml: 본 파일 = 원본 + name 변경 + 본 헤더 주석. 그 외 동일.
+#
+# 비교 baseline:
+#   - artifacts/train/mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6/1eeb6309b6cf
+#     (clamp 없던 시절). 같은 hash 로 충돌하지 않도록 name 분리.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_kind: paper          # AAAI'24 paper-faithful (default 이지만 명시)
+      adapter_bottleneck: 128
+      adapter_dropout: 0.0
+      # n_adapter_layers 는 paper 모드에서 무시 (depth-1 = 2 자동 결정)
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping         # 코드 경로 게이트만 — 실제 grouping 은
+                                   # task_set.initial_grouping (6-group) 에서 옴
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss:
+  type: mixed_task_gradnorm
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null             # GradNorm 동적 학습 → uniform 강제
+  kwargs:
+    alpha: 1.5                     # restoring force (Chen 2018 ADMET asymmetric)
+    shared_layer: backbone.proj.0  # CheMeleon post-pool Linear
+                                   # (CHEMELEON_HIDDEN+d_xd → d_h).
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 4
+
+notes: |
+  3-way 합성 + w_k clamp 재학습: GradNorm last-linear scope + AdapterGNN
+  paper-faithful + causal6 + w_k ∈ [0.3, 3.0] hard bound.
+
+  모든 모델/데이터/loss 설정은 원본 (mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6)
+  과 동일. 유일한 차이는 lit_module._gradnorm_training_step 의 w renormalize
+  단계에 두 번 clamp 가 추가된 코드 변경. yaml hash 가 동일하면 store 가 기존
+  artifact (1eeb6309b6cf) 를 반환해 재학습이 안 되므로 name 만 분리.
+
+  비교 baseline:
+    - clamp 이전 (이 코드 변경 전 학습): 위 1eeb6309b6cf.
+    - clamp 이후 (본 recipe): 신규 run_id.
+
+  검증 시그널:
+    - gradnorm/w_max 가 3.0 에 hard cap, gradnorm/w_min 이 0.3 에 floor 인지.
+    - gradnorm_w/<task> 곡선에서 1eeb6309b6cf 에서 발산했던 task (의심:
+      Half_Life_Obach) 가 안정되는지.
+    - val_loss / TDC leaderboard mean rank 가 1eeb6309b6cf 와 동등 이상인지.

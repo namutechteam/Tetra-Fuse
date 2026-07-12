@@ -1,0 +1,20 @@
+name: stack_smart__mtldg_x_stlmf
+kind: stack
+
+ensemble:
+  strategy: smart_fallback
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_molformer_lora
+  kwargs:
+    fit_split: val
+    split: test
+    winner_threshold: 0.5
+    fallback: average
+    eps: 1.0e-12
+    global_fit: false
+    unfit_strategy: uniform
+
+notes: |
+  chemprop MTL (7-group) + MolFormer LoRA STL
+  task 별 winner-takes-all (val MSE dominance) + average fallback.

@@ -1,0 +1,7 @@
+name: stack_bs_k2_average__stlch_stlmf
+kind: stack
+ensemble:
+  strategy: average
+  bases:
+    - stl_chemeleon_adaptivegnn
+    - stl_molformer_lora

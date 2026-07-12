@@ -1,0 +1,79 @@
+name: mtl_chemeleon_molformer_unimol2_lora
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+# CheMeleon(frozen) + MoLFormer LoRA + UniMol2 LoRA — 3 modality fusion (descriptor 제외).
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048  # AdaptorGNN 출력 — CheMeleon native dim 유지 (정보 손실 최소화)
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+  fusion: !include _base/fusion/robust_attention.yaml
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: bf16-mixed  # functional.py dtype fix 적용 후 안전 (메모리 ~1.5x 절감)
+  early_stopping: true
+  batch_size: 16         # UniMol2 OPM 메모리 + 3 backbone 동시 grad — bf16 으로 batch 키움
+  lr: 0.001              # CheMeleon adaptor / fusion / GroupedHead
+  lr_lora: 0.00005       # MoLFormer + UniMol2 LoRA query/value (공통)
+  num_workers: 4
+  kwargs:
+    accumulate_grad_batches: 2  # effective batch=32 (옛 STL/MTL 패턴)
+
+notes: |
+  3-modality fusion (Step E 본 학습):
+    - CheMeleon 사전학습 GNN(frozen) + AdaptorGNN(trainable, 2048→2048 + ReLU).
+    - MoLFormer LoRA (rank=16, alpha=32, output=768).
+    - UniMol2 LoRA (rank=16, alpha=32, output=768) — LMDB 입력.
+
+  Fusion (RobustAttention, K=3):
+    - 입력: CheMeleon(2048), MoLFormer-LoRA(768), UniMol2-LoRA(768).
+    - **pre-LayerNorm**: dim/scale 비대칭(2048 vs 768) 흡수 → alpha 균형 보호.
+    - output_dim=768 (모달리티 native dim 평균 근처).
+    - tau annealing(2.0→0.5 over 50ep), modality dropout(0.1), residual.
+    - entropy_weight=0.01 (collapse 방지).
+    - **per-sample presence mask**: UniMol2 LMDB miss 시 그 샘플의 UniMol2
+      alpha 만 차단 → CheMeleon+MoLFormer 로만 fusion (gfn 패턴).
+
+  Descriptor 정책:
+    - features.descriptors=[] (rdkit/xtb 제외, modality_fusion_improving.md 처방).
+
+  Optimizer:
+    - main lr=1e-3: AdaptorGNN, fusion projections, GroupedHead, log_vars.
+    - lr_lora=5e-5: 두 LoRA backbone 의 "lora_*" 파라미터 공통.
+    - frozen mp/agg: requires_grad=False → optimizer 자동 skip.

@@ -1,0 +1,94 @@
+name: mtl_graphmvp_robust_causal6_kendall
+kind: train
+
+# GraphMVP uni-backbone (AdapterGNN) + Kendall UW (mixed_task_uncertainty) + causal6.
+#
+# mtl_chemeleon_robust_causal6_kendall.yaml 의 backbone 만 GraphMVP 로 교체한 짝 recipe.
+# per-modality uni-backbone Kendall 비교 세트 (ch / gm / um / mf) 의 graphmvp 축.
+# loss / head / dataset / trainer 레짐은 4개 recipe 가 동일 → "modality" 단독 ablation.
+#
+# backbone kwargs 는 mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6.yaml 에서 carry
+# (adapter_kind=paper, bottleneck=64, GIN num_layer=5 / emb_dim=300 / JK=last).
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← 6-group causal
+
+features:
+  graph: null                     # GraphMVP 는 자체 graph featurizer 사용 (chemeleon graph 미소비)
+  descriptors: []
+  embeddings: [graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: graphmvp
+    consumes: [graphmvp_data]
+    kwargs:
+      d_h: 300
+      checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+      num_layer: 5
+      emb_dim: 300
+      JK: last
+      adapter_kind: paper          # AAAI'24 paper-faithful AdapterGNN
+      adapter_bottleneck: 64       # ← graphmvp gradnorm causal6 와 동일 (300d 에 맞춘 r)
+      adapter_dropout: 0.0
+      use_edge_attr: true
+      pool: mean
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping      # 코드 게이트 — 실제 grouping 은 TaskSet.initial_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4                 # ← ch recipe 와 동일 (robust_causal6 carry)
+
+loss:
+  type: mixed_task_uncertainty     # Kendall UW
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null             # Kendall σ 가 log-var 로 동적 가중 → inverse-freq prior 끔
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100                   # gm best epoch 8~15 (mtl_graphmvp_adaptivegnn_gradnorm 관측) → 20 충분
+  patience: 15
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16                   # ch recipe 와 동일 축 정렬 (graphmvp 는 상향 가능한 free knob)
+  lr: 0.0005                       # constant LR (adapter + head + Kendall log_vars)
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  GraphMVP uni-backbone (AdapterGNN paper) + Kendall UW + causal6 6-group.
+  per-modality 비교 세트: ch(chemeleon) / gm(graphmvp, 본 recipe) / um(unimol2) / mf(molformer).
+  네 recipe 모두 mixed_task_uncertainty + causal6 + bf16 / const-LR 5e-4 / batch 16 /
+  head dropout 0.4 동일 → backbone(modality) 단독 비교.
+
+  Backbone:
+    - graphmvp_hybrid.pth GIN (num_layer=5, emb_dim=300, JK=last, mean pool) frozen.
+    - adapter_kind="paper" AdapterGNN (r=64, γ init=0 → 초기 frozen-only 동등).
+
+  수렴/예산 근거:
+    - mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6 관측 best epoch = 8~15
+      (mean 11.6) → 20ep + patience 5 로 충분 (단, 그 런은 GradNorm/Noam, 본건 Kendall/const-LR
+      → best epoch 다소 이동 가능).
+
+  ⚠ 가중치: data/weights/graphmvp/graphmvp_hybrid.pth (없으면 random-init warning).
+
+  DDP (2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_graphmvp_robust_causal6_kendall.yaml \
+      --devices 2 --strategy ddp
+    - Kendall 단일 backward → 보통 추가 플래그 불필요. 단 GradNorm sibling 은
+      GIN 경로상 --find-unused-parameters --no-ddp-static-graph 를 요구했으므로,
+      "unused parameters" / NCCL hang 발생 시 두 플래그 추가.

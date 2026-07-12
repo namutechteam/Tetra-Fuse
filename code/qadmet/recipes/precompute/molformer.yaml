@@ -1,0 +1,10 @@
+name: precompute_molformer
+kind: precompute
+features:
+  embeddings:
+    - molformer
+notes: |
+  TDC ADMET 22 union SMILES 의 MoLFormer-XL 768-dim frozen pooler_output.
+  HuggingFace ibm/MoLFormer-XL-both-10pct, deterministic_eval=True.
+  scripts-old/precompute_molformer.py 의 logic 을 PrecomputeBase 위에 재구성.
+  parity check: parity/check_precompute.py molformer

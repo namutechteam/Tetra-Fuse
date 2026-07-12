@@ -1,0 +1,20 @@
+name: stack_smart__mtlchfilm_x_stlch
+kind: stack
+
+ensemble:
+  strategy: smart_fallback
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+  kwargs:
+    fit_split: val
+    split: test
+    winner_threshold: 0.5
+    fallback: average
+    eps: 1.0e-12
+    global_fit: false
+    unfit_strategy: uniform
+
+notes: |
+  chemeleon FiLM+aux MTL + chemeleon AdaptiveGNN STL
+  task 별 winner-takes-all + average fallback.

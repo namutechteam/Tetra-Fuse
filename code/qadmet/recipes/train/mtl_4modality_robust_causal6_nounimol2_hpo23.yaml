@@ -1,0 +1,119 @@
+name: mtl_4modality_robust_causal6_nounimol2_hpo23
+kind: train
+
+# mtl_4modality_robust_causal6_nounimol2 의 HPO winner (sweep/ Optuna 2-stage, 2026-06-04).
+#
+# 부모 recipe 와 아키텍처/modality 동일 (CheMeleon + MoLFormer-LoRA + GraphMVP,
+# robust_attention fusion + grouped head). 차이는 Tier A(학습률) + Tier B(정규화)
+# 6개 하이퍼파라미터뿐 — Stage A(30 trial, 2-seed proxy TPE) → Stage B(top-5 5-seed
+# 재검증) 의 최종 1위 config(= trial 23).
+#
+# Stage B 5-seed objective(SOTA 정규화, reg_weight=1.4):
+#   trial 23 = 0.9200 (평균 rank 7.73) vs baseline 0.9055 (평균 rank 8.55) → +0.0145.
+#   ※ 2-seed proxy 에선 trial 23 이 top-5 중 4위였으나 5-seed 재검증에서 1위로 역전
+#     (proxy 1위였던 trial 26 은 3위로 하락) — multi-fidelity 검증의 가치.
+#
+# 바뀐 값 (vs 부모):
+#   trainer.lr/init_lr/final_lr : 5e-4   → 1.26e-4   (constant LR, 1/4 수준)
+#   trainer.lr_lora             : 5e-5   → 1.89e-5
+#   trainer.lr_fusion           : 1e-4   → 5.28e-5
+#   model.head.kwargs.dropout   : 0.4    → 0.2125
+#   model.fusion.kwargs.modality_dropout : 0.2 → 0.2234
+#   model.fusion.entropy_weight : 0.01   → 0.0291
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.0290503        # HPO: 0.01 → 0.0291
+    kwargs:
+      output_dim: 300
+      tau_init: 3.0
+      tau_min: 0.5
+      anneal_epochs: 15
+      modality_dropout: 0.2234       # HPO: 0.2 → 0.2234
+      residual: true
+      pre_norm: true
+      warmup_epochs: 1
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2125                # HPO: 0.4 → 0.2125
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+  max_epochs: 20
+  patience: 5
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.000126257                    # HPO: 5e-4 → 1.26e-4 (constant LR)
+  init_lr: 0.000126257
+  final_lr: 0.000126257
+  warmup_epochs: 0
+  lr_lora: 0.0000188994              # HPO: 5e-5 → 1.89e-5
+  lr_fusion: 0.0000528067            # HPO: 1e-4 → 5.28e-5
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  HPO winner (trial 23) of mtl_4modality_robust_causal6_nounimol2.
+  Stage B 5-seed objective 0.9200 (평균 rank 7.73) vs baseline 0.9055 (8.55), +0.0145.
+  승리 영역: lr·lr_fusion 을 baseline 대비 크게 낮추고(1/4, 1/2) head_dropout 도 낮춤,
+  modality_dropout·entropy_weight 는 다소 높임. 회귀 task(VDss·Clearance_Micro·
+  Lipophilicity·LD50 등)에서 집중 개선 — reg_weight=1.4 objective 설계 의도대로.
+
+  DDP (2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_4modality_robust_causal6_nounimol2_hpo23.yaml \
+      --devices 2 --strategy ddp --find-unused-parameters --no-ddp-static-graph

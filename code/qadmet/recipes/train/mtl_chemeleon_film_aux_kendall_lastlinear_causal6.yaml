@@ -1,0 +1,144 @@
+name: mtl_chemeleon_film_aux_kendall_lastlinear_causal6
+kind: train
+
+# CheMeleon-major FiLM 변조 + Kendall UW (mixed_task_uncertainty) + causal6.
+#
+# mtl_chemeleon_film_aux_gradnorm_lastlinear_causal6 의 GradNorm 분기를
+# loss 만 Kendall UW 로 바꾼 짝 recipe (fusion/backbone/dataset/trainer 동일 →
+# loss 단독 ablation). loss·trainer.kwargs 는 mtl_4modality_robust_causal6.yaml
+# 의 Kendall UW 설정을 따름 (주석 "← robust_causal6" = 그 recipe 에서 가져온 값).
+#
+# 모달리티 배치 (lit_module: input_dims = [primary backbone, *extra_backbones]):
+#   - primary = CheMeleon (backbone, 2048d)            → FiLM embeddings[0]
+#   - aux     = MoLFormer-LoRA / UniMol2-LoRA / GraphMVP → conditions
+#   - z = γ⊙x + β + x, 이후 output_proj(z) (post-fusion Linear, identity-init).
+#
+# robust_causal6 대비 핵심 차이:
+#   - fusion: robust_attention → film (+ use_output_proj, gamma clamp).
+#   - loss / trainer.kwargs 는 robust_causal6 와 동일 (mixed_task_uncertainty, Kendall UW).
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← robust_causal6 (6-group causal)
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]   # ← robust_causal6
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:                                  # primary = FiLM embeddings[0]
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:                           # ← robust_causal6 (동일 backbone/LoRA 설정)
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: film
+    entropy_weight: 0.0                       # FiLM 은 attention 아님 — entropy reg 미사용
+    kwargs:
+      output_dim: 300                         # ← robust_causal6 (사용자 의도; 검증값은 768)
+      cond_hidden: 256                         # 보조 condition projection 차원 (3×256 concat)
+      condition_dropout: 0.2                   # ← robust_causal6 modality_dropout(0.2) 에 정렬
+      residual: true                           # z = γ⊙x + β + x
+      pre_norm: true                           # CheMeleon 2048 vs aux 768/768/300 scale 흡수
+      film_init_identity: true                 # γ_pre=0, β=0 시작 → identity modulation
+      warmup_epochs: 1                         # ← robust_causal6 fusion warmup 에 정렬 (20ep 단기)
+      use_output_proj: true                    # fused z 위 post-fusion Linear (300→300, identity-init).
+                                               # gradnorm 짝 recipe 와 아키텍처 동일하게 유지
+                                               # (Kendall 에선 shared_layer 역할 없음, identity-init 무해).
+      gamma_min: 0.3                           # γ lower bound: residual 과 함께면 x 계수 γ+1 →
+      gamma_max: 3.0                           # ≥1.3 보장, primary washout(γ→-1) 차단.
+  head:
+    type: grouped
+    routing: taskset_grouping                  # 코드 게이트 — 실제 grouping 은 TaskSet.initial_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4
+
+loss:
+  type: mixed_task_uncertainty                 # ← robust_causal6 (Kendall UW)
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null                         # Kendall UW 가 log-var 로 동적 가중 → uniform 강제
+  kwargs:
+    freeze_log_vars: false                     # ← robust_causal6 (log-var 학습 허용)
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]                       # ← robust_causal6
+  max_epochs: 20                               # ← robust_causal6 (단기 탐색)
+  patience: 5                                  # ← robust_causal6
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16                               # UniMol2 OPM N² hard ceiling
+  lr: 0.0005                                   # ← robust_causal6 (constant LR)
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0                             # constant LR (Noam 무효화 — init=final=peak)
+  lr_lora: 0.00005                             # ← robust_causal6
+  lr_fusion: 0.0001                            # ← robust_causal6 (gate collapse 방어)
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:                                      # ← robust_causal6: Kendall UW 는 자동 미분 →
+    accumulate_grad_batches: 1                 #   manual opt 비호환 이슈 없음.
+    gradient_clip_val: 1.0                      #   effective batch 32 = DDP 2-rank × 16.
+
+notes: |
+  CheMeleon primary + (MoLFormer-LoRA / UniMol2-LoRA / GraphMVP) FiLM 변조 + Kendall UW,
+  causal6 6-group. mtl_chemeleon_film_aux_gradnorm_lastlinear_causal6 의 loss 만
+  GradNorm → Kendall UW 로 교체한 짝 (fusion/backbone/dataset/trainer 동일 → loss 단독 비교).
+
+  Fusion (FiLM):
+    - x = primary_proj(H_chemeleon 2048d) → 300d
+    - γ,β = MLP(concat(cond_proj(H_molformer 768d), cond_proj(H_unimol2 768d),
+                       cond_proj(H_graphmvp 300d))) ∈ R^{300}
+    - z = γ⊙x + β + x  →  output_proj(z)  (post-fusion Linear 300→300, identity-init)
+    - γ clamp [0.3, 3.0]: residual 의 x 계수(γ+1)를 ≥1.3 으로 묶어 primary washout 차단.
+    - identity init (γ_pre=0, β=0, output_proj=I) + warmup 1 epoch → 초기엔 CheMeleon 단독.
+
+  Loss / Optim:
+    - mixed_task_uncertainty (Kendall UW): task 별 learnable log-variance 로 손실 가중
+      (L = Σ exp(-s_k)·L_k + s_k). freeze_log_vars=false → log-var 학습 허용.
+      자동 미분 단일 backward → manual opt 불필요 (accumulate/clip 정상 동작).
+    - lr=5e-4(constant) / lr_lora=5e-5 / lr_fusion=1e-4 분리 (robust_causal6 에서 carry).
+
+  비교 대상:
+    - 동일 fusion(FiLM) + GradNorm: mtl_chemeleon_film_aux_gradnorm_lastlinear_causal6.
+    - 동일 loss(Kendall UW) + robust_attention fusion: mtl_4modality_robust_causal6.
+
+  ⚠ 가중치 필요: data/weights/chemeleon_mp.pt (primary),
+     data/weights/graphmvp/graphmvp_hybrid.pth (aux, 없으면 random-init warning),
+     MoLFormer / UniMol2 84M ckpt (각 LoRA base).
+
+  DDP 권장 (2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_chemeleon_film_aux_kendall_lastlinear_causal6.yaml \
+      --devices 2 --strategy ddp --find-unused-parameters --no-ddp-static-graph
+    - find-unused-parameters: FiLM warmup(epoch 0) 이 film_gen 을 requires_grad=False 로 얼려
+      trainable subset 변동 → DDP reducer "unused parameters" crash 방어 (robust_causal6 와 동일).
+    - no-ddp-static-graph: UniMol2 LoRA reducer 충돌 + warmup(epoch 1) film_gen
+      requires_grad False→True 전환으로 static graph 가정 붕괴.

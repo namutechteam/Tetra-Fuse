@@ -1,0 +1,104 @@
+name: mtl_4modality_v2_reg_strong
+kind: train
+
+# σ freeze 1차 결과 (best val=ep1 너무 이름) 보고 처방.
+# 변경 (vs mtl_chemeleon_molformer_unimol2_graphmvp.yaml):
+#   1) 학습 속도 둔화 (best 시점 ep15~ 로 이동 기대)
+#       lr           1e-3   → 5e-4
+#       lr_lora      5e-5   → 3e-5
+#       lr_fusion    1e-4   → 5e-5
+#   2) Head capacity noise
+#       head dropout 0.2    → 0.4
+#   3) Fusion alpha 다양성 압박 (chem/mform collapse 방어)
+#       entropy_weight  0.01 → 0.05
+#       warmup_epochs    5  → 15
+#       modality_dropout 0.1 → 0.25
+#       tau_init        2.0 → 3.0
+# 그 외 (σ freeze, per-group WD head=0.10, gradient_clip 1.0, 22-task) 는 기본 동일.
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.05      # 0.01 → 0.05
+    kwargs:
+      output_dim: 768
+      tau_init: 3.0           # 2.0 → 3.0
+      tau_min: 0.5
+      anneal_epochs: 50
+      modality_dropout: 0.25  # 0.1 → 0.25
+      residual: true
+      pre_norm: true
+      warmup_epochs: 15       # 5 → 15
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4             # 0.2 → 0.4
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: kendall_uncertainty
+  kwargs:
+    freeze_log_vars: true      # σ=1 고정 (Kendall 자유도 무력화)
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005                   # 1e-3 → 5e-4
+  lr_lora: 0.00003             # 5e-5 → 3e-5
+  lr_fusion: 0.00005           # 1e-4 → 5e-5
+  num_workers: 4
+  kwargs:
+    accumulate_grad_batches: 2
+    gradient_clip_val: 1.0
+
+notes: |
+  v2 — σ freeze 1차 (best=ep1) 결과 보고 학습 속도 둔화 + reg 강화 패키지.
+  GPU1 의 v1 (mtl_chemeleon_molformer_unimol2_graphmvp.yaml) 과 *별도 run_id*
+  (recipe sha 다름) 로 artifact 분리. 동시 진행 가능.

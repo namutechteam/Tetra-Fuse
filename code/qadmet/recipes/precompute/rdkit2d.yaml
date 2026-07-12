@@ -1,0 +1,9 @@
+name: precompute_rdkit2d
+kind: precompute
+features:
+  descriptors:
+    - rdkit2d
+notes: |
+  TDC ADMET 22 union SMILES 의 RDKit 2D 200-dim descriptor.
+  scripts-old/precompute_rdkit2d.py 의 logic 을 PrecomputeBase 로 재구성.
+  parity check: parity/check_precompute.py rdkit2d

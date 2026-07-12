@@ -1,0 +1,6 @@
+name: stack_bs_k1_average__mtlchfilm
+kind: stack
+ensemble:
+  strategy: average
+  bases:
+    - mtl_chemeleon_film_aux

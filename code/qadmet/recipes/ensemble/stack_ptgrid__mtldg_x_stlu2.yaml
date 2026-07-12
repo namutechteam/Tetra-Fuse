@@ -1,0 +1,19 @@
+name: stack_ptgrid__mtldg_x_stlu2
+kind: stack
+
+ensemble:
+  strategy: per_task_grid
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_unimol2_lora
+  kwargs:
+    fit_split: val
+    split: test
+    grid_step: 0.1
+    global_fit: false
+    unfit_strategy: uniform
+    tie_breaker: smaller_w
+
+notes: |
+  chemprop MTL (7-group) + UniMol2 LoRA STL
+  task 별 (w, 1-w) 격자 sweep (val MSE 기준) — selection 변형. K=2 전용.

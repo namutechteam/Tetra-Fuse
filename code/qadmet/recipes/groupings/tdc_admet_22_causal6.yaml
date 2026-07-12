@@ -1,0 +1,25 @@
+# 6-group causal-chain 재편 (2026-05-20).
+# tdc_admet_22_mech 와 달리 partitioning_physchem 을 해체하고 물성을 인과 사슬 끝에 배치:
+#   - Solubility_AqSolDB → oral_uptake (수용성 → 막투과 → 장흡수 → 생체이용률 인과 사슬)
+#   - Lipophilicity_AstraZeneca → distribution_cns (logP → PPBR/BBB/VDss 분포 축 드라이버)
+# 나머지 4 그룹 (interaction_liabilities, metabolic_turnover, distal_safety,
+# composite_exposure) 은 tdc_admet_22_mech 와 동일.
+name: tdc_admet_22_causal6
+tasks: tdc_admet_22
+notes: >-
+  TDC ADMET leaderboard 22-task, causal-chain 6-group (2026-05-20).
+  tdc_admet_22_mech 의 partitioning_physchem 을 해체해 Solubility→oral_uptake,
+  Lipophilicity→distribution_cns 로 재배치.
+groups:
+  oral_uptake:
+    [Solubility_AqSolDB, Caco2_Wang, HIA_Hou, Bioavailability_Ma]
+  distribution_cns:
+    [Lipophilicity_AstraZeneca, PPBR_AZ, BBB_Martins, VDss_Lombardo]
+  interaction_liabilities:
+    [Pgp_Broccatelli, hERG, CYP2C9_Veith, CYP2D6_Veith, CYP3A4_Veith]
+  metabolic_turnover:
+    [CYP2C9_Substrate_CarbonMangels, CYP2D6_Substrate_CarbonMangels, CYP3A4_Substrate_CarbonMangels, Clearance_Hepatocyte_AZ, Clearance_Microsome_AZ]
+  distal_safety:
+    [AMES, DILI, LD50_Zhu]
+  composite_exposure:
+    [Half_Life_Obach]

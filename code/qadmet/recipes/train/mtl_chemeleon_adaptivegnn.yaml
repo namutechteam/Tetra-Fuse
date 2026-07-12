@@ -1,0 +1,78 @@
+name: mtl_chemeleon_adaptivegnn
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22_mech.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_bottleneck: 256
+      n_adapter_layers: 2
+      adapter_dropout: 0.0
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss:
+  type: mixed_task_gradnorm
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null            # GradNorm 동적 학습 → uniform 강제
+  kwargs:
+    alpha: 1.5                    # restoring force (Chen 2018 ADMET asymmetric 권장)
+    shared_layer: backbone
+    #shared_layer: backbone.proj.0 # backbone+projection의 마지막 레이어 CheMeleon 의 마지막 Linear (CHEMELEON_HIDDEN→d_h)
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 4
+
+notes: |
+  단일 backbone MTL — CheMeleon (frozen BondMessagePassing+MeanAggregation
+  + AdapterGIN trainable, adaptivegnn.md 2026-05-09 구현).
+
+  Backbone:
+    - chemeleon_mp.pt frozen, AdapterGINBlock 2층 (r=256) 만 학습.
+    - LoRA-style zero-init residual → 학습 시작 시 frozen-only baseline 과 출력 동등.
+    - 보조 modality 없음, fusion 없음 → 단일 backbone 으로 GroupedHead 직결.
+
+  Routing:
+    - dataset = tdc_admet_22_mech (routing.md mechanism-aligned 7-group).
+    - head.routing = taskset_grouping (코드 경로 게이트; 실제 grouping 은 TaskSet 의
+      initial_grouping = ADMET_7_GROUP_MECH 에서 옴).
+    - 그룹: partitioning_physchem / oral_uptake / distribution_cns /
+      interaction_liabilities / metabolic_turnover / distal_safety / composite_exposure.
+
+  Loss / Optim:
+    - mixed_task_gradnorm (bce + masked_mae + GradNorm dynamic task weighting).
+      shared_layer=backbone.proj.0 (CheMeleon proj 의 Linear) 의 ∥∇_W L_k∥ 로
+      각 task w_k 를 학습. α=1.5 (asymmetric). w 는 step 마다 sum=K 로 renormalize.
+      LitModule 가 manual optimization 모드로 두 step (L_main / L_grad) backward.
+    - LoRA 없음 → lr_lora 불필요, lr=1e-3 단일.
+
+  비교 대상:
+    - STL: stl_chemeleon_adaptivegnn.yaml (동일 backbone 설정, head=linear).
+    - MTL baseline routing: 동일 구성에서 dataset 만 tdc_admet_22 로 바꾸면 routing 효과
+      ablation 가능.

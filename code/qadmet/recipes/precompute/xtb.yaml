@@ -1,0 +1,12 @@
+name: precompute_xtb
+kind: precompute
+features:
+  descriptors:
+    - xtb
+notes: |
+  TDC ADMET 22 union SMILES 의 GFN2-xTB 4-dim QC descriptor
+  (dipole, homo_lumo_gap, electrons, total_energy).
+  scripts-old/compute_xtb_descriptors.py 의 ETKDG → MMFF/UFF → xtb single-point
+  파이프라인을 PrecomputeBase 위에 재구성.
+  실패 분자는 NaN row — 하류 missing_policy 가 처리.
+  parity check: parity/check_precompute.py xtb

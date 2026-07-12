@@ -1,0 +1,79 @@
+name: mtl_chemeleon_adaptivegnn_kendall_pcgrad
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22_mech.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_bottleneck: 256
+      n_adapter_layers: 2
+      adapter_dropout: 0.0
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss:
+  type: mixed_task_uncertainty_pcgrad
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null            # Kendall σ 가 reweighting 담당 → inverse-freq prior 끔.
+  kwargs:
+    freeze_log_vars: false        # Kendall σ 학습 자유도 유지 (= 2da91035e0a7 와 동일).
+    pcgrad_scope: trunk           # backbone (+fusion) 파라미터에만 PCGrad projection.
+    pcgrad_eps: 1.0e-12
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 4
+
+notes: |
+  Kendall UW (loss-level reweighting) + PCGrad (gradient-level conflict resolution)
+  조합 — 2da91035e0a7 (Kendall only) / f51fffae01e5 (GradNorm only) 와의 3-way 비교용.
+
+  알고리즘 (mixed_task_uncertainty_pcgrad):
+    1) Kendall 가중 per-task loss 벡터 weighted_L_k = reg_var_k · (1/σ²_k) · L̄_k.
+    2) 각 task k 별 autograd.grad(weighted_L_k, trunk_params, retain_graph=True)
+       → K=22 개의 per-task gradient 텐서.
+    3) PCGrad (Yu et al. 2020): 각 g_k 를 임의 순서로 다른 g_j 와 비교, cosine<0
+       이면 g_k - (g_k·g_j / ‖g_j‖²) g_j 로 사영 (j 의 정상평면).
+    4) projected gradients 합 → trunk params .grad 덮어쓰기.
+    5) (weighted_L_k.sum() + 0.5 Σ log σ²) backward → head/log_vars .grad 채움.
+    6) opt.step() + Noam LR scheduler step.
+
+  Kendall UW vs PCGrad 직교성 (이 recipe 의 가설):
+    - Kendall UW: 손실 함수 레벨에서 각 태스크의 "신뢰도" 로 가중치 결정 (확률적).
+    - PCGrad: 결정된 가중치로 계산된 그라디언트 레벨에서 "방향의 모순" 만 해결 (기하학적).
+    - 상호 보완: Kendall 이 "이 task 는 어렵다, weight 줄여" 라고 정하면, PCGrad 는
+      그 줄어든 weighted gradient 들 사이에서 "서로 상충되는 방향은 빼라" 만 정리.
+
+  비교 대상:
+    - 2da91035e0a7 (Kendall UW only) — 동일 backbone/head/data, PCGrad 없음.
+    - f51fffae01e5 (GradNorm only)  — Kendall σ 대신 dynamic w 학습.
+
+  진단 신호:
+    - sigma/<task>: Kendall σ_k (epoch 별, mixed_task_uncertainty path 와 동일).
+    - pcgrad/conflict_rate: pair-wise cos<0 비율 (PCGrad 가 실제 사영한 conflict 비율).
+    - pcgrad/mean_cosine: 평균 pairwise cosine (task 간 그라디언트 정렬도).

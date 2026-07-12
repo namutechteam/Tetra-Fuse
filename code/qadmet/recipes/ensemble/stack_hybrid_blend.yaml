@@ -1,0 +1,46 @@
+name: stack_hybrid_blend
+kind: stack
+
+ensemble:
+  strategy: hybrid_blend
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  kwargs:
+    fit_split: val            # primary (smart_fallback) 가 val 잔차로 task 별 결정 학습
+    split: test               # 본 split — 두 sub-strategy 의 test 예측을 alpha 블렌드
+    alpha: 0.5                # primary 가중치. 옛 v6 default. 0.0 → secondary only,
+                              #   1.0 → primary only.
+    primary: smart_fallback
+    primary_kwargs:
+      winner_threshold: 0.5   # best_mse / second_best_mse < 0.5 → winner-takes-all
+      fallback: average
+      eps: 1.0e-12
+      global_fit: false
+      unfit_strategy: uniform
+    secondary: average
+    secondary_kwargs:
+      weights: [0.7, 0.3]     # 옛 v6 의 stack 70/30 simple 평균. base 순서 (mtl=0.7, stl=0.3).
+
+notes: |
+  옛 phase4 v6 (run_stacking_v6_hybrid) 의 일반화. 옛 v6 는
+  ``alpha * v5_smart + (1 - alpha) * v1_avg(0.7, 0.3)`` 하드코딩이었으나, 신규는
+  primary/secondary 두 sub-strategy 를 registry 키로 자유 조합.
+
+  사용자 환경 prereq:
+    - 두 base train artifact 의 ``predictions.parquet`` 에 ``split="val"`` 행 필요
+      (smart_fallback 이 val 잔차 사용). Step 4.2 부터 MTL runner, Step 4.4 부터
+      STL DMPNN 도 val 행 작성.
+    - bases 순서가 secondary_kwargs.weights 의 순서와 일치해야 함 (위 [0.7, 0.3] 은
+      bases = [mtl, stl] 가정).
+
+  튜닝 가이드:
+    - alpha sweep 0.3 / 0.5 / 0.7 — 옛 v6 metrics 와 직접 비교 가능 (Step 3.7 parity).
+    - primary 를 ``oof_xgboost`` 로 바꾸면 옛 v4 + v1 의 hybrid 변형. 이 경우
+      primary_kwargs 에 ``meta_model_family`` / ``task_types`` 등 추가 필요.
+    - secondary 를 ``inverse_variance`` 로 바꾸면 robust baseline 도 자동 가중.
+
+  주의:
+    - sub-strategy 빌드 시 잘못된 인자는 ``ValueError`` (HybridBlend 가 sub-빌드
+      예외를 명시 wrap). recipe 작성 시 primary_kwargs / secondary_kwargs 의 키를
+      각 strategy 의 ``__init__`` 시그니처와 맞출 것.

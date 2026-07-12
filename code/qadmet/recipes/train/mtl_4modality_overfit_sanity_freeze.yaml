@@ -1,0 +1,97 @@
+name: mtl_4modality_overfit_sanity_freeze
+kind: train
+
+# σ freeze ablation — Kendall log_var 학습 자유도 무력화.
+# 공격 처방 (floor=-1, head WD=0.10, dropout=0.5, trunk=64) 그대로 + log_vars freeze.
+# 가설 H2: Kendall σ 학습이 본질 원인 → freeze 후 결과 좋으면 Kendall 제거 결정.
+
+dataset: !include _base/dataset/tdc_admet_5_sanity.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.1
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.01
+    kwargs:
+      output_dim: 768
+      tau_init: 2.0
+      tau_min: 0.5
+      anneal_epochs: 50
+      modality_dropout: 0.1
+      residual: true
+      pre_norm: true
+      warmup_epochs: 5
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 64
+      dropout: 0.5
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: kendall_uncertainty
+  kwargs:
+    freeze_log_vars: true   # ← 핵심 ablation: σ=1 고정 (Kendall 무력화)
+
+trainer:
+  seeds: [0]
+  max_epochs: 30
+  patience: 30
+  precision: bf16-mixed
+  early_stopping: false
+  batch_size: 16
+  lr: 0.001
+  lr_lora: 0.00005
+  lr_fusion: 0.0001
+  num_workers: 4
+  kwargs:
+    accumulate_grad_batches: 2
+    gradient_clip_val: 1.0
+
+notes: |
+  H2 ablation: log_vars.requires_grad=False → σ=1 고정 (precision=1) → Kendall weighting
+  은 inverse-freq c_k 만 동작. 공격 처방 (floor=-1, WD 0.10, dropout 0.5, trunk 64) 다른
+  부분 그대로. ep6 시점 gap 비교:
+    - 옛 floor=-2 처방: +1.68
+    - 새 floor=-1 공격: +2.59
+    - σ freeze (이 recipe): ?
+  결과 좋으면 Kendall 자체 제거 결정 — 큰 발견.

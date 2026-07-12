@@ -1,0 +1,13 @@
+name: stack_avg_uniform__mtlchfilm_x_stldr
+kind: stack
+
+ensemble:
+  strategy: average
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_dmpnn_rdkit
+  # weights 미지정 → 균등 1/K
+
+notes: |
+  chemeleon FiLM+aux MTL + chemprop+RDKit STL
+  Uniform 1/K average — fair baseline.

@@ -1,0 +1,73 @@
+name: mtl_unimol2_lora_only
+kind: train
+
+# Step 2 진단 (per-modality aux loss 의 코드-free 대체):
+#   "UniMol2 LoRA backbone 자체가 22 ADMET task 를 학습할 능력이 있는가?"
+#   - v2 결과에서 UniMol2 alpha 가 5% 로 collapse → backbone 죽음 vs fusion 미스배분 분리 불가능.
+#   - 단일 backbone MTL 로 fusion 영향 제거 → val_loss / per-task TDC 메트릭으로 직접 진단.
+#   - 비교 기준: v2 MAIN seed_0 best val_loss = -2.443 @ ep4 (fusion=uniform 단계).
+#     UniMol2-only 가 이에 근접 → backbone 정상, fusion 이 문제.
+#     크게 못 미침 → backbone 자체 문제.
+#
+# 변경점 (vs v2):
+#   - features.graph: chemeleon → null
+#   - features.embeddings: [molformer_tokens, unimol2_lmdb] → [unimol2_lmdb]
+#   - model.backbone: chemeleon → unimol2_lora (consumes: unimol2_lmdb)
+#   - model.extra_backbones: [molformer_lora, unimol2_lora] → []
+#   - model.fusion: robust_attention → null  (단일 backbone, fusion 우회)
+#   - trainer.seeds: [0,1,2,3,4] → [0]  (진단용 single seed)
+#   - trainer.max_epochs: 100 → 30, patience: 20 → 10
+#   - trainer.lr_fusion: 제거 (fusion 없음)
+#
+# 검증된 batch=16 + accum=2 (effective 32) 유지.
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: null
+  descriptors: []
+  embeddings: [unimol2_lmdb]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: unimol2_lora
+    consumes: [unimol2_lmdb]
+    kwargs:
+      ckpt_path: data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt
+      model_size: 84m
+      lora_rank: 16
+      lora_alpha: 32
+      lora_dropout: 0.1
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer:
+  seeds: [0]
+  max_epochs: 30
+  patience: 10
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.001
+  lr_lora: 0.00005
+  num_workers: 4
+  kwargs:
+    accumulate_grad_batches: 2
+
+notes: |
+  Step 2 진단: UniMol2-LoRA-only MTL.
+  per-modality aux loss 의 정식 구현은 lit_module 코드 변경 필요 (head + loss term + recipe schema).
+  본 recipe 는 동일 과학 질문 ("UniMol2 backbone 단독 학습력") 을 코드-free 로 진단하는 대체.
+  결과 해석:
+    - val_loss 가 v2 best (-2.443) 근처 도달 → UniMol2 정상, fusion 이 죽인 것.
+    - val_loss 가 크게 못 미침 → UniMol2 backbone 자체 문제 (LoRA rank/lr/feature 부적합).

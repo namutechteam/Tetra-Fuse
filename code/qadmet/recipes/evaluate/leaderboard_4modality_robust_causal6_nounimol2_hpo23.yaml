@@ -1,0 +1,23 @@
+name: leaderboard_4modality_robust_causal6_nounimol2_hpo23
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: mtl_4modality_robust_causal6_nounimol2_hpo23
+    target_kind: train
+    target_run_id: REPLACE_VIA_OVERRIDE   # run_trial 이 -o evaluation.kwargs.target_run_id=... 로 주입
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+  hpo23 winner recipe(grouping 실험용) 의 TDC leaderboard 랭킹.
+  grouping 실험: train 측에서 -o dataset.name 또는 -o dataset.grouping_override 로
+  routing group 만 바꾸고, 이 eval 은 target_run_id 로 해당 train run 을 가리킨다.
+  task_set=tdc_admet_22 (per-task metric 계산용 — grouping 과 무관, 항상 22 task 동일).

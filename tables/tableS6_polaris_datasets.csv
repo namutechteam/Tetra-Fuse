@@ -1,0 +1,7 @@
+Endpoint,Polaris slug,Target variable,n (train+val),n (test)
+HLM_CLint,adme-fang-hclint-reg-v1,LOG_HLM_CLint,2230,576
+RLM_CLint,adme-fang-rclint-reg-v1,LOG_RLM_CLint,2220,559
+MDR1_ER,adme-fang-perm-reg-v1,LOG_MDR1-MDCK_ER,1920,483
+Solubility,adme-fang-solu-reg-v1,LOG_SOLUBILITY,1578,400
+HPPB,adme-fang-hppb-reg-v1,LOG_HPPB,126,34
+RPPB,adme-fang-rppb-reg-v1,LOG_RPPB,111,24

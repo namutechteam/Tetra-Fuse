@@ -1,0 +1,35 @@
+name: mtl_dmpnn_rdkit_xtb
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: dmpnn
+  descriptors: [rdkit2d, xtb]
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml
+  # fusion 미사용 — descriptors 만 쓰는 case 는 DMPNN 의 X_d concat 으로 흡수.
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer: !include _base/trainer/default.yaml
+
+notes: |
+  옛 phase1.3b 변종: D-MPNN + RDKit2D(200) + GFN2-xTB(4) = 204-dim X_d block.
+
+  데이터 경로 (Step B, 2026-05-01): descriptors 합 (204) 이 chemprop X_d 로 흘러
+  ``MPNN.fingerprint`` 가 fp 뒤에 concat → backbone output_dim = d_h + 204 = 504.
+
+  xtb 는 ETKDG 실패 분자에 대해 NaN row → 본 recipe 에서는 0 으로 채움. "왜 0
+  인지" 는 ``mtl_dmpnn_rdkit_xtb_missing.yaml`` 에서 gfn_missing_vector 마스크로
+  보강한다.

@@ -1,0 +1,19 @@
+name: stack_ptgrid__mtldr_x_stldr
+kind: stack
+
+ensemble:
+  strategy: per_task_grid
+  bases:
+    - mtl_dmpnn_rdkit
+    - stl_dmpnn_rdkit
+  kwargs:
+    fit_split: val
+    split: test
+    grid_step: 0.1
+    global_fit: false
+    unfit_strategy: uniform
+    tie_breaker: smaller_w
+
+notes: |
+  chemprop+RDKit MTL + chemprop+RDKit STL (rdkit-rich pair)
+  task 별 (w, 1-w) 격자 sweep (val MSE 기준) — selection 변형. K=2 전용.

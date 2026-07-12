@@ -1,0 +1,13 @@
+name: stack_bs_k1_ivar__stlch
+kind: stack
+ensemble:
+  strategy: inverse_variance
+  bases:
+    - stl_chemeleon_adaptivegnn
+  kwargs:
+    fit_split: val
+    split: test
+    eps: 1.0e-6
+    global_fit: false
+    normalize_weights: true
+    unfit_strategy: uniform

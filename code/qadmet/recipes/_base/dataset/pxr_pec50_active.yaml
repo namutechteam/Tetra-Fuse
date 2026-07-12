@@ -1,0 +1,12 @@
+name: pxr_pec50_only_active
+split: active_cluster_5seed
+seeds: [1, 2, 3, 4, 5]
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths:
+    rdkit2d: data/pxr_rdkit_2d.parquet
+    molformer: data/embeddings/pxr_molformer.parquet
+    molformer_tokens: data/embeddings/pxr_molformer_tokens.parquet
+    unimol2: data/embeddings/pxr_unimol2_84m_frozen.parquet
+  lmdb_paths:
+    unimol2_lmdb: data/embeddings/pxr_unimol2_features.lmdb

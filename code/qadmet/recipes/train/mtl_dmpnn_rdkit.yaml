@@ -1,0 +1,35 @@
+name: mtl_dmpnn_rdkit
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: dmpnn
+  descriptors: [rdkit2d]
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml
+  # fusion 미사용 — descriptors 만 쓰는 case 는 DMPNN 의 X_d concat 으로 직접
+  # 흡수되므로 fusion 모듈이 필요 없음 (옛 phase1.3a 와 같은 단일 backbone 경로).
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer: !include _base/trainer/default.yaml
+
+notes: |
+  옛 phase1.3a 대응: D-MPNN + RDKit2D 200-dim descriptor.
+
+  데이터 경로 결정 (Step B, 2026-05-01):
+    rdkit2d 는 chemprop ``MPNN.fingerprint`` 의 X_d 자리에 concat → backbone
+    output_dim = d_h(300) + 200 = 500. fusion 모듈 미사용. 옛 phase1.3a 와 동일
+    경로 (옛 X_d concat 패턴 부활). runner 가 ``d_xd`` 를 자동 주입하므로 backbone
+    kwargs 에는 적지 않아도 동작.

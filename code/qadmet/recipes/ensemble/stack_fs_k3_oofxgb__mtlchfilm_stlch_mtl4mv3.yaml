@@ -1,0 +1,19 @@
+name: stack_fs_k3_oofxgb__mtlchfilm_stlch_mtl4mv3
+kind: stack
+ensemble:
+  strategy: oof_xgboost
+  bases:
+    - mtl_chemeleon_film_aux
+    - stl_chemeleon_adaptivegnn
+    - mtl_4modality_v3_capacity_min
+  meta_model: xgboost
+  kwargs:
+    fit_split: val
+    split: test
+    task_set: tdc_admet_22
+    meta_model_kwargs:
+      n_estimators: 100
+      max_depth: 4
+      learning_rate: 0.1
+      tree_method: hist
+    unfit_strategy: uniform

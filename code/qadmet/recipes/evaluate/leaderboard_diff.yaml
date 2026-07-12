@@ -1,0 +1,47 @@
+name: leaderboard_diff
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  compare_to:
+    - mtl_dmpnn_grouped         # train artifact
+    - stl_dmpnn_rdkit           # train artifact
+    - stack_average_70_30       # stack artifact (옛 v1 0.7/0.3)
+  kwargs:
+    target: stack_hybrid_blend  # 옛 v6 hybrid α=0.5, 가장 좋은 ensemble 후보
+    target_kind: stack
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean       # 옛 phase result CSV 와 컬럼 정합
+    tie_eps: 0.005
+    compare_kinds:              # name → kind 매핑 (기본 "train", stack 만 명시)
+      stack_average_70_30: stack
+    legacy_csvs:                # 옛 phase 산출물 비교 (data/results 의 CSV 들)
+      phase1.1_grouped: data/results/phase1_1_grouped.csv
+      phase2_stl_summary: data/results/phase2_stl_summary.csv
+      phase3_stack_v1_avg70: data/results/phase3_stack_v1_avg70.csv
+      phase4_stack_v6_a0.5: data/results/phase4_stack_v6_hybrid_a0.5.csv
+    # leaderboard:              # 사용자 환경에서 인터넷 가능할 때 활성 — 기본 비활성
+    #   methods: [Chemprop, MapLight + GNN, Top]
+    #   use_cache: true
+
+notes: |
+  Step 5 의 핵심 사용 사례 — 옛 phase 결과 vs 신규 hybrid stack 의 W/L/T 매트릭스.
+  metric 컬럼은 ensemble_mean (옛 phase CSV 의 대표값) 으로 비교. tie_eps=0.005 는
+  TDC 리더보드 자릿수 기준.
+
+  실행 전 사용자 환경에 다음 4 artifact 가 있어야 한다:
+    - train/mtl_dmpnn_grouped/<run_id>/data/predictions.parquet
+    - train/stl_dmpnn_rdkit/<run_id>/data/predictions.parquet
+    - stack/stack_average_70_30/<run_id>/data/predictions.parquet
+    - stack/stack_hybrid_blend/<run_id>/data/predictions.parquet
+  Step 3.7 의 실 학습 결과 (run_id 51cb1c2ee567 / 7d69e8265dec / ae294d7a097c /
+  b268fd93e697) 가 정확히 이 조합.
+
+  산출물:
+    - data/metrics.csv         : target (stack_hybrid_blend) 의 7-컬럼 표
+    - data/comparison.csv      : long [dataset, metric, target, other_label, other,
+                                       delta, verdict]
+    - data/comparison.md       : per-task pivot + W/L/T 요약 markdown
+    - manifest.metrics.wlt     : 각 비교 대상별 W/L/T/missing/net 요약

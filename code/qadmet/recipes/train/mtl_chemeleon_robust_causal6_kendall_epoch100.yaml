@@ -1,0 +1,122 @@
+name: mtl_chemeleon_robust_causal6_kendall
+kind: train
+
+# CheMeleon uni-backbone + Kendall UW (mixed_task_uncertainty) + causal6 (6-group).
+#
+# mtl_4modality_robust_causal6.yaml 에서 출발해 "single chemeleon backbone" 으로
+# 축소한 baseline. 4-modality 의 핵심 구성요소 중 다음을 제거함:
+#   - extra_backbones (MoLFormer-LoRA / UniMol2-LoRA / GraphMVP) → []
+#   - fusion (robust_attention) → null  (단일 backbone → 융합 불필요)
+#   - embeddings [] (graph 만 소비)
+# 이에 따라 robust_causal6 의 lr_lora / lr_fusion / fusion warmup / modality_dropout /
+# UniMol2 batch-16 OPM 제약은 모두 사문화 → 제거하거나 free knob 으로 강등.
+#
+# robust_causal6 에서 유지 (주석 "← robust_causal6"):
+#   - dataset = tdc_admet_22_causal6 (6-group causal)
+#   - loss = mixed_task_uncertainty (Kendall UW), freeze_log_vars false
+#   - trainer 레짐: 20ep 단기 / constant LR 5e-4 / bf16-mixed / patience 5 / batch 16
+#   - head: grouped(taskset_grouping), trunk_hidden 128, dropout 0.4
+# uni-backbone 전용 추가 (← uni):
+#   - backbone.adapter_kind=paper (AAAI'24 AdapterGNN) — frozen backbone 에
+#     학습 capacity 부여. fusion 이 capacity 를 담당하던 4-modality 와 달리
+#     uni-backbone 은 adapter capacity 가 성능에 직결.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← robust_causal6 (6-group causal)
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []                  # ← uni: 보조 modality 임베딩 미소비 (graph only)
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_kind: paper          # AAAI'24 paper-faithful AdapterGNN (backbone default,
+                                   #   명시). depth-1=2 iter 마다 pre/post block, γ init=0
+                                   #   → 초기엔 frozen-only baseline 과 출력 동등.
+      adapter_bottleneck: 256      # ← robust_causal6 chemeleon 과 동일 (backbone default 256).
+                                   #   4modality 는 미명시 = default 256 → 동일 capacity 유지.
+      adapter_dropout: 0.0
+  extra_backbones: []             # ← uni: MoLFormer/UniMol2/GraphMVP 제거
+  fusion: null                    # ← uni: 단일 backbone → robust_attention 융합 제거
+  head:
+    type: grouped
+    routing: taskset_grouping      # 코드 게이트 — 실제 grouping 은 TaskSet.initial_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4
+
+loss:
+  type: mixed_task_uncertainty     # ← robust_causal6 (Kendall UW)
+  classification: bce_with_logits
+  regression: masked_mae           # sparse 라벨 마스킹 필수
+  task_weighting: null             # Kendall σ 가 log-var 로 동적 가중 → inverse-freq prior 끔
+  kwargs:
+    freeze_log_vars: false         # ← robust_causal6 (log-var 학습 허용)
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100                   # ← robust_causal6 (단기 탐색)
+  patience: 15                      # ← robust_causal6
+  precision: bf16-mixed            # ← robust_causal6
+  early_stopping: true
+  batch_size: 16                   # ← robust_causal6 미러. ⚠ UniMol2 OPM N² ceiling 은
+                                   #   uni-backbone 엔 부재 → 사실상 free knob (상향 가능).
+  lr: 0.0005                       # ← robust_causal6 (constant LR)
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0                 # constant LR (Noam 무효화 — init=final=peak)
+  # lr_lora / lr_fusion 제거: uni-backbone 엔 LoRA·fusion 파라미터 없음 → 단일 lr.
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1     # effective batch 32 = DDP 2-rank × 16
+    gradient_clip_val: 1.0
+
+notes: |
+  CheMeleon uni-backbone (AdapterGNN paper-faithful) + Kendall UW + causal6 6-group.
+  mtl_4modality_robust_causal6.yaml 을 single-backbone 으로 축소한 baseline —
+  4-modality robust_attention fusion / FiLM-aux 대비 "modality 1 개" 하한선 측정용.
+
+  Backbone:
+    - chemeleon_mp.pt frozen (BondMessagePassing + MeanAggregation).
+    - adapter_kind="paper": chemprop depth=3 의 (depth-1)=2 iteration 마다
+      pre/post AdapterGNNBlock 쌍 (bond-level, d=2048, r=256). 총 4 adapter.
+      각 block = down → ReLU → up → BN → γ·scale (parameter init=0) → dropout → delta.
+      γ=0 초기엔 frozen-only baseline 과 출력 동등 → 안정적 warm start.
+    - trainable post-pool Linear backbone.proj.0 (CHEMELEON_HIDDEN → d_h=2048).
+
+  Routing:
+    - dataset = tdc_admet_22_causal6 (6-group causal chain).
+    - 그룹 (총 22 task): oral_uptake(4) / distribution_cns(4) /
+      interaction_liabilities(5) / metabolic_turnover(5) / distal_safety(3) /
+      composite_exposure(1).
+    - head.routing 문자열은 코드 경로 게이트일 뿐, 실제 grouping 은
+      TaskSet.initial_grouping = ADMET_6_GROUP_CAUSAL 에서 옴.
+
+  Loss / Optim:
+    - mixed_task_uncertainty (Kendall UW): task 별 learnable log-variance 로 손실 가중
+      (L = Σ exp(-s_k)·L_k + s_k). freeze_log_vars=false → log-var 학습 허용.
+      자동 미분 단일 backward → manual opt 불필요 (accumulate/clip 정상 동작).
+    - lr=5e-4 constant 단일 (LoRA·fusion 없음 → lr 분리 불필요).
+
+  비교 대상:
+    - mtl_4modality_robust_causal6 (robust_attention 4-modality, 동일 loss/causal6).
+    - mtl_chemeleon_film_aux_kendall_lastlinear_causal6 (CheMeleon primary + FiLM aux).
+    → 셋 다 Kendall UW + causal6 동일, "modality/fusion 구성" 만 다른 ablation 축.
+
+  ⚠ 가중치 필요: data/weights/chemeleon_mp.pt.
+
+  실행 예 (torchrun, 2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_chemeleon_robust_causal6_kendall.yaml \
+      --devices 2 --strategy ddp
+    - robust_causal6 와 달리 UniMol2 LoRA reducer / fusion warmup 이 없으므로
+      --no-ddp-static-graph / --find-unused-parameters 불필요 (AdapterGNN γ init=0
+      파라미터도 graph 에 등록되어 "unused" 아님).

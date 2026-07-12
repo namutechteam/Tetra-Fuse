@@ -1,0 +1,118 @@
+name: mtl_chemeleon_adaptivegnn_gradnorm_lastlinear_causal6
+kind: train
+
+# 3-way combination recipe (2026-05-20):
+#   1. GradNorm scope = last shared linear only (backbone.proj.0)
+#      → docs/sessions/2026-05-20_gradnorm_review_resume_fix.md
+#        Chen 2018 표준 proxy. per-task autograd 호출이 단일 W 텐서로 좁아져
+#        step 당 비용 대폭 감소. resume 시 _gradnorm_L_init_set BoolTensor
+#        buffer 패치도 함께 적용된 상태.
+#   2. AdapterGNN paper-faithful (adapter_kind="paper")
+#      → docs/sessions/2026-05-20_adaptergnn_paper_faithful_rewrite.md
+#        Li et al. AAAI'24 Eq.(7-8). chemprop depth=3 → 2 pre + 2 post
+#        AdapterGNNBlock (BN + learnable γ scalar init=0, delta-only parallel).
+#   3. Routing = causal6 (tdc_admet_22_causal6, 6-group)
+#      → docs/sessions/2026-05-20_causal6_grouping.md
+#        partitioning_physchem 해체. Sol→oral_uptake, Lipo→distribution_cns.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_kind: paper          # AAAI'24 paper-faithful (default 이지만 명시)
+      adapter_bottleneck: 128
+      adapter_dropout: 0.0
+      # n_adapter_layers 는 paper 모드에서 무시 (depth-1 = 2 자동 결정)
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping         # 코드 경로 게이트만 — 실제 grouping 은
+                                   # task_set.initial_grouping (6-group) 에서 옴
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss:
+  type: mixed_task_gradnorm
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null             # GradNorm 동적 학습 → uniform 강제
+  kwargs:
+    alpha: 1.5                     # restoring force (Chen 2018 ADMET asymmetric)
+    shared_layer: backbone.proj.0  # CheMeleon post-pool Linear
+                                   # (CHEMELEON_HIDDEN+d_xd → d_h).
+                                   # resolver 가 nn.Linear → .weight 추출 →
+                                   # 단일 W 텐서로 per-task ∥∇W L_k∥ 측정.
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100
+  patience: 20
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 4
+
+notes: |
+  3-way 합성: GradNorm last-linear scope + AdapterGNN paper-faithful + causal6.
+
+  Backbone:
+    - chemeleon_mp.pt frozen (BondMessagePassing + MeanAggregation).
+    - adapter_kind="paper": chemprop depth=3 의 (depth-1)=2 iteration 마다
+      pre/post AdapterGNNBlock 쌍 (bond-level, d=2048, r=256). 총 4 adapter.
+      각 block = down → ReLU → up → BN → γ·scale (parameter init=0)
+      → dropout → delta. γ=0 초기엔 frozen-only baseline 과 출력 동등.
+    - parallel wiring (Eq.8): h_l = frozen_update + s1·A1(H) + s2·A2(M).
+    - trainable post-pool Linear self.proj[0] (CHEMELEON_HIDDEN → d_h=2048).
+
+  Routing:
+    - dataset = tdc_admet_22_causal6 (6-group causal chain).
+    - 그룹 (총 22 task): oral_uptake(4) / distribution_cns(4) /
+      interaction_liabilities(5) / metabolic_turnover(5) / distal_safety(3) /
+      composite_exposure(1).
+    - head.routing 문자열은 train.py 의 코드 경로 게이트일 뿐, 실제 grouping
+      은 TaskSet.initial_grouping = ADMET_6_GROUP_CAUSAL 에서 옴.
+
+  Loss / Optim:
+    - mixed_task_gradnorm: bce + masked_mae + GradNorm dynamic w.
+    - shared_layer=backbone.proj.0 (마지막 공유 Linear).
+      Chen 2018 원논문의 last-shared-layer proxy. per-task autograd.grad
+      호출이 1 개 weight tensor 로 좁아져 step 당 비용이 backbone-wide 대비
+      크게 줄어듦.
+    - α=1.5, w 는 step 마다 sum=K=22 로 renormalize.
+    - manual optimization: main_opt(W·head·backbone) + w_opt(w) 분리.
+    - lr=1e-3 단일 (LoRA 없음).
+
+  비교 대상:
+    - GradNorm scope ablation:
+        backbone-wide  → mtl_chemeleon_adaptivegnn (7-group mech).
+        backbone.proj.0 + 7-group mech → mtl_chemeleon_adaptivegnn_gradnorm_lastlinear.
+        backbone.proj.0 + 6-group causal → 본 recipe.
+    - Routing ablation:
+        7-group mech (위 두 recipe) vs 6-group causal (본 recipe).
+        Sol/Lipo 재배치 효과를 동일 backbone/loss 에서 직접 측정.
+    - Loss family:
+        Kendall + PCGrad → mtl_chemeleon_adaptivegnn_kendall_pcgrad / _scopeall.
+
+  기대 시그널:
+    - causal6 효과: Half_Life (singleton) 의 negative transfer 제거,
+      Sol·Caco2·HIA·Bio co-training 으로 oral_uptake 인과 사슬 학습,
+      Lipo·PPBR·BBB·VDss 분포 축 정렬. mech 7-group 의 best epoch / overfit
+      진입 시점과 비교.
+    - last-linear scope: backbone-wide 대비 성능 동등 ± 노이즈 → 원논문 proxy
+      충분. 성능 하락 시 adapter delta 까지 task imbalance 신호가 필요한
+      이유 분석 필요.

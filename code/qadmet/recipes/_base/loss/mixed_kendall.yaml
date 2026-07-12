@@ -1,0 +1,5 @@
+type: mixed_task_uncertainty
+classification: bce_with_logits
+regression: masked_mae
+task_weighting: kendall_uncertainty
+kwargs: {}

@@ -1,0 +1,63 @@
+name: mtl_dmpnn_robust_causal6_kendall_tdcpxr25
+kind: train
+
+# DMPNN (from-scratch, descriptor 없음) + Kendall UW + causal6.
+# mtl_chemeleon_robust_causal6_kendall.yaml 와 동일 옵션 — backbone(DMPNN) 만 차이 (descriptor 0).
+# per-modality 비교 세트(ch/gm/um/mf) 의 dmpnn graph-only 축. (옛 mtl_dmpnn_grouped 의 현재-옵션 버전)
+#
+# ★ scratch 모델 예외: max_epochs 50 / patience 7 (pretrain warm start 없음 → 수렴 여유).
+# 그 외(loss / head / dataset / precision / LR / batch)는 base 와 동일.
+
+dataset: !include _base/dataset/tdc_pxr_25_causal6.yaml   # ← 25-task (TDC22+PXR3)
+
+features:
+  graph: dmpnn
+  descriptors: []                  # graph-only (rdkit/xtb 변형의 하한 baseline)
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml   # type: dmpnn (d_h=300, depth=3, scratch)
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4                 # ← base 와 동일
+
+loss:
+  type: mixed_task_uncertainty     # Kendall UW
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null             # ← base 와 동일 (mixed_kendall include 의 kendall_uncertainty 아님)
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 100                   # ★ scratch 예외 (base 20)
+  patience: 15                      # ★ scratch 예외 (base 5)
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16                   # base 와 동일 축 정렬 (DMPNN 은 상향 가능한 free knob)
+  lr: 0.0005                       # constant LR
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  DMPNN(scratch, graph-only) + Kendall UW + causal6. mtl_chemeleon_robust_causal6_kendall 와
+  동일 옵션이며 backbone(DMPNN) 만 다르고 descriptor 는 없음.
+  (옛 mtl_dmpnn_grouped = tdc_admet_22 / default trainer 의 현재-옵션 변환 버전; 원본은 보존)
+
+  scratch 예외: max_epochs 50 / patience 7 (pretrain warm start 없음).
+  ⚠ chemeleon(pretrained) 런은 const-LR 5e-4 에서 best epoch 2~4 로 매우 빨리 수렴 →
+    scratch DMPNN 도 50 상한 안에서 early-stop 으로 종료될 가능성 높음 (warmup 0 초기 불안정 주시).

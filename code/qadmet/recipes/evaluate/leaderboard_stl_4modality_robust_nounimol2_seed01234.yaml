@@ -1,0 +1,22 @@
+name: leaderboard_stl_4modality_robust_nounimol2_seed01234
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: stl_4modality_robust_nounimol2
+    target_kind: train
+    target_run_id: a57008843b9b   # ← train 출력 run_id 붙여넣기
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+  MAP fusion 의 STL 대응물 (joint 3-modality fusion, per-task) 런의 TDC leaderboard.
+  target_run_id 는 stl_4modality_robust_nounimol2_seed01234.yaml train 출력 run_id 로 교체.
+  MTL 대조: leaderboard_4modality_robust_causal6_nounimol2.yaml (run 11ef0eb31194).

@@ -1,0 +1,28 @@
+cff-version: 1.2.0
+message: "If you use this software or the accompanying data, please cite it as below."
+title: "Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction"
+authors:
+  - family-names: An
+    given-names: Taekyeong
+    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
+  - family-names: Han
+    given-names: Herim
+    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
+  - family-names: Lee
+    given-names: Jinhee
+    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
+  - family-names: Yeom
+    given-names: Minsun
+    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
+version: 1.0.0
+date-released: 2026-07-13
+license: MIT
+# doi: 10.5281/zenodo.XXXXXXX  # TODO: fill in after first Zenodo release
+repository-code: "https://github.com/USERNAME/REPONAME"  # TODO: set GitHub URL
+keywords:
+  - ADMET
+  - molecular property prediction
+  - late fusion
+  - ensemble
+  - Therapeutics Data Commons
+

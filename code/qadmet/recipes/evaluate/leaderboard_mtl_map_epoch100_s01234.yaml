@@ -1,0 +1,20 @@
+name: leaderboard_4modality_robust_causal6_nounimol2
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  kwargs:
+    target: mtl_4modality_robust_causal6_nounimol2
+    target_kind: train
+    target_run_id: 9afd69d9fcbf   # ← train 출력 run_id 붙여넣기
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    leaderboard:
+      methods: [Top]
+      use_cache: true
+
+notes: |
+

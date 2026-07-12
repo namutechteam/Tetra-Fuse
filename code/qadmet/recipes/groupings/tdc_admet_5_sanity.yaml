@@ -1,0 +1,17 @@
+# 4-modality overfit 진단용 sanity subset. 작은/큰 · clf/reg 균형 + 5 group 사용으로
+# GroupedHead trunk 활성화 다양성 확보.
+# tasks: auto — task 목록·순서를 groups 펼친 순서에서 도출 (22-task subset 이므로).
+name: tdc_admet_5_sanity
+tasks: auto
+notes: "4-modality overfit 진단용 5-task sanity (3 clf + 2 reg, 5 group)."
+groups:
+  transporter:
+    [Bioavailability_Ma]      # clf, 512 (small)
+  cyp_inhibition:
+    [CYP3A4_Veith]            # clf, ~12k (large)
+  toxicity:
+    [DILI]                    # clf, 379 (smallest)
+  pk_clearance:
+    [Half_Life_Obach]         # reg, 667 (small, hard)
+  solubility_perm:
+    [Solubility_AqSolDB]      # reg, ~10k (large)

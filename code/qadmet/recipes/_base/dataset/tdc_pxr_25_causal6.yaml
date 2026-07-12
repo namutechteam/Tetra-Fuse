@@ -1,0 +1,10 @@
+name: tdc_pxr_25_causal6_pxr
+split: scaffold_5seed
+seeds: [0, 1, 2, 3, 4]
+# plan_details.md §2.5a — MTL 4종(D-MPNN/MoLFormer/GraphMVP/MAP) 용.
+# graphmvp_data 는 synthetic(즉석 featurize) → parquet 불필요. 즉 parquet 필요 modality 는
+# molformer_tokens(+molformer) 뿐. graph(dmpnn/chemeleon)도 synthetic.
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths:
+    molformer_tokens: data/embeddings/molformer_tokens_tdcpxr.parquet

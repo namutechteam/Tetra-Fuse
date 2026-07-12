@@ -1,0 +1,13 @@
+name: tdc_admet_22
+split: scaffold_5seed
+seeds: [1, 2, 3, 4, 5]
+kwargs:
+  parquet_root: data/embeddings
+  parquet_paths:
+    rdkit2d: data/rdkit_2d.parquet
+    xtb: data/xtb_descriptors.parquet
+    molformer: data/embeddings/molformer.parquet
+    molformer_tokens: data/embeddings/molformer_tokens.parquet
+    unimol2: data/embeddings/unimol2_84m_frozen.parquet
+  lmdb_paths:
+    unimol2_lmdb: data/embeddings/unimol2_features.lmdb

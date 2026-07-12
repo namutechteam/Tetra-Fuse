@@ -1,0 +1,60 @@
+name: mtl_dmpnn_rdkit_robust_causal6_kendall
+kind: train
+
+# DMPNN (from-scratch) + RDKit2D descriptors + Kendall UW + causal6.
+# mtl_chemeleon_robust_causal6_kendall.yaml 와 동일 옵션 — backbone(DMPNN) + descriptors 만 차이.
+# (옛 mtl_dmpnn_rdkit 의 현재-옵션 버전; 원본 mtl_dmpnn_rdkit.yaml 은 보존)
+#
+# ★ scratch 모델 예외: max_epochs 50 / patience 7 (pretrain warm start 없음).
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← 6-group causal
+
+features:
+  graph: dmpnn
+  descriptors: [rdkit2d]          # RDKit 2D descriptor — runner 가 d_xd(=200) 자동 주입 → X_d concat
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml   # type: dmpnn (d_h=300, depth=3, scratch)
+  extra_backbones: []
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4                 # ← base 와 동일
+
+loss:
+  type: mixed_task_uncertainty     # Kendall UW
+  classification: bce_with_logits
+  regression: masked_mae
+  task_weighting: null             # ← base 와 동일
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 50                   # ★ scratch 예외 (base 20)
+  patience: 7                      # ★ scratch 예외 (base 5)
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16
+  lr: 0.0005                       # constant LR
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  DMPNN(scratch) + RDKit2D + Kendall UW + causal6. backbone(DMPNN)/descriptors(rdkit2d) 만 base 와 다름.
+  rdkit2d(200) → chemprop X_d concat → output_dim = 300+200 = 500 (runner d_xd 자동 주입, fusion 불필요).
+  (옛 mtl_dmpnn_rdkit 의 현재-옵션 변환 버전; 원본 보존)
+
+  scratch 예외: max_epochs 50 / patience 7.

@@ -1,0 +1,21 @@
+# 경험적 7-group grouping (PLAN_MTL_v2.md 기반).
+# outcome/liability/물성 축이 섞여 있어 negative transfer 가설이 강한 baseline grouping.
+# task 목록·순서는 코드(tdc_admet.py ALL_TASKS)가 단일 진실원 — 여기선 grouping 만 정의.
+name: tdc_admet_22
+tasks: tdc_admet_22
+notes: "TDC ADMET leaderboard 22-task (13 cls + 9 reg). 7-group grouping 포함."
+groups:
+  transporter:
+    [HIA_Hou, Pgp_Broccatelli, BBB_Martins, Bioavailability_Ma]
+  cyp_inhibition:
+    [CYP2C9_Veith, CYP2D6_Veith, CYP3A4_Veith]
+  cyp_substrate:
+    [CYP2C9_Substrate_CarbonMangels, CYP2D6_Substrate_CarbonMangels, CYP3A4_Substrate_CarbonMangels]
+  toxicity:
+    [AMES, DILI, hERG]
+  pk_clearance:
+    [Clearance_Hepatocyte_AZ, Clearance_Microsome_AZ, Half_Life_Obach, VDss_Lombardo]
+  solubility_perm:
+    [Solubility_AqSolDB, Lipophilicity_AstraZeneca, Caco2_Wang, PPBR_AZ]
+  tox_acute:
+    [LD50_Zhu]

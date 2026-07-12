@@ -1,0 +1,21 @@
+name: stl_3mod_wlt_gmvp_target
+kind: evaluate
+
+evaluation:
+  benchmark: tdc_admet
+  aggregate: mean
+  compare_to:
+    - stl_molformer_lora
+  kwargs:
+    target: stl_graphmvp_adaptivegnn
+    target_kind: train
+    target_run_id: 54ea17568152
+    split: test
+    task_set: tdc_admet_22
+    column: ensemble_mean
+    tie_eps: 0.005
+    base_run_ids:
+      stl_molformer_lora: 1674754ee094
+
+notes: |
+  stl_3mod_wlt 보충 — 빠진 pair (graphmvp ↔ molformer) W/L/T 채우기.

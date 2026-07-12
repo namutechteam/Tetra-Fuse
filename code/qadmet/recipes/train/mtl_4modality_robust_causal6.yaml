@@ -1,0 +1,119 @@
+name: mtl_4modality_robust_causal6
+kind: train
+
+# 4-modality (CheMeleon 2048 + MoLFormer-LoRA 768 + UniMol2-LoRA 768 + GraphMVP 300)
+# robust_attention fusion + grouped head (causal6 6-group).
+#
+# 사용자 제안 설정을 기반으로 하되, 아래 항목을 수정/복구함 (주석 "← 변경"):
+#   [버그] head.routing 에 dataset 이름(tdc_admet_22_causal6) 금지 → taskset_grouping.
+#          taskset 은 dataset include 로 지정.
+#   [버그] regression: mse 미등록 → masked_mae (sparse 라벨 마스킹 필수).
+#   [복구] pre_norm true / entropy_weight 0.01 / fusion warmup 5
+#          / lr_lora 5e-5 / lr_fusion 1e-4  — alpha collapse 방어 (메모리 검증값).
+#   [복구] freeze_log_vars true + kendall_uncertainty — Kendall overfit 방어.
+# 유지한 사용자 의도: 20ep 단기런, constant LR(5e-4), output_dim 300,
+#          modality_dropout 0.2, tau_init 3.0, head dropout 0.4.
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← taskset 은 여기서 (6-group causal)
+
+features:
+  graph: chemeleon
+  descriptors: []
+  embeddings: [molformer_tokens, unimol2_lmdb, graphmvp_data]
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone:
+    type: chemeleon
+    kwargs:
+      d_h: 2048
+      checkpoint_path: data/weights/chemeleon_mp.pt
+      d_xd: 0
+      adapter_dropout: 0.0
+  extra_backbones:
+    - type: molformer_lora
+      consumes: [molformer_tokens]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: unimol2_lora
+      consumes: [unimol2_lmdb]
+      kwargs:
+        lora_rank: 16
+        lora_alpha: 32
+        lora_dropout: 0.2
+    - type: graphmvp
+      consumes: [graphmvp_data]
+      kwargs:
+        d_h: 300
+        checkpoint_path: data/weights/graphmvp/graphmvp_hybrid.pth
+        num_layer: 5
+        emb_dim: 300
+        JK: last
+        adapter_dropout: 0.0
+        pool: mean
+  fusion:
+    type: robust_attention
+    entropy_weight: 0.01        # ← 변경 (0 → 0.01): alpha 다양성 압박, collapse 방어
+    kwargs:
+      output_dim: 300           # 사용자 의도 유지 (검증값은 768)
+      tau_init: 3.0
+      tau_min: 0.5
+      anneal_epochs: 15         # ← 변경 (20 → 15): max_epochs 보다 짧게 둬 sharp 구간 확보
+      modality_dropout: 0.2
+      residual: true
+      pre_norm: true            # ← 변경 (false → true): 2048/768/300 scale 비대칭 흡수
+      warmup_epochs: 1
+  head:
+    type: grouped
+    routing: taskset_grouping   # ← 변경 (tdc_admet_22_causal6 는 dataset 이름, routing 아님)
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.4
+
+loss:
+  type: mixed_task_uncertainty
+  classification: bce_with_logits
+  regression: masked_mae        # ← 변경 (mse 미등록 → masked_mae)
+  task_weighting: null
+  kwargs:
+    freeze_log_vars: false
+
+trainer:
+  seeds:
+    - 0
+    - 1
+    - 2
+    - 3
+    - 4
+  max_epochs: 20
+  patience: 5
+  precision: bf16-mixed
+  early_stopping: true
+  batch_size: 16                # UniMol2 OPM N² hard ceiling
+  lr: 0.0005
+  init_lr: 0.0005
+  final_lr: 0.0005
+  warmup_epochs: 0              # constant LR (Noam 무효화 — init=final=peak)
+  lr_lora: 0.00005              # ← 변경 (5e-4 → 5e-5): LoRA 과적합/불안정 방어 + lr 분리 유지
+  lr_fusion: 0.0001             # ← 변경 (5e-4 → 1e-4): gate collapse 방어 (검증값)
+  num_workers: 4
+  predict_ckpt: best
+  kwargs:
+    accumulate_grad_batches: 1
+    gradient_clip_val: 1.0
+
+notes: |
+  robust_attention 4-modality + causal6 단기 탐색 recipe.
+  ⚠ DDP launch 시 반드시 --no-ddp-static-graph (UniMol2 LoRA reducer 충돌 방어).
+  ⚠ DDP launch 시 반드시 --find-unused-parameters: fusion warmup(warmup_epochs>0)
+     이 epoch 0 에서 gate 를 requires_grad=False 로 얼려 우회 → DDP reducer 가
+     "unused parameters" 로 첫 step 에서 crash. 이 플래그로 해소.
+  ⚠ graphmvp 가중치 필요: data/weights/graphmvp/graphmvp_hybrid.pth
+     (없으면 random-init smoke, warning 로그).
+  실행 예 (torchrun, 2-GPU):
+    torchrun --nproc_per_node=2 -m qadmet.cli.main train \
+      --recipe recipes/train/mtl_4modality_robust_causal6.yaml \
+      --devices 2 --strategy ddp --no-ddp-static-graph --find-unused-parameters

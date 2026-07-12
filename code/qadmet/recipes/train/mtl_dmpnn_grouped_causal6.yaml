@@ -1,0 +1,30 @@
+name: mtl_dmpnn_grouped_causal6
+kind: train
+
+dataset: !include _base/dataset/tdc_admet_22_causal6.yaml
+
+features:
+  graph: dmpnn
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: multitask
+  backbone: !include _base/model/dmpnn_default.yaml
+  fusion: null
+  head:
+    type: grouped
+    routing: taskset_grouping
+    kwargs:
+      trunk_hidden: 128
+      dropout: 0.2
+
+loss: !include _base/loss/mixed_kendall.yaml
+
+trainer: !include _base/trainer/default.yaml
+
+notes: |
+  Causal-chain 6-group GroupedHead (tdc_admet_22_causal6).
+  mtl_dmpnn_grouped 의 dataset include 만 교체 — D-MPNN + mixed Kendall 동일.
+  partitioning_physchem 해체: Solubility→oral_uptake, Lipophilicity→distribution_cns.

@@ -1,0 +1,9 @@
+name: stack_bs_k4_average__stlch_stlmf_stlgm_mtldrx
+kind: stack
+ensemble:
+  strategy: average
+  bases:
+    - stl_chemeleon_adaptivegnn
+    - stl_molformer_lora
+    - stl_graphmvp_adaptivegnn
+    - mtl_dmpnn_rdkit_xtb

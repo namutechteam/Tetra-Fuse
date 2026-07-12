@@ -1,0 +1,56 @@
+name: stl_dmpnn_paper
+kind: train
+
+# STL D-MPNN graph-only baseline, stl_chemeleon_adaptivegnn_paper_seed01234.yaml
+# 와 동일 학습 프로토콜(seeds 0-4 / 30ep / patience 5 / bs 32 / lr 1e-3)로
+# 맞춘 fair STL↔STL backbone 비교용. CheMeleon(AdapterGNN) ↔ classic D-MPNN
+# 둘 다 graph-only(descriptors 없음) → backbone 단독 성능 비교.
+
+dataset: !include _base/dataset/tdc_admet_22.yaml
+
+features:
+  graph: dmpnn
+  descriptors: []
+  embeddings: []
+  missing_policy: mask_token
+
+model:
+  type: singletask
+  backbone: !include _base/model/dmpnn_default.yaml
+  # graph-only — X_d concat 없음. backbone output = d_h(300).
+  fusion: null
+  head:
+    type: linear
+
+loss: !include _base/loss/single_task.yaml
+
+trainer:
+  seeds: [0, 1, 2, 3, 4]
+  max_epochs: 30
+  patience: 5
+  precision: 32-true
+  early_stopping: true
+  batch_size: 32
+  lr: 0.001
+  num_workers: 2
+
+notes: |
+  STL classic D-MPNN (chemprop BondMessagePassing depth=3, d_h=300) graph-only.
+  Per-task per-seed (22 × 5 = 110) 모델.
+
+  목적:
+    - stl_chemeleon_adaptivegnn_paper_seed01234.yaml 의 fair STL 대조군.
+      동일 trainer 프로토콜(seeds [0,1,2,3,4], max_epochs 30, patience 5,
+      precision 32-true, batch_size 32, lr 1e-3, num_workers 2)을 그대로 복제.
+    - 두 recipe 모두 graph-only(descriptors: []) → CheMeleon+AdapterGNN PEFT
+      backbone 대 frozen-free 전체학습 D-MPNN backbone 의 단독 비교.
+
+  vs stl_dmpnn_rdkit.yaml:
+    - descriptors [rdkit2d] 제거 → graph-only (X_d concat 없음, output=300).
+    - trainer: _base/trainer/default.yaml (seeds 1-5, 100ep, patience 20,
+      bs 64, warmup 2) 대신 reference paper 프로토콜로 교체.
+
+  Loss / Optim:
+    - single_task (loss/_base/single_task.yaml): regression=masked_mse,
+      classification=bce_with_logits, STL 이므로 task weighting 무관.
+    - 전체 backbone + linear head 학습 (PEFT 아님). lr=1e-3 단일.

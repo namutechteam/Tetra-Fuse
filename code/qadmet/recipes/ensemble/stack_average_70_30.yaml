@@ -1,0 +1,18 @@
+name: stack_average_70_30
+kind: stack
+
+ensemble:
+  strategy: average
+  bases:
+    - mtl_dmpnn_grouped
+    - stl_dmpnn_rdkit
+  kwargs:
+    weights: [0.7, 0.3]
+    # split: test          # 기본값 — 명시 시 base 의 다른 split 결합 (val 등)
+    # base_kind: train     # base artifact kind. 기본 train
+    # base_run_ids: {...}  # 이름→run_id 명시 매핑 (latest 대신 특정 run 고정)
+
+notes: |
+  옛 phase3 v1 (run_stacking_v1.stack_simple_average) 동등.
+  D-MPNN MTL(7-group) 과 D-MPNN+RDKit STL 의 raw test 예측을 0.7 / 0.3 가중 평균.
+  base train artifact 두 개가 사용자 환경에 존재해야 동작한다.
