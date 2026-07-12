@@ -17,6 +17,7 @@ Node02 from the trained models' held-out-test and nested-OOF-validation predicti
 | `tables_data.json` | Pre-formatted table rows: `T1`-`T4` (main tables), `S1`-`S3` (supplementary), with `cols_s1`/`cols_s2` headers. |
 | `stat_tests.json` | Wilcoxon signed-rank results: `deployable_single` (ensemble vs 3 strongest singles), `per_task_oracle`, `n_tasks`, `ensemble_mean`. One-sided, Holm-corrected. |
 | `all1023.csv` | All 1,023 non-empty subsets of the 10 base models (uniform-mean). Cols: `combo_key,k,val_within,val_cross,test_within,test_cross,val_comb,test_comb`. Basis for Figure 4a and the k-sweep. |
+| `tdc_leaderboard_snapshot.json` | TDC ADMET Benchmark Group public leaderboard snapshot (23 tasks, captured 2026-04-29), used as the rank-normalization ruler for all TDC norm_scores. |
 | `uniform_val_test_unified.csv` | 133-subset validation/test table (subset used in an earlier draft; retained for provenance). Same columns as all1023. |
 | `solo10_within_cross.json` | 10-model solo within/cross norm_score (redundant with ground_truth for cross-check). |
 | `reconciliation_flags.json` | 10 draft-vs-ground-truth discrepancies that were fixed during revision (provenance/audit trail). |
