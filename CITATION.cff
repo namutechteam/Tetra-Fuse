@@ -18,7 +18,7 @@ version: 1.0.0
 date-released: 2026-07-13
 license: MIT
 # doi: 10.5281/zenodo.XXXXXXX  # TODO: fill in after first Zenodo release
-repository-code: "https://github.com/USERNAME/REPONAME"  # TODO: set GitHub URL
+repository-code: "https://github.com/Taekya/ADMET-late-fusion"
 keywords:
   - ADMET
   - molecular property prediction
