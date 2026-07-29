@@ -45,20 +45,19 @@ training is driven by `python -m qadmet.cli.main train --recipe <recipe.yaml>`.
 ```
 release/
 ├── README.md                     ← this file
+├── CITATION.cff                  ← citation metadata
 ├── requirements.txt              ← minimal deps for the notebooks
 ├── environment.yml               ← conda env for the notebooks
+├── LICENSE                       ← MIT
 ├── data/                         ← reproduction inputs (see DATA_MANIFEST.md)
 │   ├── DATA_MANIFEST.md
 │   ├── recompute_data/           ← RAW source the notebooks recompute from:
 │   │   ├── predictions/{model}.parquet   (10 models; seed,task,split,smiles,y_true,y_pred)
 │   │   ├── leaderboards/{model}.csv       (10 models; dataset,metric,ours,ours_std,rank,n_total,Top,Top_model)
 │   │   ├── clean_stage1_current.csv, all1023.csv   (1,023-subset sweeps; validation-only vs val+test — complementary, not duplicates)
-│   │   └── tdc_leaderboard_snapshot.json, task_registry.json
-│   ├── ground_truth.json, pertask.json, tables_data.json, stat_tests.json   (verification reference)
-│   ├── uniform_val_test_ALL1023.csv   (per-subset val/test norm, all 1,023 uniform subsets)
-│   │   (per-model/per-task solo norm — formerly data/solo_pertask_within_cross.csv /
-│   │    data/fig1_within_pertask.csv — is now recomputed in-notebook from predictions+leaderboards)
-│   └── polaris_*.csv / polaris_leaderboard_full.json   (external benchmark)
+│   │   ├── tdc_leaderboard_snapshot.json, task_registry.json, task_metadata.json
+│   │   └── polaris_leaderboard_full.json   (Polaris public submissions, notebook input for Figure 6)
+│   └── polaris_external/          ← Polaris audit/reference tables (not notebook inputs; see its README.md)
 ├── notebooks/
 │   ├── regenerate_paper_materials.ipynb   ← ALL figures + tables (Figure 1–6, Figure S1–S7;
 │   │                                          Table 1–5, Table S1–S8) recomputed from data/recompute_data/
@@ -66,12 +65,13 @@ release/
 ├── figures/                      ← generated PNGs (figure1..6.png, figureS1..S7.png)
 ├── tables/                       ← generated CSVs + supplementary_tables.xlsx
 └── code/
-    ├── TRAINING.md               ← model-training reproduction guide
+    ├── TRAINING.md               ← model-training reproduction guide (weights, splits, pipeline)
     ├── qadmet/                   ← the full qadmet training/evaluation engine
-    │   ├── src/qadmet/           ← 113 modules: core, datasets, features, modules/backbones,
+    │   ├── src/qadmet/           ← core, datasets, features, modules/backbones,
     │   │                            ensembles, evaluation, precompute, runners, tasks, training, cli
-    │   ├── recipes/              ← 490 recipe YAMLs (train/ has TDC-22 + Polaris ADME-Fang;
-    │   │                            _base/, ensemble/, evaluate/, precompute/, groupings/, ablations/)
+    │   ├── recipes/              ← 38 recipe YAMLs (the paper-reproduction set):
+    │   │                            train/ 15 (TDC-22: 5 MTL + 5 STL; Polaris: 5 members),
+    │   │                            evaluate/ 10, _base/ 9, groupings/ 2, precompute/ 2
     │   ├── pyproject.toml        ← qadmet package metadata (CLI entry point qadmet.cli.main)
     │   └── README.md
     ├── polaris_fang_run_all.sh   ← end-to-end training run order
@@ -79,7 +79,8 @@ release/
 ```
 
 The five backbones behind the ensemble, their exact recipe paths inside `qadmet/recipes/`,
-and the pinned MoLFormer revision are documented in `code/TRAINING.md`.
+the pretrained-weight download instructions (CheMeleon, GraphMVP), the dataset-split provenance,
+and the pinned MoLFormer revision are all documented in `code/TRAINING.md`.
 
 ## Figures and tables produced
 
@@ -110,9 +111,15 @@ is also MIT-licensed.
 ## Notes
 
 - `data/recompute_data/` contains the **raw per-seed model predictions and leaderboard entries**
-  that the notebooks recompute every figure/table value from; the top-level `data/*.json`
-  summary files are kept only as a verification reference. `data/` does not contain trained
-  model weights; those (and the raw predictions/leaderboards themselves) are reproducible via
-  `code/TRAINING.md` — see "How the notebook inputs are produced" there.
+  that the notebooks recompute every figure/table value from. `data/` does not contain trained
+  model weights or the pretrained backbone weights; the trained checkpoints (and the raw
+  predictions/leaderboards themselves) are reproducible via `code/TRAINING.md`. `rdkit2d`, `xtb`,
+  and `unimol2` descriptor/embedding files are **not** required — none of the 10 paper models use
+  them (the two joint-fusion MAP models use only the CheMeleon graph, MoLFormer tokens, and a
+  GraphMVP encoder built on-the-fly from SMILES).
+- Dataset splits reproduce deterministically per seed: TDC-22 is downloaded at runtime by the
+  `tdc` package (fixed official test split; seeded train/val), and the Polaris ADME-Fang
+  train/val CSVs ship in `code/data_polaris_adme_fang/` (test labels are withheld by the Polaris
+  Hub). Hosting the raw splits on Zenodo is therefore unnecessary — see `code/TRAINING.md`.
 - The leaderboard scores in `polaris_leaderboard_full.json` reflect publicly listed submissions
   parsed from the benchmark pages at the time of analysis and may change as new submissions arrive.

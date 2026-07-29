@@ -25,28 +25,23 @@ D-MPNN is trained from scratch (no external weights).
 | CheMeleon | `data/weights/chemeleon_mp.pt` | https://github.com/JacksonBurns/chemeleon · weights on Zenodo https://zenodo.org/records/15460715 |
 | GraphMVP | `data/weights/graphmvp/graphmvp_hybrid.pth` | https://github.com/chao1224/GraphMVP · pretrained checkpoints https://drive.google.com/drive/folders/1uPsBiQF3bfeCAXSDd4JfyXiTh-qxYfu6 (see note below) |
 
-**GraphMVP checkpoint — which one and how to prepare it.** From the Drive folder use
+**GraphMVP checkpoint — which one.** From the Drive folder use
 `pretraining_model/GraphMVP_hybrid/` — the **Hybrid (Eq. 8) variant trained with the OGB
 "complete" atom/bond features** (9-d atom / 3-d bond), *not* the chirality-only classification
 weights. This choice is deliberate: our 22 ADMET tasks mix 10 regression + 12 classification
 endpoints, and the OGB-feature weights are what our GIN encoder (OGB `AtomEncoder`/`BondEncoder`)
-loads. The raw Drive checkpoint is a dict `{model, model_3D, AE_2D_3D, AE_3D_2D}`; **extract only
-the `model` key** (the 2D-GIN state_dict — the other keys are SSL auxiliaries not used
-downstream) and save that as `graphmvp_hybrid.pth`:
-
-```python
-import torch
-ckpt = torch.load("GraphMVP_hybrid/<downloaded>.pth", map_location="cpu")
-torch.save(ckpt["model"], "data/weights/graphmvp/graphmvp_hybrid.pth")
-```
+loads. Save the **raw** Drive checkpoint as `graphmvp_hybrid.pth` — no pre-processing is needed:
+it is a dict `{model, model_3D, AE_2D_3D, AE_3D_2D}` and the backbone loader
+(`modules/backbones/graphmvp.py`) itself pulls out the `model` key (the 2D-GIN state_dict) and
+shape-filters it against the current OGB encoder, so a raw download loads correctly.
 
 ```bash
 cd code/qadmet
 mkdir -p data/weights/graphmvp
 # CheMeleon: download chemeleon_mp.pt from the Zenodo record → data/weights/chemeleon_mp.pt
-# GraphMVP:  download pretraining_model/GraphMVP_hybrid/ (OGB-feature regression weights) from
-#            the Drive folder, extract its "model" key (see snippet above)
-#            → data/weights/graphmvp/graphmvp_hybrid.pth
+#            (a checkpoint dict with hyper_parameters + state_dict; used as-is)
+# GraphMVP:  download the GraphMVP_hybrid (OGB-feature) checkpoint from the Drive folder,
+#            save it unchanged → data/weights/graphmvp/graphmvp_hybrid.pth
 ```
 
 If a weight file is absent, the corresponding backbone falls back to random-init "smoke" mode
@@ -235,9 +230,30 @@ so it is computed directly in the notebooks from the five `predictions.parquet` 
 is no separate ensemble-training step. See `../data/polaris_all_model_test_preds.csv` for the
 exact per-molecule predictions submitted to the Polaris Hub as `LateFusion-k5`.
 
-## Data splits
+## Data splits — provenance and reproducibility
 
-- **TDC-22**: scaffold split via `GroupKFold` on raw SMILES (5 folds if ≥50 unique SMILES groups,
-  else 3), 5 seeds. 21 tasks are scored (Bioavailability_Ma is trained as an MTL auxiliary but
-  excluded from benchmark scoring due to an unreliable leaderboard rank; see Supplementary Note S1).
-- **Polaris ADME-Fang**: the benchmark's own random split, 5 seeds, Pearson r metric.
+No split CSVs need to be shipped for TDC, and the Polaris split data is already in the repo.
+Both benchmarks reproduce deterministically per seed from `clone` + the sources below.
+
+**TDC-22** — obtained at runtime from the `tdc` package, not stored in this repo:
+- `tdc.benchmark_group.admet_group(path="data/")` downloads the benchmark on first use
+  (`src/qadmet/datasets/tdc_admet.py`). The **test split is TDC's fixed official split** — the
+  same for everyone, so results are comparable to the public leaderboard.
+- **train/validation** come from `group.get_train_valid_split(split_type="default", seed=seed)`
+  for seeds 1–5 — TDC's default (scaffold) split, deterministic given the seed. We do **not**
+  re-implement or ship this split; regenerating it requires only the `tdc` package.
+- 21 tasks are scored; Bioavailability_Ma is trained as an MTL auxiliary but excluded from
+  benchmark scoring due to an unreliable leaderboard rank (see Supplementary Note S1).
+
+**Polaris ADME-Fang** — the split data **is shipped** in `code/data_polaris_adme_fang/`:
+- `{endpoint}_train_val.csv` (columns `Drug,Y`) and `{endpoint}_test.csv` (column `Drug` only)
+  for all six endpoints, plus `summary.json`.
+- The **validation** split is drawn from `train_val.csv` per seed as a random `val_frac=0.125`
+  partition (`src/qadmet/datasets/polaris_fang.py`), deterministic given the seed.
+- **Test labels are intentionally withheld by Polaris** — the shipped `{endpoint}_test.csv` has
+  no `Y` column, so the local "test" metric block reports NaN by design. Test scoring is done by
+  the Polaris Hub against its hidden labels (Pearson r); no local test labels exist to ship.
+
+Because TDC is a versioned public package and Polaris' train/val data is in-repo, **hosting the
+raw splits on Zenodo is unnecessary** — the GitHub release plus the `tdc` dependency is a
+complete, deterministic reproduction path.
