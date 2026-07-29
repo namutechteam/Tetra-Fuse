@@ -13,6 +13,32 @@ reproducing the underlying model checkpoints and predictions.
   GraphMVP `graphmvp_hybrid.pth`, MoLFormer-XL `ibm/MoLFormer-XL-both-10pct`).
 - Training is driven by the `qadmet` recipe/registry CLI: `python -m qadmet.cli.main train --recipe <recipe.yaml>`.
 
+## Pretrained backbone weights
+
+Two backbones load **frozen pretrained weights that are not shipped in this repository** and
+must be downloaded once into `code/qadmet/data/weights/` (the exact paths the recipes expect).
+MoLFormer-XL is fetched automatically from HuggingFace at the pinned revision (see below), and
+D-MPNN is trained from scratch (no external weights).
+
+| Backbone | Expected path (under `code/qadmet/`) | Source |
+|---|---|---|
+| CheMeleon | `data/weights/chemeleon_mp.pt` | https://github.com/JacksonBurns/chemeleon · weights on Zenodo https://zenodo.org/records/15460715 |
+| GraphMVP | `data/weights/graphmvp/graphmvp_hybrid.pth` | https://github.com/chao1224/GraphMVP · pretrained checkpoints https://drive.google.com/drive/folders/1uPsBiQF3bfeCAXSDd4JfyXiTh-qxYfu6 (use the `GraphMVP_hybrid` regression variant) |
+
+```bash
+cd code/qadmet
+mkdir -p data/weights/graphmvp
+# CheMeleon: download chemeleon_mp.pt from the Zenodo record → data/weights/chemeleon_mp.pt
+# GraphMVP:  download the GraphMVP_hybrid checkpoint from the Drive folder
+#            → data/weights/graphmvp/graphmvp_hybrid.pth
+```
+
+If a weight file is absent, the corresponding backbone falls back to random-init "smoke" mode
+(`checkpoint_path=None`), which will **not** reproduce the paper's results — the download is
+required for any `train` run of the CheMeleon or GraphMVP models (and of MAP, which uses the
+CheMeleon graph encoder). `rdkit2d`, `xtb`, and `unimol2` descriptors/embeddings are **not**
+used by any of the 10 paper models, so no such files are needed.
+
 ## The base models and the ensemble
 
 All recipe paths below are relative to the `qadmet/` core directory (`code/qadmet/`), i.e.
