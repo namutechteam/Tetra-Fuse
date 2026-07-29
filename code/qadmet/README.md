@@ -5,58 +5,58 @@ TDC ADMET 멀티태스크 학습 연구 플랫폼. **Recipe (YAML) → Spec → 
 strategy / feature builder / calibrator 모두 registry 기반 — 새 modality·loss·strategy 는
 파일 하나 + 데코레이터 한 줄로 등록된다.
 
-설계 근거: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). 도메인 컨텍스트 / 연구 방향:
-[CLAUDE.md](CLAUDE.md).
+이 디렉토리는 논문(*When and Why to Fuse Molecular Representations for ADMET Prediction*)의
+학습·평가 엔진으로 공개되는 코어다. 논문의 10개 TDC 기본 모델과 5개 Polaris 앙상블 멤버를
+재현하는 recipe 와 실행 순서는 [`../TRAINING.md`](../TRAINING.md) 에 정리돼 있다.
+
+> **그림·표 재현에는 이 엔진이 필요 없다.** Figure/Table 은 사전 계산된 예측·리더보드
+> (`../../data/recompute_data/`) 만으로 `../../notebooks/regenerate_paper_materials.ipynb`
+> 에서 GPU·네트워크 없이 재현된다. 이 엔진은 그 예측·리더보드를 **처음부터 다시 학습**해
+> 만들고 싶을 때 쓴다.
 
 ## 설치
 
 ```bash
-conda activate admet-mtl   # 사전 구성된 admet-mtl 환경 사용
-cd /nas/tk_ahn/ADMET-MTL/qadmet
-pip install -e .
+conda activate admet-mtl   # 무거운 의존(torch/lightning/chemprop/transformers/rdkit/tdc)이 깔린 환경
+cd code/qadmet
+pip install -e .           # qadmet CLI 등록 (entry point: qadmet.cli.main:main)
 ```
 
 `pyproject.toml` 의 `[project] dependencies` 는 최소 (`pyyaml` / `numpy` / `pandas`) —
-torch / lightning / chemprop / transformers / peft / xgboost / rdkit / tdc 같은 무거운 의존은
-conda env (`admet-mtl`) 책임.
+torch / lightning / chemprop / transformers / peft / rdkit / tdc 같은 무거운 의존은
+conda env (`admet-mtl`) 책임이다. 재현 환경 상세는 [`../TRAINING.md`](../TRAINING.md).
 
 ## CLI
 
 | 서브커맨드 | 역할 |
 |---|---|
-| `qadmet precompute --recipe <yaml>` | feature parquet 사전계산 (rdkit2d / xtb / molformer / molformer_tokens / unimol2). |
+| `qadmet precompute --recipe <yaml>` | feature parquet 사전계산 (MoLFormer token embeddings 등). |
 | `qadmet train --recipe <yaml>` | MTL / STL 학습. 학습 직후 val + test split 모두 `predictions.parquet` 로 저장. |
-| `qadmet stack --recipe <yaml>` | 학습된 base artifact 들을 ensembles strategy 로 묶음. |
-| `qadmet evaluate --recipe <yaml>` | 7-컬럼 metric 표 + W/L/T 비교 + (옵션) 리더보드 순위. |
-| `qadmet recipe validate <path...>` | YAML schema 검증. |
+| `qadmet evaluate --recipe <yaml>` | 7-컬럼 metric 표 (`dataset,metric,ours,ours_std,rank,n_total,Top,Top_model`) + 리더보드 순위 → `leaderboard.csv`. |
+| `qadmet recipe validate <path...>` | recipe YAML schema 검증. |
 | `qadmet artifacts list [--kind <kind>]` | 저장된 artifact 목록. |
 | `qadmet lineage show <kind> <name>` | artifact 의존 그래프 (graphviz dot). |
 
-별도의 `predict` 서브커맨드는 두지 않는다 — train runner 가 학습 즉시 val + test 모두에 대한
-`predictions.parquet` 를 작성하므로 그 결과가 곧 PredictionSet 이다 (Step 4.2 부터).
+별도의 `predict` 서브커맨드는 없다 — train runner 가 학습 즉시 val + test 모두에 대한
+`predictions.parquet` 를 작성하므로 그 결과가 곧 PredictionSet 이다.
 
-기본 흐름:
+기본 흐름 (논문 재현 — 전체 순서는 [`../TRAINING.md`](../TRAINING.md)):
 
 ```bash
-# 1) precompute (한 번만; 결과는 data/ 안의 parquet)
-qadmet precompute --recipe recipes/precompute/rdkit2d.yaml
+# 1) precompute (MoLFormer backbone 전용, 한 번만)
+qadmet precompute --recipe recipes/precompute/molformer_tokens.yaml
 
-# 2) train (MTL + STL — base artifact 두 개)
-qadmet train --recipe recipes/train/mtl_dmpnn_grouped.yaml
-qadmet train --recipe recipes/train/stl_dmpnn_rdkit.yaml
+# 2) train (예: D-MPNN·MTL 기본 모델)
+qadmet train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100.yaml
 
-# 3) stack (옛 phase3/4 대체)
-qadmet stack --recipe recipes/ensemble/stack_average_70_30.yaml      # 옛 v1
-qadmet stack --recipe recipes/ensemble/stack_hybrid_blend.yaml       # 옛 v6 (alpha=0.5)
-
-# 4) evaluate (target vs others 비교, legacy CSV 도 비교 가능)
-qadmet evaluate --recipe recipes/evaluate/leaderboard_diff.yaml
+# 3) evaluate → leaderboard.csv (예: 위 모델)
+qadmet evaluate --recipe recipes/evaluate/leaderboard_mtl_dmpnn_epoch100_s01234.yaml
 ```
 
 CLI override (dot-notation, 반복 가능):
 
 ```bash
-qadmet train --recipe recipes/train/mtl_dmpnn_grouped.yaml \
+qadmet train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100.yaml \
     --override trainer.max_epochs=2 --override trainer.seeds='[0]'
 ```
 
@@ -67,62 +67,35 @@ qadmet train --recipe recipes/train/mtl_dmpnn_grouped.yaml \
 | 경로 | 설명 |
 |---|---|
 | [src/qadmet/](src/qadmet/) | 메인 패키지. core (registry/spec/recipe/artifact/lineage/runner) + tasks/datasets/features/modules/training/ensembles/evaluation/runners/cli. |
-| [recipes/](recipes/) | YAML recipe. kind 별 디렉토리 + [`_base/`](recipes/_base/) 컴포저블 base + [`ablations/`](recipes/ablations/) sweep. |
-| [scripts/](scripts/) | 얇은 shell wrapper (logic 없음, `qadmet` CLI 호출만). |
-| [scripts-old/](scripts-old/) | 옛 ~8,000 lines 코드. parity 검증용 read-only — **수정 금지**. |
-| [tests/](tests/) | pytest 단위 테스트 (425 passed). |
-| [parity/](parity/) | scripts-old ↔ qadmet 결과 동등성 검증 (W/L/T 모드). |
-| [docs/](docs/) | 활성 문서 (~7개) + [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). 시간정지 산출물은 [docs/archive/](docs/archive/) — 명시 요청 시에만 참조. |
-| [artifacts/](artifacts/) | runner 산출물 (manifest.yaml + data/). |
-| `data/`, `checkpoints*/`, `lightning_logs/`, `logs/` | 데이터/체크포인트/로그 — 손대지 않음. |
+| [recipes/](recipes/) | 논문 재현 recipe (38개). kind 별 디렉토리 + [`_base/`](recipes/_base/) 컴포저블 base. |
+| `LICENSE` | MIT. |
 
-## Ablations
+`artifacts/`, `data/`, `checkpoints*/`, `lightning_logs/`, `logs/` 는 실행 시 생성되며
+릴리스에는 포함하지 않는다.
 
-`recipes/ablations/<group>/<variant>.yaml` 패턴으로 한 축만 변동시키는 sweep 을 표현.
-default 와 동일한 변형은 두지 않는다 (default 는 `recipes/ensemble/` 또는 `recipes/train/` 가
-보유). 자세한 패턴은 [recipes/ablations/README.md](recipes/ablations/README.md).
+## Recipes (38개, 논문 재현 세트)
 
-현재 그룹:
-- `hybrid_alpha_sweep/` — alpha ∈ {0.3, 0.7} (default=0.5).
-- `stack_avg_weights_sweep/` — weights ∈ {[0.5,0.5], [0.8,0.2]} (default=[0.7,0.3]).
+| kind | 개수 | 내용 |
+|---|---|---|
+| `train/` | 15 | TDC-22 기본 모델 10개 (5 MTL + 5 STL) + Polaris 앙상블 멤버 5개. |
+| `evaluate/` | 10 | TDC-22 10개 모델의 leaderboard.csv 생성 recipe. |
+| `_base/` | 9 | kept recipe 가 `!include` 하는 dataset / model / loss / trainer 조각. |
+| `groupings/` | 2 | `tdc_admet_22_causal6` (MTL 6-group) + `tdc_admet_22` (STL 22-task TaskSet 등록). |
+| `precompute/` | 2 | MoLFormer token embeddings (TDC / Polaris). |
 
-## 테스트
+각 모델의 정확한 train / evaluate recipe 파일명 매핑은 [`../TRAINING.md`](../TRAINING.md) 표 참조.
+Polaris 5개는 Polaris Hub 가 채점하므로 `evaluate/` recipe 가 없다.
+
+## Recipe 검증
 
 ```bash
-pytest tests/ -q                                                # 425 passed
-qadmet recipe validate recipes/{train,precompute,ensemble,evaluate}/*.yaml \
-                       recipes/ablations/*/*.yaml
+qadmet recipe validate recipes/train/*.yaml recipes/evaluate/*.yaml \
+                       recipes/precompute/*.yaml
 ```
 
-## Parity (scripts-old ↔ qadmet)
+## MoLFormer HuggingFace revision pin
 
-Step 3.7 4종 모두 PASS (성능 수준 비교 모드, tie_eps=0.005, 22 task):
-
-| 비교 | net |
-|---|---|
-| `mtl_dmpnn_grouped` vs `phase1.1_grouped` | +6 |
-| `stl_dmpnn_rdkit` vs `phase2_stl_summary` | -7 (데이터 경로 통일 영향) |
-| `stack_average_70_30` vs `phase3_stack_v1_avg70` | -1 |
-| `stack_hybrid_blend` vs `phase4_stack_v6_a0.5` | -3 |
-
-scripts-old/ 는 보존 (사용자 결정).
-
-
----
-
-## Note for the paper code release
-
-This is the `qadmet` research platform — a recipe + registry + lineage framework for
-TDC ADMET multi-task learning and multi-representation fusion. It is included here as the
-core training/evaluation engine behind the paper.
-
-- Model training is driven by recipe YAMLs under `recipes/` via
-  `python -m qadmet.cli.main train --recipe <recipe.yaml>`.
-- The five backbones behind the paper's ensemble and their recipes are documented in
-  `../TRAINING.md`.
-- `src/qadmet/modules/backbones/molformer_lora.py` pins the working MoLFormer-XL HuggingFace
-  revision (`MOLFORMER_REVISION`); keep this pin for reproducibility.
-- Figures and tables do **not** require this engine — see `../../notebooks/` and `../../data/`.
-
-Dependencies (RDKit, PyTorch, Lightning, Transformers, chemprop, pretrained backbone weights)
-are installed in the `admet-mtl` conda environment described in `../TRAINING.md`.
+`ibm/MoLFormer-XL-both-10pct` 는 custom modelling code (`trust_remote_code=True`) 를 쓰며,
+이후 hub commit 은 transformers 4.57.x 에 없는 함수를 요구해 `ImportError` 를 낸다. backbone 이
+동작 revision 을 고정한다 (`src/qadmet/modules/backbones/molformer_lora.py` 의
+`MOLFORMER_REVISION`). 재현을 위해 이 pin 을 유지할 것.
