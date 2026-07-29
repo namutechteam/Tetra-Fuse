@@ -1,7 +1,0 @@
-name: stack_bs_k2_average__mtlchfilm_stlmf
-kind: stack
-ensemble:
-  strategy: average
-  bases:
-    - mtl_chemeleon_film_aux
-    - stl_molformer_lora

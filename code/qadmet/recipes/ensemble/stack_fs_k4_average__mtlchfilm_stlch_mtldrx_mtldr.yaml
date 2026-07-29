@@ -1,9 +1,0 @@
-name: stack_fs_k4_average__mtlchfilm_stlch_mtldrx_mtldr
-kind: stack
-ensemble:
-  strategy: average
-  bases:
-    - mtl_chemeleon_film_aux
-    - stl_chemeleon_adaptivegnn
-    - mtl_dmpnn_rdkit_xtb
-    - mtl_dmpnn_rdkit

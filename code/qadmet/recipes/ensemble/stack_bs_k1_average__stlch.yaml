@@ -1,6 +1,0 @@
-name: stack_bs_k1_average__stlch
-kind: stack
-ensemble:
-  strategy: average
-  bases:
-    - stl_chemeleon_adaptivegnn

@@ -1,8 +1,0 @@
-seeds: [0]
-max_epochs: 2
-patience: 1
-precision: 32-true
-early_stopping: false
-batch_size: 32
-lr: 0.001
-num_workers: 0

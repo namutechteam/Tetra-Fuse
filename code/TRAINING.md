@@ -13,21 +13,44 @@ reproducing the underlying model checkpoints and predictions.
   GraphMVP `graphmvp_hybrid.pth`, MoLFormer-XL `ibm/MoLFormer-XL-both-10pct`).
 - Training is driven by the `qadmet` recipe/registry CLI: `python -m qadmet.cli.main train --recipe <recipe.yaml>`.
 
-## The five models behind the ensemble
+## The base models and the ensemble
 
-The final k=5 late-fusion ensemble combines two multi-task learners and three single-task learners,
-all sharing identical backbone hyperparameters between the TDC-22 primary benchmark and the
-Polaris external benchmark (only the dataset and task grouping differ).
+All recipe paths below are relative to the `qadmet/` core directory (`code/qadmet/`), i.e.
+`code/qadmet/recipes/…`. Backbone hyperparameters are shared between the TDC-22 primary
+benchmark and the Polaris external benchmark; only the dataset and task grouping differ
+(TDC-22 = six mechanism-informed groups for MTL / 22-task set for STL, Polaris = one shared
+6-endpoint group).
 
-All recipe paths below are relative to the `qadmet/` core directory (`code/qadmet/`).
+The paper evaluates **10 base models** on the TDC-22 benchmark — four backbones
+(D-MPNN, CheMeleon, GraphMVP, MoLFormer) and the joint-fusion MAP model, each under both
+MTL and STL. All 10 are needed to reproduce Figure 1 and Table 3; the final k=5 late-fusion
+ensemble (marked ★) combines **two MTL learners** (D-MPNN·MTL, MoLFormer·MTL) and
+**three STL learners** (CheMeleon·STL, GraphMVP·STL, MAP·STL).
 
-| Model | Regime | Backbone | TDC-22 recipe | Polaris recipe |
-|---|---|---|---|---|
-| D-MPNN | MTL | chemprop message-passing | `recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100_tdcpxr25.yaml` | `recipes/train/mtl_dmpnn_robust_polaris_fang.yaml` |
-| MoLFormer | MTL | MoLFormer-XL + LoRA (r=16, α=32) | `recipes/train/mtl_molformer_robust_causal6_kendall_epoch100_tdcpxr25.yaml` | `recipes/train/mtl_molformer_robust_polaris_fang.yaml` |
-| CheMeleon | STL | AdapterGNN (bottleneck 128) | (STL variant of `mtl_*_tdcpxr25`) | `recipes/train/stl_chemeleon_paper_polaris_fang.yaml` |
-| GraphMVP | STL | AdapterGNN (bottleneck 64) | `recipes/train/mtl_graphmvp_robust_causal6_kendall_epoch100_tdcpxr25.yaml` | `recipes/train/stl_graphmvp_paper_polaris_fang.yaml` |
-| MAP | STL | 4-modality Modality-Attention-Pooling | `recipes/train/mtl_4modality_robust_causal6_nounimol2_epoch100_tdcpxr25.yaml` | `recipes/train/stl_map_robust_polaris_fang.yaml` |
+### TDC-22 base models — train + evaluate recipes (all under `recipes/`)
+
+| Model | Regime | Ensemble | Train recipe | Evaluate recipe |
+|---|---|:---:|---|---|
+| D-MPNN | MTL | ★ | `train/mtl_dmpnn_robust_causal6_kendall_epoch100.yaml` | `evaluate/leaderboard_mtl_dmpnn_epoch100_s01234.yaml` |
+| CheMeleon | MTL | | `train/mtl_chemeleon_robust_causal6_kendall_epoch100.yaml` | `evaluate/leaderboard_chemeleon_robust_causal6_kendall.yaml` |
+| GraphMVP | MTL | | `train/mtl_graphmvp_robust_causal6_kendall_epoch100.yaml` | `evaluate/leaderboard_graphmvp_robust_causal6_kendall.yaml` |
+| MoLFormer | MTL | ★ | `train/mtl_molformer_robust_causal6_kendall_epoch100.yaml` | `evaluate/leaderboard_molformer_robust_causal6_kendall.yaml` |
+| MAP | MTL | | `train/mtl_4modality_robust_causal6_nounimol2_epoch100.yaml` | `evaluate/leaderboard_4modality_robust_causal6_nounimol2.yaml` |
+| D-MPNN | STL | | `train/stl_dmpnn_paper_gradclip_seed01234_epoch100.yaml` | `evaluate/leaderboard_stl_dmpnn_seed01234.yaml` |
+| CheMeleon | STL | ★ | `train/stl_chemeleon_adaptivegnn_paper.yaml` | `evaluate/leaderboard_stl_chemeleon.yaml` |
+| GraphMVP | STL | ★ | `train/stl_graphmvp_adaptivegnn_paper.yaml` | `evaluate/leaderboard_stl_graphmvp_seed01234.yaml` |
+| MoLFormer | STL | | `train/stl_molformer_lora.yaml` | `evaluate/leaderboard_stl_molformer_seed01234.yaml` |
+| MAP | STL | ★ | `train/stl_4modality_robust_nounimol2_seed01234.yaml` | `evaluate/leaderboard_stl_4modality_robust_nounimol2_seed01234.yaml` |
+
+### Polaris ADME-Fang — train recipes (the 5 ensemble members only; scored by the Polaris Hub, no `evaluate` step)
+
+| Model | Regime | Train recipe |
+|---|---|---|
+| D-MPNN | MTL | `train/mtl_dmpnn_robust_polaris_fang.yaml` |
+| MoLFormer | MTL | `train/mtl_molformer_robust_polaris_fang.yaml` |
+| CheMeleon | STL | `train/stl_chemeleon_paper_polaris_fang.yaml` |
+| GraphMVP | STL | `train/stl_graphmvp_paper_polaris_fang.yaml` |
+| MAP | STL | `train/stl_map_robust_polaris_fang.yaml` |
 
 Full recipe hyperparameters (LoRA rank/alpha/dropout, AdapterGNN bottlenecks, MAP entropy/tau
 annealing, optimizer/lr/batch/epochs/scheduler) are in the paper's Supplementary **Table S5**
@@ -101,25 +124,39 @@ pip install -e .                       # registers the `qadmet` CLI (entry point
 #    the TDC-22 token recipe; for Polaris use recipes/precompute/polaris_fang_molformer_tokens.yaml
 python -m qadmet.cli.main precompute --recipe recipes/precompute/molformer_tokens.yaml
 
-# 2) train the five models (5 seeds each).  There is NO separate `predict` step:
+# 2) train the 10 base models (5 seeds each).  There is NO separate `predict` step:
 #    each train run writes its own predictions.parquet (seed,task,split,smiles,y_true,y_pred)
 #    for both the validation and the held-out-test split, right after training.
-#    (exact TDC-22 train recipe filenames are in the table above, all under recipes/train/)
-python -m qadmet.cli.main train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100_tdcpxr25.yaml
-python -m qadmet.cli.main train --recipe recipes/train/mtl_molformer_robust_causal6_kendall_epoch100_tdcpxr25.yaml
-python -m qadmet.cli.main train --recipe recipes/train/mtl_graphmvp_robust_causal6_kendall_epoch100_tdcpxr25.yaml
-python -m qadmet.cli.main train --recipe recipes/train/mtl_4modality_robust_causal6_nounimol2_epoch100_tdcpxr25.yaml
-#    (CheMeleon·STL is the STL variant of the mtl_*_tdcpxr25 recipe; see the table above)
+#    (exact filenames are in the TDC-22 table above, all under recipes/train/)
+# --- 5 MTL ---
+python -m qadmet.cli.main train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_chemeleon_robust_causal6_kendall_epoch100.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_graphmvp_robust_causal6_kendall_epoch100.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_molformer_robust_causal6_kendall_epoch100.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_4modality_robust_causal6_nounimol2_epoch100.yaml
+# --- 5 STL ---
+python -m qadmet.cli.main train --recipe recipes/train/stl_dmpnn_paper_gradclip_seed01234_epoch100.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_chemeleon_adaptivegnn_paper.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_graphmvp_adaptivegnn_paper.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_molformer_lora.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_4modality_robust_nounimol2_seed01234.yaml
 
 # 3) evaluate each model → writes leaderboard.csv next to its predictions.parquet.
 #    leaderboard.csv columns: dataset,metric,ours,ours_std,rank,n_total,Top,Top_model
 #    where rank/n_total come from qadmet.evaluation.leaderboard.get_rank against the
 #    TDC public-leaderboard snapshot (the rank-normalization ruler).
+# --- 5 MTL ---
 python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_dmpnn_epoch100_s01234.yaml
-python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_molformer_epoch100_s01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_chemeleon_robust_causal6_kendall.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_graphmvp_robust_causal6_kendall.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_molformer_robust_causal6_kendall.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_4modality_robust_causal6_nounimol2.yaml
+# --- 5 STL ---
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_dmpnn_seed01234.yaml
 python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_chemeleon.yaml
 python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_graphmvp_seed01234.yaml
-python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_map_epoch100_s01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_molformer_seed01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_4modality_robust_nounimol2_seed01234.yaml
 ```
 
 Both `train` and `evaluate` write into each model's artifact directory

@@ -1,8 +1,0 @@
-name: stack_bs_k3_average__mtlchfilm_stlch_mtldrx
-kind: stack
-ensemble:
-  strategy: average
-  bases:
-    - mtl_chemeleon_film_aux
-    - stl_chemeleon_adaptivegnn
-    - mtl_dmpnn_rdkit_xtb
