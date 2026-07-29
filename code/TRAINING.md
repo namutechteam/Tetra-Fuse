@@ -23,13 +23,29 @@ D-MPNN is trained from scratch (no external weights).
 | Backbone | Expected path (under `code/qadmet/`) | Source |
 |---|---|---|
 | CheMeleon | `data/weights/chemeleon_mp.pt` | https://github.com/JacksonBurns/chemeleon · weights on Zenodo https://zenodo.org/records/15460715 |
-| GraphMVP | `data/weights/graphmvp/graphmvp_hybrid.pth` | https://github.com/chao1224/GraphMVP · pretrained checkpoints https://drive.google.com/drive/folders/1uPsBiQF3bfeCAXSDd4JfyXiTh-qxYfu6 (use the `GraphMVP_hybrid` regression variant) |
+| GraphMVP | `data/weights/graphmvp/graphmvp_hybrid.pth` | https://github.com/chao1224/GraphMVP · pretrained checkpoints https://drive.google.com/drive/folders/1uPsBiQF3bfeCAXSDd4JfyXiTh-qxYfu6 (see note below) |
+
+**GraphMVP checkpoint — which one and how to prepare it.** From the Drive folder use
+`pretraining_model/GraphMVP_hybrid/` — the **Hybrid (Eq. 8) variant trained with the OGB
+"complete" atom/bond features** (9-d atom / 3-d bond), *not* the chirality-only classification
+weights. This choice is deliberate: our 22 ADMET tasks mix 10 regression + 12 classification
+endpoints, and the OGB-feature weights are what our GIN encoder (OGB `AtomEncoder`/`BondEncoder`)
+loads. The raw Drive checkpoint is a dict `{model, model_3D, AE_2D_3D, AE_3D_2D}`; **extract only
+the `model` key** (the 2D-GIN state_dict — the other keys are SSL auxiliaries not used
+downstream) and save that as `graphmvp_hybrid.pth`:
+
+```python
+import torch
+ckpt = torch.load("GraphMVP_hybrid/<downloaded>.pth", map_location="cpu")
+torch.save(ckpt["model"], "data/weights/graphmvp/graphmvp_hybrid.pth")
+```
 
 ```bash
 cd code/qadmet
 mkdir -p data/weights/graphmvp
 # CheMeleon: download chemeleon_mp.pt from the Zenodo record → data/weights/chemeleon_mp.pt
-# GraphMVP:  download the GraphMVP_hybrid checkpoint from the Drive folder
+# GraphMVP:  download pretraining_model/GraphMVP_hybrid/ (OGB-feature regression weights) from
+#            the Drive folder, extract its "model" key (see snippet above)
 #            → data/weights/graphmvp/graphmvp_hybrid.pth
 ```
 
