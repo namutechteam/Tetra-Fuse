@@ -1,0 +1,9 @@
+Baseline,Track,Baseline norm_score,Ensemble norm_score,Mean Δ,Median Δ,Wins/ties/losses,Wilcoxon W,p (raw),p (Holm),Significance
+CheMeleon·STL,matched-seed,0.6331,0.854,0.2209,0.2,20/0/1,226.0,6.12e-05,4.90e-04,***
+CheMeleon·STL,seed-averaged,0.7298,0.8971,0.1673,0.15,17/2/2,178.0,4.17e-04,1.67e-03,**
+MAP·STL,matched-seed,0.6045,0.854,0.2495,0.2633,20/0/1,225.0,7.04e-05,4.93e-04,***
+MAP·STL,seed-averaged,0.7745,0.8971,0.1226,0.1,14/4/3,139.0,1.55e-03,4.64e-03,**
+D-MPNN·MTL,matched-seed,0.6047,0.854,0.2493,0.2779,17/3/1,169.0,1.38e-04,8.29e-04,***
+D-MPNN·MTL,seed-averaged,0.6851,0.8971,0.212,0.1578,16/3/2,164.0,3.14e-04,1.57e-03,**
+per-task oracle,matched-seed,0.811,0.854,0.043,0.042,14/3/4,129.0,2.91e-02,5.81e-02,n.s.
+per-task oracle,seed-averaged,0.9318,0.8971,-0.0347,0.0,2/9/10,8.0,9.92e-01,9.92e-01,n.s.

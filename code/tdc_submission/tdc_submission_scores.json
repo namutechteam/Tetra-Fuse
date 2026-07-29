@@ -1,0 +1,86 @@
+{
+  "ames": [
+    0.856,
+    0.002
+  ],
+  "bbb_martins": [
+    0.913,
+    0.004
+  ],
+  "caco2_wang": [
+    0.308,
+    0.02
+  ],
+  "clearance_hepatocyte_az": [
+    0.495,
+    0.007
+  ],
+  "clearance_microsome_az": [
+    0.629,
+    0.008
+  ],
+  "cyp2c9_substrate_carbonmangels": [
+    0.447,
+    0.022
+  ],
+  "cyp2c9_veith": [
+    0.785,
+    0.005
+  ],
+  "cyp2d6_substrate_carbonmangels": [
+    0.698,
+    0.014
+  ],
+  "cyp2d6_veith": [
+    0.714,
+    0.009
+  ],
+  "cyp3a4_substrate_carbonmangels": [
+    0.658,
+    0.006
+  ],
+  "cyp3a4_veith": [
+    0.878,
+    0.003
+  ],
+  "dili": [
+    0.934,
+    0.011
+  ],
+  "half_life_obach": [
+    0.551,
+    0.033
+  ],
+  "herg": [
+    0.877,
+    0.01
+  ],
+  "hia_hou": [
+    0.992,
+    0.002
+  ],
+  "ld50_zhu": [
+    0.588,
+    0.012
+  ],
+  "lipophilicity_astrazeneca": [
+    0.452,
+    0.013
+  ],
+  "pgp_broccatelli": [
+    0.935,
+    0.006
+  ],
+  "ppbr_az": [
+    7.034,
+    0.17
+  ],
+  "solubility_aqsoldb": [
+    0.775,
+    0.015
+  ],
+  "vdss_lombardo": [
+    0.687,
+    0.01
+  ]
+}

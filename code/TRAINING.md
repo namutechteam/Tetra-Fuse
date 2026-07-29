@@ -73,14 +73,14 @@ cd code/qadmet          # the core engine directory in this release
 #    (see qadmet/src/qadmet/datasets/polaris_fang.py for the expected path)
 
 # 1) precompute MoLFormer token embeddings (once)
-python -m qadmet.cli.main precompute --recipe recipes/precompute_polaris_fang_molformer_tokens.yaml
+python -m qadmet.cli.main precompute --recipe recipes/precompute/polaris_fang_molformer_tokens.yaml
 
 # 2) train the five models (5 seeds each)
-python -m qadmet.cli.main train --recipe recipes/mtl_dmpnn_robust_polaris_fang.yaml
-python -m qadmet.cli.main train --recipe recipes/mtl_molformer_robust_polaris_fang.yaml
-python -m qadmet.cli.main train --recipe recipes/stl_chemeleon_paper_polaris_fang.yaml
-python -m qadmet.cli.main train --recipe recipes/stl_graphmvp_paper_polaris_fang.yaml
-python -m qadmet.cli.main train --recipe recipes/stl_map_robust_polaris_fang.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_dmpnn_robust_polaris_fang.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_molformer_robust_polaris_fang.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_chemeleon_paper_polaris_fang.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_graphmvp_paper_polaris_fang.yaml
+python -m qadmet.cli.main train --recipe recipes/train/stl_map_robust_polaris_fang.yaml
 ```
 
 Each run writes per-seed checkpoints and a long-format prediction parquet
@@ -88,12 +88,73 @@ Each run writes per-seed checkpoints and a long-format prediction parquet
 "leaderboard metrics" block reports NaN for the test split — this is expected, not an error;
 scoring is done against the official Polaris test labels.
 
+## End-to-end pipeline (TDC-22 primary benchmark)
+
+The full order — from raw data to the figures/tables — is:
+
+```bash
+conda activate admet-mtl
+cd code/qadmet
+pip install -e .                       # registers the `qadmet` CLI (entry point qadmet.cli.main)
+
+# 1) precompute  (only needed for the MoLFormer backbone — token embeddings, run once)
+#    the TDC-22 token recipe; for Polaris use recipes/precompute/polaris_fang_molformer_tokens.yaml
+python -m qadmet.cli.main precompute --recipe recipes/precompute/molformer_tokens.yaml
+
+# 2) train the five models (5 seeds each).  There is NO separate `predict` step:
+#    each train run writes its own predictions.parquet (seed,task,split,smiles,y_true,y_pred)
+#    for both the validation and the held-out-test split, right after training.
+#    (exact TDC-22 train recipe filenames are in the table above, all under recipes/train/)
+python -m qadmet.cli.main train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100_tdcpxr25.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_molformer_robust_causal6_kendall_epoch100_tdcpxr25.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_graphmvp_robust_causal6_kendall_epoch100_tdcpxr25.yaml
+python -m qadmet.cli.main train --recipe recipes/train/mtl_4modality_robust_causal6_nounimol2_epoch100_tdcpxr25.yaml
+#    (CheMeleon·STL is the STL variant of the mtl_*_tdcpxr25 recipe; see the table above)
+
+# 3) evaluate each model → writes leaderboard.csv next to its predictions.parquet.
+#    leaderboard.csv columns: dataset,metric,ours,ours_std,rank,n_total,Top,Top_model
+#    where rank/n_total come from qadmet.evaluation.leaderboard.get_rank against the
+#    TDC public-leaderboard snapshot (the rank-normalization ruler).
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_dmpnn_epoch100_s01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_molformer_epoch100_s01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_chemeleon.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_stl_graphmvp_seed01234.yaml
+python -m qadmet.cli.main evaluate --recipe recipes/evaluate/leaderboard_mtl_map_epoch100_s01234.yaml
+```
+
+Both `train` and `evaluate` write into each model's artifact directory
+(`artifacts/<...>/<run>/`): `predictions.parquet` from `train`, `leaderboard.csv` from
+`evaluate`. In the public baseline layout these live at
+`artifacts/baselines/<model>/baseline/{predictions.parquet,leaderboard.csv}`.
+
+## How the notebook inputs are produced
+
+The figure/table notebook `../notebooks/regenerate_paper_materials.ipynb` reads raw predictions
+and leaderboards from `../data/recompute_data/`. To wire a fresh
+training run into the notebooks, copy the two per-model outputs there:
+
+```bash
+# for each of the 10 models produced by train + evaluate:
+cp artifacts/<...>/<model>/.../predictions.parquet  ../../data/recompute_data/predictions/<model>.parquet
+cp artifacts/<...>/<model>/.../leaderboard.csv      ../../data/recompute_data/leaderboards/<model>.csv
+```
+
+The notebooks then recompute **everything** from these files: solo/ensemble norm_scores
+(the uniform-mean late fusion), the per-backbone and MAP-aggregation tables, the k-sweep,
+LOO/Shapley, correlations, and the Wilcoxon statistics. The formats match exactly — the same
+`leaderboard.csv` schema and the same `norm = (n_total - rank + 1) / n_total` rank
+normalization are used by `qadmet evaluate` and by the notebook recompute; verified
+identical across all released model×task rows. The two ruler/sweep inputs
+(`tdc_leaderboard_snapshot.json`, `clean_stage1_current.csv`, `all1023.csv`) are shipped in
+`recompute_data/` as-is.
+
 ## Late-fusion ensemble and submission
 
 The ensemble is a **uniform (equal-weight) mean** of the five models' predictions, averaged
-across the five random seeds (seed-averaged / cross-seed track). See
-`../data/polaris_all_model_test_preds.csv` for the exact per-molecule predictions submitted
-to the Polaris Hub as `LateFusion-k5`. No fitting is involved in the fusion step.
+across the five random seeds (seed-averaged / cross-seed track). It has no fitted parameters,
+so it is computed directly in the notebooks from the five `predictions.parquet` files — there
+is no separate ensemble-training step. See `../data/polaris_all_model_test_preds.csv` for the
+exact per-molecule predictions submitted to the Polaris Hub as `LateFusion-k5`.
 
 ## Data splits
 

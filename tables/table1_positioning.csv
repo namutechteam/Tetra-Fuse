@@ -1,0 +1,5 @@
+Method,Encoder pool / heterogeneity,Fusion level,Combination & training,Benchmark & selection
+MolPROP [19],Language model (ChemBERTa-2) + graph (GCN/GATv2); 2 modalities,Feature-level (token->node concatenation); single jointly-trained model,Joint training; no ensemble selection; no meta-learner,MoleculeNet (7 tasks)
+FusionCLM [15],"Three homogeneous SMILES language models (ChemBERTa-2, MoLFormer, MolBERT)",Two-level prediction/feature stacking,Trained meta-learners (RF / NN) on losses+predictions,MoleculeNet (5 tasks)
+DCPM-ADMET [20],Dual-channel pre-trained model + molecular fingerprints,Feature-level fusion,Jointly-trained fusion head,ADMET (own split)
+Tetra-Fuse (this work),"Heterogeneous: SMILES transformer, descriptor- and 3D-pretrained GNNs, from-scratch D-MPNN, and a feature-fusion MAP model; 0D-3D, pretrained+scratch, STL+MTL","Both feature-level and prediction-level late fusion, compared in one framework",Parameter-free uniform mean; no meta-learner; no additional cross-modal pre-training,21 TDC ADMET (leaderboard-native) + external Polaris; validation-only exhaustive subset selection

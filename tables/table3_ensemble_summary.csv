@@ -1,0 +1,3 @@
+Evaluation track,Mean norm_score,Mean rank,# rank-1,# top-3,# top-5
+matched-seed track,0.854,3.95,2,11,15
+seed-averaged track,0.897,3.1,6,14,19

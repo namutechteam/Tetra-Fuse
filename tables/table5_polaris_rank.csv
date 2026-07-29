@@ -1,7 +1,0 @@
-Endpoint,Polaris slug,LateFusion-k5 (Pearson r),Rank,# submissions,Leaderboard best model,Best Pearson r,Gap to best
-HLM_CLint,adme-fang-hclint-1,0.7804,2,16,seqera-gradient,0.7957,0.0153
-RLM_CLint,adme-fang-rclint-1,0.8033,1,11,LateFusion-k5,0.8033,0.0
-MDR1_ER (perm),adme-fang-perm-1,0.8381,3,15,1B_MPNN_MolGPS-ens_LargeMix,0.8794,0.0413
-Solubility,adme-fang-solu-1,0.6966,4,43,1B_MPNN_MolGPS-ens_LargeMix,0.77,0.0734
-HPPB,adme-fang-hppb-1,0.8884,1,19,LateFusion-k5,0.8884,0.0
-RPPB,adme-fang-rppb-1,0.9049,2,19,1B_MPNN_LargeMix-and-Phenomics,0.9082,0.0033

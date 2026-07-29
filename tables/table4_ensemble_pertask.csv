@@ -1,0 +1,22 @@
+Task,Metric,TDC leaderboard best model,TDC leaderboard best score,Matched score (mean ± s.d.),Matched rank,Seed-avg score,Seed-avg rank
+HIA_Hou,auroc,MiniMol,0.993 ± 0.005,0.992 ± 0.003,2,0.993,1
+Pgp_Broccatelli,auroc,MapLight + GNN,0.938 ± 0.002,0.935 ± 0.006,2,0.94,1
+BBB_Martins,auroc,MiniMol,0.924 ± 0.003,0.913 ± 0.004,6,0.915,4
+CYP2C9_Veith,auprc,MapLight + GNN,0.859 ± 0.001,0.785 ± 0.005,7,0.79,5
+CYP2D6_Veith,auprc,MapLight + GNN,0.790 ± 0.001,0.714 ± 0.009,7,0.723,4
+CYP3A4_Veith,auprc,MapLight + GNN,0.916 ± 0.000,0.878 ± 0.003,6,0.882,5
+CYP2C9_Substrate_CarbonMangels,auprc,MiniMol,0.474 ± 0.025,0.447 ± 0.021,2,0.44,3
+CYP2D6_Substrate_CarbonMangels,auprc,ContextPred,0.736 ± 0.024,0.698 ± 0.014,7,0.696,7
+CYP3A4_Substrate_CarbonMangels,auroc,CFA,0.667 ± 0.019,0.657 ± 0.006,4,0.664,2
+hERG,auroc,MapLight + GNN,0.880 ± 0.002,0.878 ± 0.010,2,0.883,1
+AMES,auroc,ZairaChem,0.871 ± 0.002,0.856 ± 0.002,5,0.861,5
+DILI,auroc,MiniMol,0.956 ± 0.006,0.934 ± 0.011,2,0.938,2
+Caco2_Wang,mae,CaliciBoost,0.256 ± 0.006,0.308 ± 0.020,9,0.298,9
+Lipophilicity_AstraZeneca,mae,MiniMol,0.456 ± 0.008,0.452 ± 0.013,1,0.445,1
+Solubility_AqSolDB,mae,MiniMol,0.741 ± 0.013,0.775 ± 0.015,3,0.761,2
+PPBR_AZ,mae,Gradient Boost,7.440 ± 0.024,7.035 ± 0.170,1,6.942,1
+VDss_Lombardo,spearman,MapLight + GNN,0.713 ± 0.007,0.687 ± 0.010,3,0.692,3
+Half_Life_Obach,spearman,CFA,0.576 ± 0.025,0.551 ± 0.034,4,0.56,3
+Clearance_Hepatocyte_AZ,spearman,CFA,0.536 ± 0.020,0.495 ± 0.007,3,0.503,2
+Clearance_Microsome_AZ,spearman,MapLight + GNN,0.630 ± 0.010,0.629 ± 0.007,2,0.636,1
+LD50_Zhu,mae,BaseBoosting KyQVZ6b2,0.552 ± 0.009,0.588 ± 0.012,5,0.583,3

@@ -1,0 +1,404 @@
+{
+ "_comment": "Task-level design metadata for the paper figures. Values are fixed labels/design choices, NOT recomputed performance. meta3 is derived in the notebook as meta1 without the training-set size.",
+ "meta1": {
+  "Caco2_Wang": {
+   "group": "oral_uptake",
+   "n": "910"
+  },
+  "HIA_Hou": {
+   "group": "oral_uptake",
+   "n": "578"
+  },
+  "Solubility_AqSolDB": {
+   "group": "oral_uptake",
+   "n": "9982"
+  },
+  "BBB_Martins": {
+   "group": "distribution_cns",
+   "n": "2030"
+  },
+  "Lipophilicity_AstraZeneca": {
+   "group": "distribution_cns",
+   "n": "4200"
+  },
+  "PPBR_AZ": {
+   "group": "distribution_cns",
+   "n": "2790"
+  },
+  "VDss_Lombardo": {
+   "group": "distribution_cns",
+   "n": "1130"
+  },
+  "CYP2C9_Veith": {
+   "group": "interaction_liabilities",
+   "n": "12092"
+  },
+  "CYP2D6_Veith": {
+   "group": "interaction_liabilities",
+   "n": "13130"
+  },
+  "CYP3A4_Veith": {
+   "group": "interaction_liabilities",
+   "n": "12328"
+  },
+  "Pgp_Broccatelli": {
+   "group": "interaction_liabilities",
+   "n": "1218"
+  },
+  "hERG": {
+   "group": "interaction_liabilities",
+   "n": "655"
+  },
+  "CYP2C9_Substrate_CarbonMangels": {
+   "group": "metabolic_turnover",
+   "n": "669"
+  },
+  "CYP2D6_Substrate_CarbonMangels": {
+   "group": "metabolic_turnover",
+   "n": "667"
+  },
+  "CYP3A4_Substrate_CarbonMangels": {
+   "group": "metabolic_turnover",
+   "n": "670"
+  },
+  "Clearance_Hepatocyte_AZ": {
+   "group": "metabolic_turnover",
+   "n": "1213"
+  },
+  "Clearance_Microsome_AZ": {
+   "group": "metabolic_turnover",
+   "n": "1102"
+  },
+  "AMES": {
+   "group": "distal_safety",
+   "n": "7278"
+  },
+  "DILI": {
+   "group": "distal_safety",
+   "n": "475"
+  },
+  "LD50_Zhu": {
+   "group": "distal_safety",
+   "n": "7385"
+  },
+  "Half_Life_Obach": {
+   "group": "composite_exposure",
+   "n": "667"
+  }
+ },
+ "groups": {
+  "Oral uptake": [
+   "Solubility_AqSolDB",
+   "Caco2_Wang",
+   "HIA_Hou"
+  ],
+  "Distribution/CNS": [
+   "Lipophilicity_AstraZeneca",
+   "PPBR_AZ",
+   "BBB_Martins",
+   "VDss_Lombardo"
+  ],
+  "Interaction": [
+   "Pgp_Broccatelli",
+   "hERG",
+   "CYP2C9_Veith",
+   "CYP2D6_Veith",
+   "CYP3A4_Veith"
+  ],
+  "Metabolism": [
+   "CYP2C9_Substrate_CarbonMangels",
+   "CYP2D6_Substrate_CarbonMangels",
+   "CYP3A4_Substrate_CarbonMangels",
+   "Clearance_Hepatocyte_AZ",
+   "Clearance_Microsome_AZ"
+  ],
+  "Safety": [
+   "AMES",
+   "DILI",
+   "LD50_Zhu"
+  ],
+  "Exposure": [
+   "Half_Life_Obach"
+  ]
+ },
+ "t2": [
+  {
+   "group": "Oral uptake",
+   "tasks": "Solubility_AqSolDB; Caco2_Wang; HIA_Hou; Bioavailability_Ma",
+   "rationale": "Solubility to intestinal absorption and systemic availability"
+  },
+  {
+   "group": "Distribution / CNS",
+   "tasks": "Lipophilicity_AstraZeneca; PPBR_AZ; BBB_Martins; VDss_Lombardo",
+   "rationale": "Physicochemical distribution and CNS exposure"
+  },
+  {
+   "group": "Interaction liabilities",
+   "tasks": "Pgp_Broccatelli; hERG; CYP(2C9/2D6/3A4)_Veith",
+   "rationale": "Transporter, ion-channel, and enzyme interaction risks"
+  },
+  {
+   "group": "Metabolic turnover",
+   "tasks": "CYP(2C9/2D6/3A4)_Substrate_CarboMangels; Clearance_(Hepatocyte/Microsome)_AZ",
+   "rationale": "Substrate recognition and hepatic elimination"
+  },
+  {
+   "group": "Distal safety",
+   "tasks": "AMES; DILI; LD50_Zhu",
+   "rationale": "Mutagenicity, organ toxicity, and acute toxicity"
+  },
+  {
+   "group": "Composite exposure",
+   "tasks": "Half_Life_Obach",
+   "rationale": "Composite endpoint isolated to reduce gradient conflict"
+  }
+ ],
+ "const_gt": {
+  "final_ensemble": [
+   "mtl_dmpnn",
+   "mtl_molformer",
+   "stl_chemeleon",
+   "stl_graphmvp",
+   "stl_map"
+  ],
+  "final_composition": {
+   "MTL": [
+    "dmpnn",
+    "molformer"
+   ],
+   "STL": [
+    "chemeleon",
+    "graphmvp",
+    "map"
+   ]
+  },
+  "headline": {
+   "22-task": {
+    "within": [
+     0.815,
+     4.73,
+     2,
+     11,
+     15
+    ],
+    "cross": [
+     0.856,
+     3.91,
+     6,
+     14,
+     19
+    ]
+   },
+   "21-task": {
+    "within": [
+     0.854,
+     3.95,
+     2,
+     11,
+     15
+    ],
+    "cross": [
+     0.897,
+     3.1,
+     6,
+     14,
+     19
+    ]
+   }
+  },
+  "sota_tasks": {
+   "within": [
+    "Lipophilicity_AstraZeneca",
+    "PPBR_AZ"
+   ],
+   "cross": [
+    "HIA_Hou",
+    "Pgp_Broccatelli",
+    "hERG",
+    "Lipophilicity_AstraZeneca",
+    "PPBR_AZ",
+    "Clearance_Microsome_AZ"
+   ]
+  },
+  "k5_selection": {
+   "simple_combo": [
+    "mtl_dmpnn",
+    "mtl_molformer",
+    "stl_chemeleon",
+    "stl_graphmvp",
+    "stl_map"
+   ],
+   "val_within": 0.7923,
+   "val_cross": 0.7883,
+   "combined": 1.5806,
+   "n_candidates_meta": 3069,
+   "n_subsets": 1023,
+   "k_candidates": 161
+  },
+  "k4_variant": {
+   "drop": "stl_graphmvp",
+   "cross_norm": 0.9101,
+   "cross_rank": 2.81,
+   "full_cross_norm": 0.8971,
+   "full_cross_rank": 3.1
+  },
+  "per_model_norm": {
+   "stl_chemeleon": [
+    0.6454,
+    8.19,
+    0,
+    3,
+    6,
+    16
+   ],
+   "mtl_map": [
+    0.6215,
+    8.67,
+    2,
+    3,
+    5,
+    14
+   ],
+   "mtl_chemeleon": [
+    0.6148,
+    8.76,
+    0,
+    2,
+    4,
+    16
+   ],
+   "mtl_dmpnn": [
+    0.6121,
+    8.76,
+    2,
+    4,
+    6,
+    14
+   ],
+   "stl_map": [
+    0.6092,
+    8.81,
+    0,
+    3,
+    4,
+    13
+   ],
+   "mtl_molformer": [
+    0.5685,
+    9.76,
+    2,
+    3,
+    4,
+    13
+   ],
+   "mtl_graphmvp": [
+    0.5194,
+    10.76,
+    1,
+    4,
+    4,
+    10
+   ],
+   "stl_molformer": [
+    0.4653,
+    11.81,
+    0,
+    1,
+    1,
+    7
+   ],
+   "stl_graphmvp": [
+    0.4261,
+    12.38,
+    0,
+    1,
+    1,
+    5
+   ],
+   "stl_dmpnn": [
+    0.2224,
+    16.57,
+    0,
+    0,
+    0,
+    2
+   ]
+  },
+  "per_model_within_cross_solo": {
+   "mtl_dmpnn": [
+    0.6047,
+    0.6851
+   ],
+   "mtl_chemeleon": [
+    0.5998,
+    0.7864
+   ],
+   "mtl_graphmvp": [
+    0.5245,
+    0.6509
+   ],
+   "mtl_molformer": [
+    0.5541,
+    0.6439
+   ],
+   "mtl_map": [
+    0.6173,
+    0.762
+   ],
+   "stl_dmpnn": [
+    0.2098,
+    0.2921
+   ],
+   "stl_chemeleon": [
+    0.6331,
+    0.7298
+   ],
+   "stl_graphmvp": [
+    0.416,
+    0.5241
+   ],
+   "stl_molformer": [
+    0.4627,
+    0.5415
+   ],
+   "stl_map": [
+    0.6045,
+    0.7745
+   ]
+  },
+  "val_test_corr": {
+   "within": {
+    "rho": 0.796,
+    "tau": 0.603,
+    "ci": [
+     0.71,
+     0.859
+    ]
+   },
+   "cross": {
+    "rho": 0.748,
+    "tau": 0.561,
+    "ci": [
+     0.643,
+     0.826
+    ]
+   },
+   "combined": {
+    "rho": 0.805,
+    "tau": 0.616,
+    "ci": [
+     0.725,
+     0.862
+    ]
+   },
+   "n_configs": 133,
+   "coarse": {
+    "within_pct": 99,
+    "within_bestsingle": 0.633,
+    "cross_pct": 91,
+    "cross_bestsingle": 0.786
+   }
+  },
+  "_fig1_basis_note": "Figure 1 reworked to within-seed (matched-seed) solo test norm to match Table 3 within column; prior leaderboard-single-value basis (per_model_norm[*][0]) retired for Fig1"
+ }
+}
