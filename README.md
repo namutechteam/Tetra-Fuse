@@ -12,27 +12,37 @@ submitted to the Polaris Hub under the label `LateFusion-k5`).
 
 **1. Figures and tables (no GPU, no network) — start here.**
 Every figure and table in the paper is recomputed from the raw per-seed model predictions
-and leaderboard entries in `data/recompute_data/` (no hard-coded summary numbers). A single
-self-contained notebook regenerates all figures and tables:
+and leaderboard entries in `data/recompute_data/` (no hard-coded summary numbers). The
+regeneration is split into six self-contained notebooks — one for the intro/methods tables
+and one per Results subsection (§3.1–3.5). **Each notebook runs independently** (each carries
+the same setup cell that recomputes all quantities from source), so they can be run in any
+order or individually:
+
+| Notebook | Produces |
+|---|---|
+| `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table 2, Table S7 |
+| `notebooks/31_complementarity.ipynb` (§3.1) | Figure 1, Table S1 |
+| `notebooks/32_fusion_comparison.ipynb` (§3.2) | Figure 2, Figures S1–S3, Table S2, Figure 3, Table S3 |
+| `notebooks/33_heldout_test.ipynb` (§3.3) | Table 3, Figures S6/S7, Table 4, Table S8, Figure 4 |
+| `notebooks/34_gain_analysis.ipynb` (§3.4) | Figure 5, Table 5, Figure S5, Table S4, Figure S4 |
+| `notebooks/35_polaris_external.ipynb` (§3.5) | Figure 6, Table S6 |
 
 ```bash
-pip install -r requirements.txt          # numpy, pandas, scipy, scikit-learn, statsmodels, matplotlib, openpyxl, jupyter
-jupyter notebook notebooks/regenerate_paper_materials.ipynb   # -> figures/figure1..6.png + figureS1..S7.png + tables/*.csv + *.xlsx
+pip install -r requirements.txt          # numpy, pandas, scipy, scikit-learn, statsmodels, matplotlib, jupyter
+# run all six (any order), e.g. headless:
+for nb in notebooks/00_pre_analysis notebooks/3?_*; do
+    jupyter nbconvert --to notebook --execute --inplace "${nb%.ipynb}.ipynb"
+done
+# or open a single section interactively, e.g.:
+jupyter notebook notebooks/31_complementarity.ipynb
 ```
 
-Or run headless:
-
-```bash
-jupyter nbconvert --to notebook --execute notebooks/regenerate_paper_materials.ipynb
-```
-
-The notebook reads raw predictions from `data/recompute_data/` and writes into `figures/`
-and `tables/`. The setup cell recomputes every value — solo/ensemble
-norm_scores, the uniform-mean late-fusion ensemble, LOO/Shapley, correlations, the k-sweep,
-and the Wilcoxon statistics — from those raw files, and `assert` blocks verify each result
-against the manuscript numbers before drawing (e.g. the k=5 composition; the ensemble wins
-3 of 6 Polaris endpoints). The derived summary files (`ground_truth.json`, `pertask.json`,
-`stat_tests.json`) are retained as a verification reference, not as the notebook input.
+Each notebook reads raw predictions from `data/recompute_data/` and writes into `figures/`
+and `tables/`. The shared setup cell recomputes every value — solo/ensemble norm_scores, the
+uniform-mean late-fusion ensemble, LOO/Shapley, correlations, the k-sweep, and the Wilcoxon
+statistics — from those raw files, and `assert` blocks verify each result against the
+manuscript numbers before drawing (e.g. the k=5 composition; the ensemble wins 3 of 6 Polaris
+endpoints). Together they produce all of `figure1..6.png`, `figureS1..S7.png`, and `tables/*.csv`.
 
 **2. Model training (GPU) — see `code/TRAINING.md`.**
 The full `qadmet` training/evaluation engine (`code/qadmet/`), all recipe YAMLs, the pinned
@@ -58,12 +68,16 @@ release/
 │   │   ├── tdc_leaderboard_snapshot.json, task_registry.json, task_metadata.json
 │   │   └── polaris_leaderboard_full.json   (Polaris public submissions, notebook input for Figure 6)
 │   └── polaris_external/          ← Polaris audit/reference tables (not notebook inputs; see its README.md)
-├── notebooks/
-│   ├── regenerate_paper_materials.ipynb   ← ALL figures + tables (Figure 1–6, Figure S1–S7;
-│   │                                          Table 1–5, Table S1–S8) recomputed from data/recompute_data/
+├── notebooks/                    ← six self-contained regeneration notebooks (one per section):
+│   ├── 00_pre_analysis.ipynb          ← setup + Table 1, S5, 2, S7
+│   ├── 31_complementarity.ipynb       ← §3.1: Figure 1, Table S1
+│   ├── 32_fusion_comparison.ipynb     ← §3.2: Figure 2, S1–S3, Table S2, Figure 3, Table S3
+│   ├── 33_heldout_test.ipynb          ← §3.3: Table 3, Figure S6/S7, Table 4, S8, Figure 4
+│   ├── 34_gain_analysis.ipynb         ← §3.4: Figure 5, Table 5, Figure S5, Table S4, Figure S4
+│   ├── 35_polaris_external.ipynb      ← §3.5: Figure 6, Table S6
 │   └── ensemble_subset_files_guide.md ← what the two 1,023-subset files (clean_stage1_current.csv, all1023.csv) are + how they are used
 ├── figures/                      ← generated PNGs (figure1..6.png, figureS1..S7.png)
-├── tables/                       ← generated CSVs + supplementary_tables.xlsx
+├── tables/                       ← generated CSVs (per-table)
 └── code/
     ├── TRAINING.md               ← model-training reproduction guide (weights, splits, pipeline)
     ├── qadmet/                   ← the full qadmet training/evaluation engine
