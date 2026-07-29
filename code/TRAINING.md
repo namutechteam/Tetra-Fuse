@@ -218,9 +218,25 @@ The notebooks then recompute **everything** from these files: solo/ensemble norm
 LOO/Shapley, correlations, and the Wilcoxon statistics. The formats match exactly — the same
 `leaderboard.csv` schema and the same `norm = (n_total - rank + 1) / n_total` rank
 normalization are used by `qadmet evaluate` and by the notebook recompute; verified
-identical across all released model×task rows. The two ruler/sweep inputs
-(`tdc_leaderboard_snapshot.json`, `clean_stage1_current.csv`, `all1023.csv`) are shipped in
-`recompute_data/` as-is.
+identical across all released model×task rows.
+
+### Ensemble-size sweep (`all1023.csv`)
+
+`recompute_data/all1023.csv` is the uniform-mean fusion sweep over all 1,023 non-empty subsets
+of the 10 base models, scored on both validation and the held-out TDC test split in the
+matched-seed (within) and seed-averaged (cross) tracks. It is shipped as a result file, but is
+**fully regenerable from the released predictions alone**:
+
+```bash
+python code/make_all1023.py        # predictions/*.parquet -> data/recompute_data/all1023.csv
+```
+
+`make_all1023.py` reuses the notebooks' exact scoring functions (`metric` / `norm_pct` /
+`merge_uniform`), so it deterministically reproduces the shipped `all1023.csv` byte-for-byte —
+the `predictions -> script -> csv` closure, single-core, about 40 minutes, no GPU/network. It
+feeds both the ensemble-size sweep (Figure 3 / Table S3, validation top-20-mean per k) and the
+validation→test reliability check (Figure 5). `tdc_leaderboard_snapshot.json` (the leaderboard
+ruler the sweep normalizes against) is shipped as-is.
 
 ## Late-fusion ensemble and submission
 

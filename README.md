@@ -64,7 +64,7 @@ release/
 │   ├── recompute_data/           ← RAW source the notebooks recompute from:
 │   │   ├── predictions/{model}.parquet   (10 models; seed,task,split,smiles,y_true,y_pred)
 │   │   ├── leaderboards/{model}.csv       (10 models; dataset,metric,ours,ours_std,rank,n_total,Top,Top_model)
-│   │   ├── clean_stage1_current.csv, all1023.csv   (1,023-subset sweeps; validation-only vs val+test — complementary, not duplicates)
+│   │   ├── all1023.csv            (1,023-subset uniform-mean sweep, val+test; regenerable via code/make_all1023.py)
 │   │   ├── tdc_leaderboard_snapshot.json, task_registry.json, task_metadata.json
 │   │   └── polaris_leaderboard_full.json   (Polaris public submissions, notebook input for Figure 6)
 │   └── polaris_external/          ← Polaris audit/reference tables (not notebook inputs; see its README.md)
@@ -75,7 +75,7 @@ release/
 │   ├── 33_heldout_test.ipynb          ← §3.3: Table 3, Figure S6/S7, Table 4, S8, Figure 4
 │   ├── 34_gain_analysis.ipynb         ← §3.4: Figure 5, Table 5, Figure S5, Table S4, Figure S4
 │   ├── 35_polaris_external.ipynb      ← §3.5: Figure 6, Table S6
-│   └── ensemble_subset_files_guide.md ← what the two 1,023-subset files (clean_stage1_current.csv, all1023.csv) are + how they are used
+│   └── ensemble_subset_files_guide.md ← what all1023.csv is, how the notebooks use it, how to regenerate it
 ├── figures/                      ← generated PNGs (figure1..6.png, figureS1..S7.png)
 ├── tables/                       ← generated CSVs (per-table)
 └── code/
