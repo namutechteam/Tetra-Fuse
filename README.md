@@ -1,12 +1,12 @@
-# Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction — Code Release
+# Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction — Code Release
 
-Reproduction package for the paper *"Prediction-Level Late Fusion Preserves Task-Specific
-Strengths across Heterogeneous Molecular Encoders for ADMET Prediction."*
+Reproduction package for the paper *"Tetra-Fuse: Late Fusion Preserves Task-Specific
+Strengths of Heterogeneous Molecular Encoders for ADMET Prediction."*
 
 The paper studies representation- and prediction-level fusion across five molecular foundation
 models on 21 TDC ADMET tasks, and validates the resulting uniform-mean late-fusion ensemble
-(**LateFusion-k5**) on the independent Polaris ADME-Fang benchmark (6 regression endpoints,
-officially submitted to the Polaris Hub).
+(**Tetra-Fuse**) on the independent Polaris ADME-Fang benchmark (6 regression endpoints;
+submitted to the Polaris Hub under the label `LateFusion-k5`).
 
 ## Two levels of reproducibility
 

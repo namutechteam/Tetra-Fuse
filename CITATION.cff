@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software or the accompanying data, please cite it as below."
-title: "Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction"
+title: "Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction"
 authors:
   - family-names: An
     given-names: Taekyeong
@@ -9,10 +9,10 @@ authors:
     given-names: Herim
     # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
   - family-names: Lee
-    given-names: Jinhee
+    given-names: Jin Hee
     # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
   - family-names: Yeom
-    given-names: Minsun
+    given-names: Min Sun
     # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
 version: 1.0.0
 date-released: 2026-07-13
