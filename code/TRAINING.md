@@ -203,9 +203,9 @@ Both `train` and `evaluate` write into each model's artifact directory
 
 ## How the notebook inputs are produced
 
-The figure/table notebook `../notebooks/regenerate_paper_materials.ipynb` reads raw predictions
-and leaderboards from `../data/recompute_data/`. To wire a fresh
-training run into the notebooks, copy the two per-model outputs there:
+The six section notebooks in `../notebooks/` (`00_pre_analysis.ipynb` + `31`–`35_*.ipynb`) read
+raw predictions and leaderboards from `../data/recompute_data/` via their shared setup cell. To
+wire a fresh training run into the notebooks, copy the two per-model outputs there:
 
 ```bash
 # for each of the 10 models produced by train + evaluate:

@@ -10,9 +10,9 @@ strategy / feature builder / calibrator 모두 registry 기반 — 새 modality�
 재현하는 recipe 와 실행 순서는 [`../TRAINING.md`](../TRAINING.md) 에 정리돼 있다.
 
 > **그림·표 재현에는 이 엔진이 필요 없다.** Figure/Table 은 사전 계산된 예측·리더보드
-> (`../../data/recompute_data/`) 만으로 `../../notebooks/regenerate_paper_materials.ipynb`
-> 에서 GPU·네트워크 없이 재현된다. 이 엔진은 그 예측·리더보드를 **처음부터 다시 학습**해
-> 만들고 싶을 때 쓴다.
+> (`../../data/recompute_data/`) 만으로 `../../notebooks/` 의 6개 섹션 노트북
+> (`00_pre_analysis.ipynb` + `31`–`35_*.ipynb`) 에서 GPU·네트워크 없이 재현된다. 이 엔진은
+> 그 예측·리더보드를 **처음부터 다시 학습**해 만들고 싶을 때 쓴다.
 
 ## 설치
 

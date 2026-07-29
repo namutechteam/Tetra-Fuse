@@ -16,15 +16,20 @@ carries the `test_*` columns Figure 4a needs.
 
 ## A. Analysis / use commands (reproduction package — deterministic, no GPU)
 
-Both files are read inside the released notebook's setup cell and turned into
-the published numbers. To reproduce the analyses that use them:
+Both files are read inside the shared setup cell that every section notebook
+carries, and turned into the published numbers. The analyses that actually
+consume them are the ensemble-size sweep (§3.2, `32_fusion_comparison.ipynb` —
+Figure 3 / Table S3) and the validation→test reliability check (§3.4,
+`34_gain_analysis.ipynb` — Figure 5). To reproduce those:
 
 ```bash
 cd paper_release/notebooks
-# runs the whole materials notebook: reads clean_stage1_current.csv + all1023.csv
-# from ../data/recompute_data, regenerates Figure 3 / Figure 4 / Table S3, etc.
+# each notebook's setup cell reads clean_stage1_current.csv + all1023.csv
+# from ../data/recompute_data; run the two that use them (or any section notebook):
 jupyter nbconvert --to notebook --execute --inplace \
-  --ExecutePreprocessor.timeout=1800 regenerate_paper_materials.ipynb
+  --ExecutePreprocessor.timeout=1800 32_fusion_comparison.ipynb
+jupyter nbconvert --to notebook --execute --inplace \
+  --ExecutePreprocessor.timeout=1800 34_gain_analysis.ipynb
 ```
 
 The two analysis functions that consume the files (in the setup cell) are:

@@ -1,13 +1,13 @@
 # Data Manifest — Reproduction Bundle
 
-All figures and tables in the paper are reproduced by `../notebooks/regenerate_paper_materials.ipynb`.
-The notebook **recomputes every quantity from raw source predictions** — no hard-coded summary
+All figures and tables in the paper are reproduced by the six section notebooks in
+`../notebooks/` (`00_pre_analysis.ipynb` + `31`–`35_*.ipynb`, one per Results subsection).
+Each notebook **recomputes every quantity from raw source predictions** — no hard-coded summary
 numbers. GPU compute and network are NOT required.
 
 ## Source data for full recomputation — `recompute_data/`
 
-The notebook (`../notebooks/regenerate_paper_materials.ipynb`) derives all figure/table values
-from these raw source files:
+The notebooks' shared setup cell derives all figure/table values from these raw source files:
 
 | File | Content |
 |---|---|
