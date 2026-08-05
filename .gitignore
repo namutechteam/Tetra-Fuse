@@ -38,3 +38,7 @@ weights/tetrafuse/
 
 # scratch predictions from `qadmet predict` / predict_smiles.py
 predictions.csv
+
+# pretrained backbone weights the reader downloads (CheMeleon, GraphMVP) — not ours
+# to redistribute, and multi-MB; see weights/README.md for where to put them.
+code/qadmet/data/weights/
