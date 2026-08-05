@@ -68,7 +68,7 @@ qadmet train --recipe recipes/train/mtl_dmpnn_robust_causal6_kendall_epoch100.ya
 |---|---|
 | [src/qadmet/](src/qadmet/) | 메인 패키지. core (registry/spec/recipe/artifact/lineage/runner) + tasks/datasets/features/modules/training/ensembles/evaluation/runners/cli. |
 | [recipes/](recipes/) | 논문 재현 recipe (38개). kind 별 디렉토리 + [`_base/`](recipes/_base/) 컴포저블 base. |
-| `LICENSE` | MIT. |
+| `LICENSE` | Apache-2.0. |
 
 `artifacts/`, `data/`, `checkpoints*/`, `lightning_logs/`, `logs/` 는 실행 시 생성되며
 릴리스에는 포함하지 않는다.

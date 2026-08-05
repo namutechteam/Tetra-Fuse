@@ -151,7 +151,7 @@ release/
 ├── CITATION.cff                  ← citation metadata
 ├── requirements.txt              ← minimal deps for the notebooks (axis A)
 ├── environment.yml               ← conda env for the notebooks
-├── LICENSE                       ← MIT
+├── LICENSE                       ← Apache-2.0
 │
 ├── data/                         ← AXIS A inputs (see DATA_MANIFEST.md)
 │   ├── recompute_data/           ← raw source the notebooks recompute from:
@@ -205,7 +205,7 @@ release/
 
 ## License
 
-MIT (see `LICENSE`), including the `qadmet` engine under `code/qadmet/`. The
+Apache-2.0 (see `LICENSE`), including the `qadmet` engine under `code/qadmet/`. The
 pretrained backbones are **not** covered by it — they are redistributed by their own
 authors under their own terms, which is why axis B asks you to download them directly.
 
