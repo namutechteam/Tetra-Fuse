@@ -31,10 +31,27 @@ else
     echo "WARNING: no DOI line found in CITATION.cff — add 'doi: ${DOI}' by hand" >&2
 fi
 
-# 2) weights/README.md — give the record URL directly rather than sending the
-#    reader via CITATION.cff, since this file is where they are standing
-sed -i "s|The Zenodo record (DOI in the top-level \`CITATION.cff\`) holds|The Zenodo record <https://zenodo.org/records/${REC}> (DOI ${DOI}) holds|" \
-    weights/README.md
+# 2) weights/README.md — state the DOI where the reader is standing, and drop the
+#    "being uploaded / may 404" caveat that only applied before publication
+python3 - "$DOI" "$REC" <<'PY'
+import re, sys
+doi, rec = sys.argv[1], sys.argv[2]
+p = "weights/README.md"
+s = open(p).read()
+new = (f"The Zenodo record <https://zenodo.org/records/{rec}> (DOI {doi}) holds "
+       "one archive per\nensemble member, so you can take only the members you "
+       "need:")
+# matches both the pre-publication wording and an already-filled one, so the
+# script is safe to re-run (e.g. after minting a new version DOI)
+pat = re.compile(
+    r"The Zenodo record[^\n]*\n(?:[^\n]*\n)*?"
+    r"(?:need\.|need:)(?:[^\n]*\n)*?(?=\n\| Archive)", re.M)
+s2, n = pat.subn(new + "\n", s, count=1)
+if n != 1:
+    sys.exit("ERROR: could not locate the Zenodo record paragraph in "
+             "weights/README.md — edit it by hand")
+open(p, "w").write(s2)
+PY
 
 echo "=== diff ==="
 git --no-pager diff -- CITATION.cff weights/README.md

@@ -71,8 +71,11 @@ were trained with it. The warning is not a sign of a broken download.
 
 ## 2. Unpack the PEFT weights
 
-The Zenodo record (DOI in the top-level `CITATION.cff`) holds one archive per
-ensemble member, so you can take only the members you need:
+The Zenodo record <https://zenodo.org/records/21802319> holds one archive per
+ensemble member, so you can take only the members you need. The deposit is being
+uploaded at the time of writing; the link goes live, and the DOI appears in the
+top-level `CITATION.cff`, once it is published. If the link 404s, the deposit has
+not been published yet — open an issue and we will point you at it.
 
 | Archive | Size | Files |
 |---|---|---|
