@@ -20,6 +20,15 @@ be swapped afterwards, so the last look should be a human's.
 
 Reruns are safe: pass `--deposition <id>` (printed on the first run) to resume,
 and files already present with a matching size are skipped.
+
+Expect this to take hours. Zenodo shapes a single connection to roughly
+0.3 MB/s no matter how fast your link is (measured: 0.33 MB/s to Zenodo versus
+9.5 MB/s to GitHub from the same host), so several files go up in parallel —
+`--jobs` controls how many. Run it detached, because a closed terminal kills it:
+
+    nohup python code/upload_zenodo.py --files-dir dist/ --jobs 4 \\
+        > upload.log 2>&1 & disown
+    tail -f upload.log
 """
 from __future__ import annotations
 
@@ -27,6 +36,8 @@ import argparse
 import json
 import os
 import sys
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 # Zenodo's documented per-record ceiling. Exceeding either needs a support
@@ -51,6 +62,11 @@ def main() -> int:
                     help="use sandbox.zenodo.org (needs a sandbox token)")
     ap.add_argument("--dry-run", action="store_true",
                     help="validate files and metadata, contact nothing")
+    ap.add_argument("--jobs", type=int, default=4,
+                    help="parallel upload streams (default 4). Zenodo shapes each "
+                         "connection to well under 1 MB/s, so concurrency — not "
+                         "your link speed — sets the wall time. Only helps when "
+                         "several files remain.")
     ap.add_argument("--exclude", nargs="*", default=["SHA256SUMS", "zenodo_manifest.csv"],
                     help="filenames to keep local (checksum lists are usually "
                          "redundant — Zenodo publishes its own per-file MD5)")
@@ -119,22 +135,72 @@ def main() -> int:
     bucket = dep["links"]["bucket"]
     already = {f["filename"]: f.get("filesize") for f in dep.get("files", [])}
 
+    pending = []
     for p in files:
         size = p.stat().st_size
         if already.get(p.name) == size:
             print(f"  skip {p.name} (already uploaded, {size/1e9:.3f} GB)")
-            continue
-        print(f"  uploading {p.name} ({size/1e9:.3f} GB) …", flush=True)
-        with open(p, "rb") as fh:
-            # Streaming PUT to the bucket: no multipart wrapper, no in-memory copy.
-            r = session.put(f"{bucket}/{p.name}", data=fh, timeout=(60, 3600))
-        if not r.ok:
-            print(f"ERROR uploading {p.name}: {r.status_code} {r.text[:300]}",
-                  file=sys.stderr)
-            print(f"       rerun with --deposition {dep['id']} to resume",
-                  file=sys.stderr)
-            return 1
-        print(f"    ok  md5 {r.json().get('checksum', '')}")
+        else:
+            pending.append(p)
+    if not pending:
+        print("  all files already uploaded")
+
+    def put_one(path):
+        """One streaming PUT. Own Session per thread — requests Sessions are not
+        thread-safe for concurrent use."""
+        s = requests.Session()
+        s.headers["Authorization"] = f"Bearer {token}"
+        t0 = time.time()
+        with open(path, "rb") as fh:
+            # Streaming body: no multipart wrapper, no in-memory copy.
+            r = s.put(f"{bucket}/{path.name}", data=fh, timeout=(60, 14400))
+        return path, r, time.time() - t0
+
+    # Zenodo shapes a single connection to well under 1 MB/s regardless of your
+    # link, so wall time is set by concurrency, not bandwidth. Uploading several
+    # files at once is the only lever that helps; it does nothing for a lone
+    # large file, since one file is one PUT.
+    failed = []
+    if args.jobs > 1 and len(pending) > 1:
+        print(f"  uploading {len(pending)} files with {args.jobs} parallel streams")
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            futures = {pool.submit(put_one, p): p for p in pending}
+            for fut in as_completed(futures):
+                p = futures[fut]
+                try:
+                    path, r, secs = fut.result()
+                except Exception as exc:                      # noqa: BLE001
+                    print(f"  FAILED {p.name}: {exc}", file=sys.stderr)
+                    failed.append(p.name)
+                    continue
+                if not r.ok:
+                    print(f"  FAILED {path.name}: {r.status_code} {r.text[:200]}",
+                          file=sys.stderr)
+                    failed.append(path.name)
+                    continue
+                mb = path.stat().st_size / 1e6
+                print(f"  ok {path.name} ({mb/1024:.2f} GB in {secs/60:.1f} min, "
+                      f"{mb/max(secs, 1):.2f} MB/s)  md5 {r.json().get('checksum', '')}",
+                      flush=True)
+    else:
+        for p in pending:
+            print(f"  uploading {p.name} ({p.stat().st_size/1e9:.3f} GB) …", flush=True)
+            path, r, secs = put_one(p)
+            if not r.ok:
+                print(f"  FAILED {p.name}: {r.status_code} {r.text[:200]}",
+                      file=sys.stderr)
+                failed.append(p.name)
+                continue
+            mb = p.stat().st_size / 1e6
+            print(f"    ok  ({mb/max(secs, 1):.2f} MB/s)  md5 "
+                  f"{r.json().get('checksum', '')}", flush=True)
+
+    if failed:
+        print(f"\n{len(failed)} file(s) failed: {', '.join(failed)}", file=sys.stderr)
+        print(f"Rerun to retry just those:\n"
+              f"  python {sys.argv[0]} --files-dir {src} "
+              f"--deposition {dep['id']}", file=sys.stderr)
+        return 1
 
     r = session.put(f"{base}/deposit/depositions/{dep['id']}",
                     json={"metadata": meta}, timeout=60)
