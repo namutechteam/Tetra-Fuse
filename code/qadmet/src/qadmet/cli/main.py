@@ -97,6 +97,63 @@ def _cmd_recipe_validate(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+
+def _cmd_predict(args) -> int:
+    """SMILES -> 22 ADMET endpoint predictions with the released Tetra-Fuse weights.
+
+    Reads SMILES from --smiles, a file (--input, one per line or a CSV column),
+    or stdin; writes a long table (one row per molecule x endpoint) to --output
+    or stdout.
+    """
+    import sys
+
+    from qadmet.inference import predict_smiles
+
+    smiles: list[str] = []
+    if args.smiles:
+        smiles.extend(args.smiles)
+    if args.input:
+        import csv as _csv
+        from pathlib import Path as _Path
+
+        path = _Path(args.input)
+        text = path.read_text().splitlines()
+        if path.suffix.lower() == ".csv":
+            reader = _csv.DictReader(text)
+            col = args.smiles_column
+            if reader.fieldnames and col not in reader.fieldnames:
+                print(f"ERROR: column '{col}' not in {path} "
+                      f"(has {reader.fieldnames}); pass --smiles-column",
+                      file=sys.stderr)
+                return 1
+            smiles.extend(row[col].strip() for row in reader if row.get(col))
+        else:
+            smiles.extend(line.strip() for line in text if line.strip())
+    if not smiles and not sys.stdin.isatty():
+        smiles.extend(line.strip() for line in sys.stdin if line.strip())
+    if not smiles:
+        print("ERROR: no SMILES given (use --smiles, --input, or pipe to stdin)",
+              file=sys.stderr)
+        return 1
+
+    df = predict_smiles(
+        smiles,
+        weights_root=args.weights_root,
+        recipes_root=args.recipes_root,
+        repo_root=args.repo_root,
+        tasks=args.tasks,
+        seeds=tuple(args.seeds),
+        device=args.device,
+        batch_size=args.batch_size,
+    )
+    if args.output:
+        df.to_csv(args.output, index=False)
+        print(f"wrote {args.output}  ({len(df)} rows, "
+              f"{df.smiles.nunique()} molecules x {df.task.nunique()} endpoints)")
+    else:
+        df.to_csv(sys.stdout, index=False)
+    return 0
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="qadmet",
@@ -126,6 +183,33 @@ def main(argv: list[str] | None = None) -> int:
     p_list = sub_arts.add_parser("list", help="저장된 artifact 목록")
     p_list.add_argument("--kind", default=None)
     p_list.set_defaults(_cmd=_cmd_artifacts_list)
+
+
+    # predict — SMILES -> ADMET endpoints using the released weights
+    p_pred = sub.add_parser(
+        "predict",
+        help="SMILES 로부터 22 ADMET endpoint 예측 (배포 가중치 사용)")
+    p_pred.add_argument("--smiles", nargs="*", default=None,
+                        help="SMILES 문자열 (여러 개 가능)")
+    p_pred.add_argument("--input", default=None,
+                        help="SMILES 파일 (.txt = 한 줄에 하나, .csv = --smiles-column)")
+    p_pred.add_argument("--smiles-column", default="smiles",
+                        help="--input 이 CSV 일 때 읽을 열 이름 (기본 smiles)")
+    p_pred.add_argument("--output", default=None,
+                        help="결과 CSV 경로 (생략 시 stdout)")
+    p_pred.add_argument("--weights-root", default="weights",
+                        help="PEFT 가중치 트리 (weights/README.md 참고)")
+    p_pred.add_argument("--recipes-root", default="code/qadmet/recipes",
+                        help="recipe 디렉토리")
+    p_pred.add_argument("--repo-root", default="code/qadmet",
+                        help="백본 체크포인트 경로(data/weights/...)의 기준 디렉토리")
+    p_pred.add_argument("--tasks", nargs="*", default=None,
+                        help="예측할 endpoint 부분집합 (기본: 전체 22개)")
+    p_pred.add_argument("--seeds", nargs="*", type=int, default=[0, 1, 2, 3, 4],
+                        help="평균낼 seed (기본 0-4 = 논문 앙상블)")
+    p_pred.add_argument("--device", default="cpu", help="cpu 또는 cuda")
+    p_pred.add_argument("--batch-size", type=int, default=32)
+    p_pred.set_defaults(_cmd=_cmd_predict)
 
     # recipe validate
     p_rec = sub.add_parser("recipe", help="recipe 서브커맨드")

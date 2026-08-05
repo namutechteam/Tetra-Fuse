@@ -1,16 +1,32 @@
 {
-  "title": "Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction",
+  "title": "Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction — code and model weights",
   "upload_type": "software",
-  "description": "Code and reproduction bundle for the paper \"Prediction-Level Late Fusion Preserves Task-Specific Strengths across Heterogeneous Molecular Encoders for ADMET Prediction\". Contains self-contained Jupyter notebooks that regenerate every main-text and supplementary figure and table from released ground-truth summary data (no GPU or network required), the qadmet training/evaluation engine, model recipes, and the Polaris ADME-Fang external-benchmark integration.",
+  "description": "Code and model weights for the paper \"Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction\".\n\nThe release serves two independent uses. (1) Reproducing the paper: six self-contained Jupyter notebooks regenerate every main-text and supplementary figure and table from the released per-seed model predictions and leaderboard entries, with no GPU, no network, and no model weights required. (2) Predicting new molecules: the fine-tuned PEFT weights of all five Tetra-Fuse ensemble members (LoRA, AdapterGNN, fusion and head parameters, plus regression target scalers) are released here, together with an inference module and CLI that runs the k=5 uniform-mean ensemble on arbitrary SMILES across 22 TDC ADMET endpoints.\n\nAlso included: the qadmet training and evaluation engine, the 38 recipe YAMLs that reproduce the 10 base models, and the Polaris ADME-Fang external-benchmark integration.\n\nThe three pretrained backbones (CheMeleon, GraphMVP, MoLFormer) are not redistributed here — they are downloaded from their original authors; see weights/README.md. Only the parameters we trained are released, which is why the archive is 11.3 GiB rather than the ~78 GiB of raw training checkpoints.\n\nWeight archives are per-member uncompressed tar files (the payload is dense fp32 tensors, where compression buys ~8%); every archive and metadata file ships with a SHA-256 checksum in zenodo_manifest.csv and SHA256SUMS.\n\nInference fidelity is verified rather than asserted: four of the five members reproduce the released predictions to floating-point tolerance, and the k=5 ensemble matches at three decimal places on every endpoint checked. See verification/inference_parity.md.",
   "license": "MIT",
   "access_right": "open",
   "creators": [
-    {"name": "An, Taekyeong"},
-    {"name": "Han, Herim"},
-    {"name": "Lee, Jinhee"},
-    {"name": "Yeom, Minsun"}
+    {"name": "An, Taekyeong", "affiliation": "NamuICT R&D Center"},
+    {"name": "Han, Herim", "affiliation": "NamuICT R&D Center"},
+    {"name": "Lee, Jin Hee", "affiliation": "NamuICT R&D Center"},
+    {"name": "Yeom, Min Sun", "affiliation": "NamuICT R&D Center"}
   ],
-  "keywords": ["ADMET", "molecular property prediction", "late fusion", "ensemble", "Therapeutics Data Commons", "Polaris"],
-  "version": "1.0.0"
+  "keywords": [
+    "ADMET",
+    "molecular property prediction",
+    "late fusion",
+    "ensemble selection",
+    "multi-task learning",
+    "molecular representation",
+    "parameter-efficient fine-tuning",
+    "Therapeutics Data Commons",
+    "Polaris"
+  ],
+  "version": "1.1.0",
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/Taekya/ADMET-late-fusion",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ]
 }
-

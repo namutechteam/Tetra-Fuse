@@ -1,0 +1,488 @@
+{
+  "stl_chemeleon": {
+    "AMES": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.3709068298339844e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.344650268554688e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.238719940185547e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.046627044677734e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.344650268554688e-07
+      }
+    },
+    "BBB_Martins": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 5.364418029785156e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.682209014892578e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.0728836059570312e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.5762786865234375e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      }
+    },
+    "Bioavailability_Ma": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.384185791015625e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.7881393432617188e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 5.960464477539063e-08
+      }
+    },
+    "CYP2C9_Substrate_CarbonMangels": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.862645149230957e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.4901161193847656e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.043081283569336e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.6391277313232422e-07
+      }
+    },
+    "CYP2C9_Veith": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.344650268554688e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.748603820800781e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.6391277313232422e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.341104507446289e-06
+      }
+    },
+    "CYP2D6_Substrate_CarbonMangels": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.7881393432617188e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.5331974029541016e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.384185791015625e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.4901161193847656e-07
+      }
+    },
+    "CYP2D6_Veith": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1622905731201172e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.5795230865478516e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.6689300537109375e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.3113021850585938e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.7418136596679688e-06
+      }
+    },
+    "CYP3A4_Substrate_CarbonMangels": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.7881393432617188e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.7881393432617188e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 5.960464477539063e-08
+      }
+    },
+    "CYP3A4_Veith": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.682209014892578e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.3113021850585938e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.4603137969970703e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.791685104370117e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1920928955078125e-06
+      }
+    },
+    "Caco2_Wang": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      }
+    },
+    "Clearance_Hepatocyte_AZ": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 8.392333984375e-05
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 6.103515625e-05
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 5.7220458984375e-05
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 6.103515625e-05
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.62939453125e-05
+      }
+    },
+    "Clearance_Microsome_AZ": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 0.0001068115234375
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 6.866455078125e-05
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.62939453125e-05
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 0.00012969970703125
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.1552734375e-05
+      }
+    },
+    "DILI": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 4.76837158203125e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.682209014892578e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.5762786865234375e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.5762786865234375e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 4.172325134277344e-07
+      }
+    },
+    "HIA_Hou": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.341104507446289e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.0265579223632812e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 6.854534149169922e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.748603820800781e-07
+      }
+    },
+    "Half_Life_Obach": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.62939453125e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.86102294921875e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.33514404296875e-05
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.0517578125e-05
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.52587890625e-05
+      }
+    },
+    "LD50_Zhu": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.86102294921875e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.814697265625e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.86102294921875e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.9073486328125e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.430511474609375e-06
+      }
+    },
+    "Lipophilicity_AstraZeneca": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.0265579223632812e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.6226043701171875e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.337860107421875e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.5762786865234375e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.7418136596679688e-06
+      }
+    },
+    "PPBR_AZ": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.814697265625e-05
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.0517578125e-05
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 4.57763671875e-05
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.814697265625e-05
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.288818359375e-05
+      }
+    },
+    "Pgp_Broccatelli": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 4.172325134277344e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.430511474609375e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1324882507324219e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.4454126358032227e-06
+      }
+    },
+    "Solubility_AqSolDB": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.814697265625e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.0994415283203125e-06
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 5.245208740234375e-06
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 3.814697265625e-06
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.0013580322265625e-05
+      }
+    },
+    "VDss_Lombardo": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 9.5367431640625e-06
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.1444091796875e-05
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.049041748046875e-05
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 1.049041748046875e-05
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 6.67572021484375e-06
+      }
+    },
+    "hERG": {
+      "0": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      },
+      "1": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      },
+      "2": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      },
+      "3": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 7.152557373046875e-07
+      },
+      "4": {
+        "file": "best-v1.ckpt",
+        "max_abs_diff": 2.980232238769531e-07
+      }
+    }
+  }
+}
