@@ -1,6 +1,8 @@
-seeds: [1, 2, 3, 4, 5]
-max_epochs: 30
-patience: 5
+# Values as actually trained for the released STL LoRA run (stl_molformer,
+# run aa4e18e3c732 - see artifacts/baselines/stl_molformer/baseline/manifest.yaml).
+seeds: [0, 1, 2, 3, 4]   # TDC fold seeds; the runner passes these straight to load_fold
+max_epochs: 100
+patience: 15
 precision: 32-true
 early_stopping: true
 batch_size: 32

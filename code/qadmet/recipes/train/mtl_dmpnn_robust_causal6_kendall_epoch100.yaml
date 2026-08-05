@@ -38,8 +38,8 @@ loss:
 
 trainer:
   seeds: [0, 1, 2, 3, 4]
-  max_epochs: 100                   # ★ scratch 예외 (base 20)
-  patience: 15                      # ★ scratch 예외 (base 5)
+  max_epochs: 100                   # as trained (run 63cabbaf3772); scratch 모델
+  patience: 15                      # as trained (run 63cabbaf3772)
   precision: bf16-mixed
   early_stopping: true
   batch_size: 16                   # base 와 동일 축 정렬 (DMPNN 은 상향 가능한 free knob)

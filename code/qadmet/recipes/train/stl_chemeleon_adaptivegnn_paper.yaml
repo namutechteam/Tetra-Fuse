@@ -34,9 +34,9 @@ model:
 loss: !include _base/loss/single_task.yaml
 
 trainer:
-  seeds: [1, 2, 3, 4, 5]
-  max_epochs: 30
-  patience: 5
+  seeds: [0, 1, 2, 3, 4]      # TDC fold seeds actually used (manifest trainer.seeds)
+  max_epochs: 100            # as trained (run 641681c81003); base stl_lora says 30
+  patience: 15               # as trained (run 641681c81003); base stl_lora says 5
   precision: 32-true
   early_stopping: true
   batch_size: 32

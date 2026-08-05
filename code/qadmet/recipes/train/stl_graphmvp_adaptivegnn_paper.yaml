@@ -37,9 +37,9 @@ model:
 loss: !include _base/loss/single_task.yaml
 
 trainer:
-  seeds: [1, 2, 3, 4, 5]
-  max_epochs: 100
-  patience: 20
+  seeds: [0, 1, 2, 3, 4]      # TDC fold seeds actually used (manifest trainer.seeds)
+  max_epochs: 100            # as trained (run 898dfd67a49b)
+  patience: 15               # as trained (run 898dfd67a49b)
   precision: 32-true
   early_stopping: true
   batch_size: 32
@@ -84,7 +84,8 @@ notes: |
     - single_task (loss/_base/single_task.yaml): regression=masked_mae,
       classification=bce_with_logits, STL 이므로 task weighting 무관.
     - AdapterGNN paper-faithful + linear head 만 학습 → lr=1e-3 단일.
-    - max_epochs=100, patience=20 — adapter 학습 신호 약함 보완 (legacy 와 동일).
+    - max_epochs=100, patience=15 — adapter 학습 신호 약함 보완. (as trained,
+      run 898dfd67a49b; legacy 변형은 patience 20 이었음)
 
   비교 대상:
     - stl_graphmvp_adaptivegnn.yaml (동일 paper 모드 default).

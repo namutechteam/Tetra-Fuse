@@ -78,8 +78,8 @@ trainer:
     - 2
     - 3
     - 4
-  max_epochs: 20
-  patience: 5
+  max_epochs: 100            # as trained (run a57008843b9b); base stl_lora says 20
+  patience: 15               # as trained (run a57008843b9b); base stl_lora says 5
   precision: bf16-mixed
   early_stopping: true
   batch_size: 16

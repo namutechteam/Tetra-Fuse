@@ -14,7 +14,7 @@ kind: train
 # robust_causal6 에서 유지 (주석 "← robust_causal6"):
 #   - dataset = tdc_admet_22_causal6 (6-group causal)
 #   - loss = mixed_task_uncertainty (Kendall UW), freeze_log_vars false
-#   - trainer 레짐: 20ep 단기 / constant LR 5e-4 / bf16-mixed / patience 5 / batch 16
+#   - trainer 레짐: 100ep / constant LR 5e-4 / bf16-mixed / patience 15 / batch 16 (as trained)
 #   - head: grouped(taskset_grouping), trunk_hidden 128, dropout 0.4
 # uni-backbone 전용 추가 (← uni):
 #   - backbone.adapter_kind=paper (AAAI'24 AdapterGNN) — frozen backbone 에
@@ -62,7 +62,7 @@ loss:
 
 trainer:
   seeds: [0, 1, 2, 3, 4]
-  max_epochs: 100                   # ← robust_causal6 (단기 탐색)
+  max_epochs: 100                   # as trained (run de323a791224)
   patience: 15                      # ← robust_causal6
   precision: bf16-mixed            # ← robust_causal6
   early_stopping: true

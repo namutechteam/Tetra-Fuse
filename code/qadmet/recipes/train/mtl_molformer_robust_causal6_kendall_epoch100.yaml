@@ -5,7 +5,7 @@ kind: train
 #
 # mtl_chemeleon_robust_causal6_kendall.yaml 의 backbone 만 MoLFormer-LoRA 로 교체한 짝.
 # per-modality uni-backbone Kendall 비교 세트 (ch / gm / um / mf) 의 molformer 축.
-# loss / head / dataset / trainer 레짐은 ch/gm 과 동일 (20ep, patience 5).
+# loss / head / dataset / trainer 레짐은 ch/gm 과 동일 (100ep, patience 15 — as trained).
 #
 # backbone kwargs 는 mtl_molformer_lora_gradnorm_lastlinear_causal6.yaml 에서 carry.
 
@@ -45,7 +45,7 @@ loss:
 
 trainer:
   seeds: [0, 1, 2, 3, 4]
-  max_epochs: 100                   # mf best epoch 2~5 관측 (가장 빠른 수렴) → 20 넉넉
+  max_epochs: 100                   # as trained (run f6b3e3db0740); best epoch 2~5 관측
   patience: 15
   precision: bf16-mixed
   early_stopping: true
@@ -68,7 +68,8 @@ notes: |
   수렴/예산 근거:
     - mtl_molformer_lora_gradnorm_lastlinear_causal6 관측 best epoch = 5/2/5/4/2
       (mean 3.6). 4 modality 중 가장 빨리 수렴 → 즉시 overfit 진입 경향.
-      20ep + patience 5 + head dropout 0.4 로 조기 종료가 핵심 (예산보다 정규화 중요).
+      head dropout 0.4 + early stopping 이 핵심 (예산보다 정규화 중요). 실제 학습은
+      max_epochs 100 / patience 15 (early stopping 이 훨씬 앞서 끊음).
     - 단, 위는 GradNorm/Noam 런 — 본건 Kendall/const-LR 이라 수렴 시점 이동 가능.
 
   ⚠ MoLFormer 84M base ckpt 필요 (molformer_lora backbone 내부 로드).
