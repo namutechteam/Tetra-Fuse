@@ -91,6 +91,10 @@ sha256sum -c SHA256SUMS                        # verify the downloads first
 for t in tetrafuse_weights_*.tar; do tar -xf "$t" -C weights/; done
 ```
 
+(If you are re-depositing these archives yourself — a fork, a new version —
+`code/upload_zenodo.py` streams them to Zenodo's bucket API and resumes on
+failure. It stops at the draft; publishing stays manual.)
+
 Paths inside each archive begin with `tetrafuse/`, so extracting into `weights/`
 gives exactly:
 
