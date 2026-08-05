@@ -34,23 +34,29 @@ fi
 # 2) weights/README.md — state the DOI where the reader is standing, and drop the
 #    "being uploaded / may 404" caveat that only applied before publication
 python3 - "$DOI" "$REC" <<'PY'
-import re, sys
+import sys
 doi, rec = sys.argv[1], sys.argv[2]
 p = "weights/README.md"
-s = open(p).read()
-new = (f"The Zenodo record <https://zenodo.org/records/{rec}> (DOI {doi}) holds "
-       "one archive per\nensemble member, so you can take only the members you "
-       "need:")
-# matches both the pre-publication wording and an already-filled one, so the
-# script is safe to re-run (e.g. after minting a new version DOI)
-pat = re.compile(
-    r"The Zenodo record[^\n]*\n(?:[^\n]*\n)*?"
-    r"(?:need\.|need:)(?:[^\n]*\n)*?(?=\n\| Archive)", re.M)
-s2, n = pat.subn(new + "\n", s, count=1)
-if n != 1:
-    sys.exit("ERROR: could not locate the Zenodo record paragraph in "
-             "weights/README.md — edit it by hand")
-open(p, "w").write(s2)
+lines = open(p).read().split("\n")
+
+# Replace the whole paragraph that starts with "The Zenodo record" — from that
+# line up to the following blank line. Paragraph-scoped rather than
+# sentence-scoped, so it also drops the pre-publication "may 404" caveat, and
+# re-running it (a new version DOI, say) is harmless.
+start = next((i for i, l in enumerate(lines)
+              if l.startswith("The Zenodo record")), None)
+if start is None:
+    sys.exit("ERROR: no line starting 'The Zenodo record' in weights/README.md "
+             "— edit it by hand")
+end = start
+while end < len(lines) and lines[end].strip():
+    end += 1
+
+lines[start:end] = [
+    f"The Zenodo record <https://zenodo.org/records/{rec}> (DOI {doi}) holds one",
+    "archive per ensemble member, so you can take only the members you need:",
+]
+open(p, "w").write("\n".join(lines))
 PY
 
 echo "=== diff ==="
