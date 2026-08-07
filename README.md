@@ -59,7 +59,7 @@ or just the one you care about:
 | `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table 2, Table S7 |
 | `notebooks/31_complementarity.ipynb` (§3.1) | Figure 1, Table S1 |
 | `notebooks/32_fusion_comparison.ipynb` (§3.2) | Figure 2, Figures S1–S3, Table S2, Figure 3, Table S3 |
-| `notebooks/33_heldout_test.ipynb` (§3.3) | Table 3, Figures S6/S7, Table 4, Table S8, Figure 4 |
+| `notebooks/33_heldout_test.ipynb` (§3.3) | Table 3, Figures S6/S7, Table 4, Table S8, Figure 4, Figure S8, Table S9 |
 | `notebooks/34_gain_analysis.ipynb` (§3.4) | Figure 5, Table 5, Figures S4/S5, Table S4 |
 | `notebooks/35_polaris_external.ipynb` (§3.5) | Figure 6, Table S6 |
 
@@ -86,9 +86,9 @@ Polaris wins, and so on). Output lands in `figures/` and `tables/`.
 | Figure 4 | Statistical validation: paired Wilcoxon forest plot of the ensemble gain vs strong single models and the per-task oracle |
 | Figure 5 | Where the gain comes from: validation→test reliability over all 1,023 subsets (post-hoc) + per-member task-win counts |
 | Figure 6 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
-| Figures S1–S7 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7) |
+| Figures S1–S8 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7), homogeneous-ensemble control (S8) |
 | Tables 1–5 | Positioning vs prior fusion work; mechanism grouping; ensemble summary; per-task ensemble; k=5 member roles |
-| Tables S1–S8 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance |
+| Tables S1–S9 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; homogeneous-ensemble control |
 
 ---
 
