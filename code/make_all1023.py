@@ -87,7 +87,7 @@ def merge_uniform(models, within):
 
 def mean_norm(models, within, split):
     """Mean norm_score over the 21 tasks for the uniform-mean fusion, on `split`.
-    within=True: score each seed then average the per-seed norm (matched-seed track);
+    within=True: average the per-seed raw metric, then normalize once (matched-seed track);
     within=False: score once on the seed-averaged predictions (seed-averaged track)."""
     base = merge_uniform(models, within); vals = []
     for task in TASKS:
