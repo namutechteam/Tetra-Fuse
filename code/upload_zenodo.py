@@ -146,14 +146,49 @@ def main() -> int:
         print("  all files already uploaded")
 
     def put_one(path):
-        """One streaming PUT. Own Session per thread — requests Sessions are not
-        thread-safe for concurrent use."""
+        """One streaming PUT, with automatic retry on transient failures. Own
+        Session per thread — requests Sessions are not thread-safe for concurrent
+        use.
+
+        Zenodo's gateway intermittently returns 502/503/504 (or drops the
+        connection) partway through a large PUT, even on a single sequential
+        stream — the failure tracks how long the connection stays open, not
+        concurrency. Each PUT re-opens the file from the start (Zenodo's bucket
+        API is last-write-wins per object key, so a retried whole-file PUT is
+        idempotent), so we simply retry the whole part a few times with
+        exponential backoff. This turns a run that otherwise needs several manual
+        reruns into a single unattended one."""
         s = requests.Session()
         s.headers["Authorization"] = f"Bearer {token}"
-        t0 = time.time()
-        with open(path, "rb") as fh:
-            # Streaming body: no multipart wrapper, no in-memory copy.
-            r = s.put(f"{bucket}/{path.name}", data=fh, timeout=(60, 14400))
+        RETRY_STATUS = {500, 502, 503, 504}
+        MAX_TRIES = 5
+        last = None
+        for attempt in range(1, MAX_TRIES + 1):
+            t0 = time.time()
+            try:
+                with open(path, "rb") as fh:
+                    # Streaming body: no multipart wrapper, no in-memory copy.
+                    r = s.put(f"{bucket}/{path.name}", data=fh,
+                              timeout=(60, 14400))
+            except (requests.ConnectionError, requests.Timeout) as exc:
+                last = exc
+                if attempt == MAX_TRIES:
+                    raise
+                wait = min(5 * 3 ** (attempt - 1), 120)
+                print(f"  retry {path.name}: {type(exc).__name__} "
+                      f"(attempt {attempt}/{MAX_TRIES}), waiting {wait}s",
+                      file=sys.stderr, flush=True)
+                time.sleep(wait)
+                continue
+            if r.status_code in RETRY_STATUS and attempt < MAX_TRIES:
+                wait = min(5 * 3 ** (attempt - 1), 120)
+                print(f"  retry {path.name}: {r.status_code} "
+                      f"(attempt {attempt}/{MAX_TRIES}), waiting {wait}s",
+                      file=sys.stderr, flush=True)
+                time.sleep(wait)
+                continue
+            return path, r, time.time() - t0
+        # exhausted retries on a status error: return the last response as-is
         return path, r, time.time() - t0
 
     # Zenodo shapes a single connection to well under 1 MB/s regardless of your

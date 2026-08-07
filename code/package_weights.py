@@ -52,6 +52,14 @@ def main() -> int:
     ap.add_argument("--force", action="store_true",
                     help="rebuild archives that already exist (default: reuse them, "
                          "since re-taring 11 GiB is slow and the content is identical)")
+    ap.add_argument("--max-part-bytes", type=int, default=0,
+                    help="split archives larger than this into .part-aa, .part-ab, … "
+                         "(0 = never split). Zenodo shapes each connection to well "
+                         "under 1 MB/s, and one file is one HTTP PUT, so a single "
+                         "large archive cannot be parallelised; splitting it lets "
+                         "several parts upload at once and bounds what a failed "
+                         "transfer costs. Readers reassemble with `cat …part-* > x.tar`. "
+                         "Suggested: 1000000000 (1 GB).")
     args = ap.parse_args()
 
     root = Path(args.weights).resolve()
@@ -63,7 +71,8 @@ def main() -> int:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
 
-    rows = []
+    rows = []            # files that exist in `out` — these go into SHA256SUMS
+    reassembled_rows = []  # split archives: manifest-only, never present as one file
     for member in args.members:
         src = tree / member
         if not src.is_dir():
@@ -78,8 +87,35 @@ def main() -> int:
         else:
             subprocess.run(["tar", "-cf", str(archive), "-C", str(root),
                             f"tetrafuse/{member}"], check=True)
-        digest = sha256_of(archive)
         size = archive.stat().st_size
+
+        if args.max_part_bytes and size > args.max_part_bytes:
+            # `split -b` with a numeric-free suffix so `cat *.part-*` reassembles in
+            # lexical order. The whole-archive sha256 stays in the manifest as well,
+            # so a reader can verify the reassembled file, not just the parts.
+            whole_digest = sha256_of(archive)
+            prefix = f"{archive.name}.part-"
+            existing = sorted(out.glob(prefix + "*"))
+            if not existing or args.force:
+                for old in existing:
+                    old.unlink()
+                subprocess.run(["split", "-b", str(args.max_part_bytes),
+                                str(archive), str(out / prefix)], check=True)
+                existing = sorted(out.glob(prefix + "*"))
+            print(f"  split into {len(existing)} parts of <= "
+                  f"{args.max_part_bytes/1e9:.2f} GB "
+                  f"(reassemble: cat {prefix}* > {archive.name})")
+            for part in existing:
+                rows.append({"filename": part.name, "bytes": part.stat().st_size,
+                             "sha256": sha256_of(part), "n_files": 0})
+            # The whole-archive digest belongs in the manifest (a reader verifies the
+            # file they reassemble) but NOT in SHA256SUMS, which `sha256sum -c` runs
+            # against files actually present in the upload directory.
+            reassembled_rows.append({"filename": archive.name, "bytes": size,
+                                     "sha256": whole_digest, "n_files": n_files})
+            continue
+
+        digest = sha256_of(archive)
         rows.append({"filename": archive.name, "bytes": size,
                      "sha256": digest, "n_files": n_files})
         print(f"{archive.name:44} {size/2**30:6.2f} GiB  {n_files:3} files  {digest[:16]}…")
@@ -104,6 +140,20 @@ def main() -> int:
         w = csv.DictWriter(fh, fieldnames=["filename", "bytes", "sha256", "n_files"])
         w.writeheader()
         w.writerows(rows)
+        # after the uploadable files, the digest of each reassembled whole archive
+        w.writerows(reassembled_rows)
+    if reassembled_rows:
+        names = ", ".join(r["filename"] for r in reassembled_rows)
+        with open(out / "REASSEMBLE.txt", "w") as fh:
+            fh.write("Some archives were split so they could be uploaded in "
+                     "parallel.\nReassemble before extracting:\n\n")
+            for r in reassembled_rows:
+                fh.write(f"  cat {r['filename']}.part-* > {r['filename']}\n"
+                         f"  sha256sum {r['filename']}   # expect "
+                         f"{r['sha256']}\n\n")
+            fh.write("Then extract as usual:\n  tar -xf <archive> -C weights/\n")
+        print(f"\nsplit archives ({names}) — see REASSEMBLE.txt; "
+              f"whole-file digests are in zenodo_manifest.csv")
 
     # `sha256sum -c SHA256SUMS` after downloading, from the directory holding the files
     with open(out / "SHA256SUMS", "w") as fh:
