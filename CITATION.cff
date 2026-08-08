@@ -17,7 +17,7 @@ authors:
 version: 1.1.0
 date-released: 2026-07-29
 license: Apache-2.0
-# doi: 10.5281/zenodo.XXXXXXX  # TODO: fill in after first Zenodo release
+doi: 10.5281/zenodo.21802319
 repository-code: "https://github.com/Taekya/ADMET-late-fusion"
 keywords:
   - ADMET

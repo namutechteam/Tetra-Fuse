@@ -71,19 +71,31 @@ were trained with it. The warning is not a sign of a broken download.
 
 ## 2. Unpack the PEFT weights
 
-The Zenodo record <https://zenodo.org/records/21802319> holds one archive per
-ensemble member, so you can take only the members you need. The deposit is being
-uploaded at the time of writing; the link goes live, and the DOI appears in the
-top-level `CITATION.cff`, once it is published. If the link 404s, the deposit has
-not been published yet — open an issue and we will point you at it.
+The Zenodo record <https://zenodo.org/records/21802319> (DOI 10.5281/zenodo.21802319) holds one
+archive per ensemble member, so you can take only the members you need:
 
 | Archive | Size | Files |
 |---|---|---|
 | `tetrafuse_weights_mtl_dmpnn.tar` | 10 MB | 5 |
 | `tetrafuse_weights_mtl_molformer.tar` | 25 MB | 5 |
-| `tetrafuse_weights_stl_chemeleon.tar` | 4.0 GB | 110 |
+| `tetrafuse_weights_stl_chemeleon.tar` | 4.3 GB | 110 |
 | `tetrafuse_weights_stl_graphmvp.tar` | 240 MB | 110 |
-| `tetrafuse_weights_stl_map.tar` | 7.0 GB | 110 |
+| `tetrafuse_weights_stl_map.tar` | 7.5 GB | 110 |
+
+Zenodo rejected the two largest archives as single objects, so they are stored
+split into 1 GB parts — `tetrafuse_weights_stl_chemeleon.tar.part-aa` through
+`part-ae` (5 parts) and `tetrafuse_weights_stl_map.tar.part-aa` through
+`part-ah` (8 parts). Download every part of the member you want and concatenate
+them in alphabetical order before unpacking:
+
+```bash
+cat tetrafuse_weights_stl_chemeleon.tar.part-* > tetrafuse_weights_stl_chemeleon.tar
+cat tetrafuse_weights_stl_map.tar.part-*       > tetrafuse_weights_stl_map.tar
+```
+
+`REASSEMBLE.txt` in the record repeats these commands, and the reassembled
+archives match the SHA-256 digests recorded in `weights_manifest.csv`. The other
+three archives are single files and need no reassembly.
 
 Predicting with the full k=5 ensemble needs all five. The archives are
 uncompressed `.tar` — the payload is dense fp32 tensors, where gzip buys about 8%

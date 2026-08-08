@@ -98,7 +98,8 @@ Loads the actual trained weights and runs the k=5 ensemble on arbitrary SMILES.
 
 **Setup** (once): follow [`weights/README.md`](weights/README.md). Two things are
 needed, because they carry different licences — the fine-tuned PEFT weights we
-release (12 GB, on Zenodo) and the three pretrained backbones, which you download
+release (12 GB, on Zenodo: [10.5281/zenodo.21802319](https://doi.org/10.5281/zenodo.21802319))
+and the three pretrained backbones, which you download
 from their original authors (CheMeleon 34 MB, GraphMVP 13 MB, MoLFormer fetched
 automatically from Hugging Face).
 
