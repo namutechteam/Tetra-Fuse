@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use this software or the accompanying data, please cite it as below."
-title: "Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction"
+title: "Tetra-Fuse: Encoder Heterogeneity Improves ADMET Prediction at Matched Ensemble Size"
 authors:
   - family-names: An
     given-names: Taekyeong
@@ -14,15 +14,17 @@ authors:
   - family-names: Yeom
     given-names: Min Sun
     # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
-version: 1.1.0
-date-released: 2026-07-29
+version: 2.0.0
+date-released: 2026-10-21
 license: Apache-2.0
 doi: 10.5281/zenodo.21802319
-repository-code: "https://github.com/Taekya/ADMET-late-fusion"
+repository-code: "https://github.com/namutechteam/Tetra-Fuse"
 keywords:
   - ADMET
   - molecular property prediction
   - late fusion
+  - ensemble diversity
+  - controlled comparison
   - ensemble selection
   - multi-task learning
   - molecular representation

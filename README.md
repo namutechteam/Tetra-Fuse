@@ -1,12 +1,23 @@
-# Tetra-Fuse: Late Fusion Preserves Task-Specific Strengths of Heterogeneous Molecular Encoders for ADMET Prediction
+# Tetra-Fuse: Encoder Heterogeneity Improves ADMET Prediction at Matched Ensemble Size
 
-Code and weights for the paper *"Tetra-Fuse: Late Fusion Preserves Task-Specific
-Strengths of Heterogeneous Molecular Encoders for ADMET Prediction."*
+Code, data and weights for the paper *"Tetra-Fuse: Encoder Heterogeneity Improves ADMET
+Prediction at Matched Ensemble Size"* (An, Han, Lee, Yeom).
 
-The paper compares representation- and prediction-level fusion across five molecular
-foundation models on 21 TDC ADMET tasks, and validates the resulting uniform-mean
-late-fusion ensemble (**Tetra-Fuse**, k=5) on the independent Polaris ADME-Fang
+Combining several molecular encoders usually also changes how many models are averaged, at
+what level they are fused and whether scores are averaged over runs. The paper separates
+these effects on 21 TDC ADMET tasks, using the per-molecule predictions of 10 base models
+(four encoders — CheMeleon, MoLFormer, GraphMVP, D-MPNN — and the feature-fusion model MAP,
+each single- and multi-task) over five independent runs. At equal member count, ensembles of
+different encoders outperform multi-run ensembles of one encoder, including the strongest
+same-encoder ensemble chosen on validation data; once member count is matched, prediction-
+and feature-level fusion do not differ detectably. The validation-selected five-member
+uniform mean (**Tetra-Fuse**) is also evaluated on the independent Polaris ADME-Fang
 benchmark (6 regression endpoints; submitted to the Polaris Hub as `LateFusion-k5`).
+
+An earlier version of this work was posted as ChemRxiv 10.26434/chemrxiv.15007185/v1
+(release 1.1.0 of this repository). Release 2.0.0 adds the controlled comparisons
+(notebook 36, `code/followup/`) and renumbers figures and tables to the current manuscript;
+see *Figure and table numbering* below.
 
 ---
 
@@ -19,9 +30,9 @@ setup cost. Pick one:
 |---|---|---|
 | Question | "Do the figures and tables come out of the data?" | "What does Tetra-Fuse say about *my* compound?" |
 | Needs a GPU | no | no (faster with one) |
-| Needs network | no | first run only (MoLFormer download) |
+| Needs network | notebook 36 only: TDC SMILES, once | first run only (MoLFormer download) |
 | Extra download | none — inputs are in `data/` | 12 GB of weights + 47 MB of backbones |
-| Entry point | `reproduce.sh`, or the six `notebooks/` | `qadmet predict` / `code/predict_smiles.py` |
+| Entry point | `reproduce.sh`, or the seven `notebooks/` | `qadmet predict` / `code/predict_smiles.py` |
 | Runtime | minutes | seconds per molecule per endpoint |
 | Read next | [Axis A](#axis-a--reproduce-the-papers-figures-and-tables) | [Axis B](#axis-b--predict-new-molecules) |
 
@@ -33,62 +44,93 @@ scratch on a GPU — is documented separately in [`code/TRAINING.md`](code/TRAIN
 
 ## Axis A — reproduce the paper's figures and tables
 
-No GPU, no network, no model weights. Every figure and table is recomputed from the
-raw per-seed model predictions and leaderboard entries in `data/recompute_data/` —
-there are no hard-coded summary numbers.
+No GPU and no model weights. Every figure and table is recomputed from the raw per-seed
+model predictions and leaderboard entries in `data/recompute_data/` — there are no
+hard-coded summary numbers.
 
 ```bash
-pip install -r requirements.txt     # numpy, pandas, scipy, scikit-learn, statsmodels, matplotlib, jupyter
+pip install -r requirements.txt     # numpy, pandas, scipy, scikit-learn, statsmodels, matplotlib, jupyter, rdkit, PyTDC
 bash reproduce.sh                   # one command, writes figures/ and tables/
 ```
 
 `reproduce.sh` detects which ingredients are already present and runs only the stages
 still needed. Since the shipped `data/recompute_data/` already contains the 10
 prediction parquets, the leaderboards, and `all1023.csv`, it skips training and the
-subset sweep and just runs the six notebooks — no GPU, no network, ~10 minutes.
+subset sweep and just runs the seven notebooks — no GPU, ~20 minutes on CPU.
 `bash reproduce.sh -h` lists the flags for forcing a stage (`--figures-only`,
 `--sweep`, `--train`).
 
-Or run the notebooks directly. Regeneration is split into six of them — one for the
-intro/methods tables, one per Results subsection. **Each runs independently** (each
-carries the same setup cell that recomputes everything from source), so any order,
-or just the one you care about:
+Notebook 36 has one external input: the TDC ADMET training/validation SMILES, used to
+place each test molecule in a similarity quintile (Note S3.4, S3.6). It reads them from
+`$TDC_ADMET_GROUP` or `data/tdc_admet_group/` if present and otherwise downloads them once
+with PyTDC. Everything else runs offline.
+
+Or run the notebooks directly. **Each runs independently** (notebooks 00 and 31–35 carry
+the same setup cell that recomputes everything from source; notebook 36 uses
+`code/followup/`), so any order, or just the one you care about:
 
 | Notebook | Produces |
 |---|---|
 | `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table 2, Table S7 |
 | `notebooks/31_complementarity.ipynb` (§3.1) | Figure 1, Table S1 |
-| `notebooks/32_fusion_comparison.ipynb` (§3.2) | Figure 2, Figures S1–S3, Table S2, Figure 3, Table S3 |
-| `notebooks/33_heldout_test.ipynb` (§3.3) | Table 3, Figures S6/S7, Table 4, Table S8, Figure 4, Figure S8, Table S9 |
-| `notebooks/34_gain_analysis.ipynb` (§3.4) | Figure 5, Table 5, Figures S4/S5, Table S4 |
-| `notebooks/35_polaris_external.ipynb` (§3.5) | Figure 6, Table S6 |
+| `notebooks/36_controlled_comparisons.ipynb` (§2.7, §3.2–3.4) | Figure 2, Table 3, Tables S10a–c, Figures S9–S11, Supplementary Note S3 values |
+| `notebooks/32_fusion_comparison.ipynb` (§3.3–3.4) | Figure 3 (C: fusion level at matched member count), Figures S1–S3, Table S2, Figure 4, Table S3 |
+| `notebooks/33_heldout_test.ipynb` (§3.4) | Table 4, Figures S6/S7, Table 5, Table S8, Figure 5, Figure S8, Table S9 |
+| `notebooks/34_gain_analysis.ipynb` (§3.4–3.5) | Figure 6, Table 6, Figures S4/S5, Table S4 |
+| `notebooks/35_polaris_external.ipynb` (§3.6) | Figure 7, Table S6 |
 
 ```bash
 for nb in notebooks/00_pre_analysis notebooks/3?_*; do
     jupyter nbconvert --to notebook --execute --inplace "${nb%.ipynb}.ipynb"
 done
-jupyter notebook notebooks/31_complementarity.ipynb   # or interactively
+jupyter notebook notebooks/36_controlled_comparisons.ipynb   # or interactively
 ```
 
 The shared setup cell recomputes every value — solo and ensemble norm_scores, the
 uniform-mean ensemble, LOO/Shapley, inter-member correlations, the k-sweep, and the
 Wilcoxon statistics — from the raw files, and `assert` blocks check each result
 against the manuscript before anything is drawn (the k=5 composition, the 3-of-6
-Polaris wins, and so on). Output lands in `figures/` and `tables/`.
+Polaris wins, and so on). Notebook 36 does the same for every number of Section 3.2,
+Table 3, Table S10 and Note S3. Output lands in `figures/` and `tables/`; intermediate
+tables of notebook 36 go to `results/controlled_comparisons/`.
+
+### Controlled comparisons (`code/followup/`)
+
+| File | Role |
+|---|---|
+| `tfcc.py` | Scoring in the manuscript convention (raw metric per realization → mean → normalize once), the member-count × encoder-heterogeneity grid S(m, d), validation-only selection of same-encoder and same-model multi-run controls, the fusion-level comparison at matched member count, the seed-averaging effect, Table 3 and Table S10 |
+| `figs.py` | Figure 2 and Figure 3C |
+| `analysis_B_decomposition.py` | Note S3.3, Figure S9: specialization vs beyond-best-member decomposition of the loss reduction |
+| `analysis_C_similarity.py` | Note S3.4, Figure S10: gain by similarity of test molecules to the training data |
+| `analysis_2_uncertainty.py` | Note S3.6, Figure S11: member disagreement as an error ranker, heterogeneous vs same-encoder ensembles |
+| `tf_common.py` | Shared loaders and the TDC metric / leaderboard normalization (same logic as `code/make_all1023.py`) |
+
+Intervals are task-bootstrap 95% percentile intervals (2,000 resamples of the 21 tasks,
+seed 20261002).
 
 ### What gets produced
 
 | Output | What it shows |
 |---|---|
-| Figure 1 | No single molecular encoder dominates (matched-seed solo test norm_score, 10 models) |
-| Figure 2 | MAP joint fusion raises the floor but rarely tops the best single backbone; fusion-level contrast |
-| Figure 3 | Ensemble-size sweep; diminishing marginal gain, elbow at k=5 |
-| Figure 4 | Statistical validation: paired Wilcoxon forest plot of the ensemble gain vs strong single models and the per-task oracle |
-| Figure 5 | Where the gain comes from: validation→test reliability over all 1,023 subsets (post-hoc) + per-member task-win counts |
-| Figure 6 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
-| Figures S1–S8 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7), homogeneous-ensemble control (S8) |
-| Tables 1–5 | Positioning vs prior fusion work; mechanism grouping; ensemble summary; per-task ensemble; k=5 member roles |
-| Tables S1–S9 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; homogeneous-ensemble control |
+| Figure 1 | No single base model is best across ADMET endpoints (matched-seed solo test norm_score, 10 models) |
+| Figure 2 | At equal member count, ensembles of different encoders outperform multi-run ensembles of one encoder, against average, validation-selected and oracle controls |
+| Figure 3 | MAP vs its constituent encoders (A, B); fusion level at matched member count: MAP, Late-3, MAP×3, MAP×5 and Tetra-Fuse (C) |
+| Figure 4 | Validation-only choice of the ensemble size (k-sweep, elbow at k=5) |
+| Figure 5 | Tetra-Fuse vs deployable single models: paired Wilcoxon forest plot |
+| Figure 6 | Validation→test transfer over all 1,023 subsets + endpoint-specific member strengths |
+| Figure 7 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
+| Figures S1–S8 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7), same-encoder five-run control (S8) |
+| Figures S9–S11 | Error decomposition (S9), gain by similarity quintile (S10), uncertainty quality (S11) |
+| Tables 1–6 | Comparison with prior fusion and ensemble studies; mechanism grouping; effects of model combination (Table 3); held-out-test summary; per-task results; member contributions |
+| Tables S1–S10 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; same-encoder five-run control; controlled comparisons (S10a per-task, S10b contrasts, S10c S(m, d) grid) |
+
+### Figure and table numbering
+
+Release 1.1.0 (the ChemRxiv version) numbered the figures differently. Mapping from the
+1.1.0 files to this release: Figure 2 → Figure 3 (panel C redrawn at matched member
+count), Figure 3 → 4, Figure 4 → 5, Figure 5 → 6, Figure 6 → 7; Table 3 → 4, Table 4 → 5,
+Table 5 → 6. Figure 2, Table 3, Figures S9–S11 and Table S10 are new. Table 1 was
+rewritten to the current manuscript.
 
 ---
 
@@ -160,10 +202,11 @@ release/
 │   │   ├── leaderboards/{model}.csv      10 models; dataset,metric,ours,ours_std,rank,n_total,Top,Top_model
 │   │   ├── all1023.csv                   1,023-subset uniform-mean sweep (code/make_all1023.py regenerates it)
 │   │   ├── tdc_leaderboard_snapshot.json, task_registry.json, task_metadata.json
-│   │   └── polaris_leaderboard_full.json Polaris public submissions (Figure 6 input)
+│   │   └── polaris_leaderboard_full.json Polaris public submissions (Figure 7 input)
 │   └── polaris_external/         ← Polaris audit tables (not notebook inputs; see its README.md)
-├── notebooks/                    ← AXIS A: six independent regeneration notebooks
+├── notebooks/                    ← AXIS A: seven independent regeneration notebooks
 ├── figures/  tables/             ← AXIS A outputs (PNG / CSV)
+├── results/controlled_comparisons/ ← AXIS A: intermediate tables of notebook 36
 │
 ├── weights/                      ← AXIS B: released PEFT weights (see its README.md)
 │   ├── README.md                 ← backbone downloads + directory layout + scalers
@@ -182,6 +225,7 @@ release/
     ├── select_checkpoints.py     ← resolve ambiguous checkpoints by measurement
     ├── audit_recipes.py          ← check shipped recipes against what was trained
     ├── make_all1023.py           ← regenerate all1023.csv from the prediction parquets
+    ├── followup/                 ← AXIS A: controlled comparisons (notebook 36, Figure 3C)
     ├── make_tdc_submission.py    ← build TDC leaderboard submission scores
     ├── tdc_submission/           ← the resulting scores (21 benchmarks, evaluate_many format)
     ├── qadmet/                   ← the training/evaluation/inference engine
@@ -217,6 +261,17 @@ authors under their own terms, which is why axis B asks you to download them dir
 - `rdkit2d`, `xtb`, and `unimol2` descriptor/embedding files are **not** required —
   none of the 10 paper models use them. The two joint-fusion MAP models use only the
   CheMeleon graph, MoLFormer tokens, and a GraphMVP encoder built on the fly from SMILES.
+- **GraphMVP chirality embedding.** The 2021 GraphMVP checkpoint was trained with a
+  4-entry chirality vocabulary; current OGB featurizers use 5 (they append `misc`). The
+  backbone therefore cannot load `atom_encoder.atom_embedding_list.1.weight` from the
+  checkpoint. In every published GraphMVP and MAP model this (4→5, 300) table kept its
+  random initialization and stayed frozen; the trained table is stored in the released
+  PEFT weights and restored on loading, so predictions are unaffected
+  (`code/verify_inference.py`). The backbone option `vocab_fill` controls the behaviour:
+  `"random"` (default, the published setting) or `"pretrained_rows"`, which copies the four
+  checkpoint rows and initializes only the extra row — recommended for new training. On
+  the 46,202 TDC ADMET molecules, OGB chirality indices 3 and 4 never occur, so with
+  `"pretrained_rows"` every chirality row actually used comes from the checkpoint.
 - The shipped training recipes are checked against the recipe each released run
   actually recorded (`code/audit_recipes.py`), so retraining from this repository
   reproduces the published configuration rather than a drifted one.

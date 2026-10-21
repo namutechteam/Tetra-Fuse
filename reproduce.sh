@@ -11,7 +11,8 @@
 #
 #   * If data/recompute_data/all1023.csv AND the 10 predictions/leaderboards
 #     are present  ->  it SKIPS training and the sweep, and only runs the
-#     six notebooks (figures + tables).  No GPU, no network, ~10 min.
+#     seven notebooks (figures + tables).  No GPU; ~20 min.  Notebook 36 needs the
+#     TDC ADMET SMILES once (set TDC_ADMET_GROUP, or it downloads them via PyTDC).
 #
 #   * If the 10 predictions are present but all1023.csv is missing/stale
 #     ->  it regenerates all1023.csv from the predictions (make_all1023.py,
@@ -165,11 +166,11 @@ if [ "$MODE" = "sweep" ]; then
   MODE="figures"
 fi
 
-# --- STAGE 3: figures + tables (six notebooks) -------------------------------
-say "STAGE 3/4 — regenerate figures + tables (six notebooks, CPU only)"
+# --- STAGE 3: figures + tables (seven notebooks) -----------------------------
+say "STAGE 3/4 — regenerate figures + tables (seven notebooks, CPU only)"
 have_predictions || { echo "ERROR: inputs missing under $DATA. See the header of this script."; exit 1; }
 have_sweep       || { echo "ERROR: $DATA/all1023.csv missing. Run 'bash reproduce.sh --sweep'."; exit 1; }
-for nb in 00_pre_analysis 31_complementarity 32_fusion_comparison 33_heldout_test 34_gain_analysis 35_polaris_external; do
+for nb in 00_pre_analysis 31_complementarity 32_fusion_comparison 33_heldout_test 34_gain_analysis 35_polaris_external 36_controlled_comparisons; do
   say "run $nb.ipynb"
   ( cd "$NB" && $PYBIN -m jupyter nbconvert --to notebook --execute --inplace \
        --ExecutePreprocessor.timeout="$NBTIMEOUT" "$nb.ipynb" )

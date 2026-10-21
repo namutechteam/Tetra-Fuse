@@ -42,3 +42,12 @@ predictions.csv
 # pretrained backbone weights the reader downloads (CheMeleon, GraphMVP) — not ours
 # to redistribute, and multi-MB; see weights/README.md for where to put them.
 code/qadmet/data/weights/
+
+# TDC ADMET benchmark-group cache (train_val.csv / test.csv per task) — downloaded by PyTDC,
+# read by notebook 36 (similarity strata, uncertainty); not ours to redistribute.
+data/tdc_admet_group
+data/admet_group/
+
+# intermediate tables of notebook 36 (regenerated; canonical outputs are figures/ and tables/)
+results/
+weights/tetrafuse
