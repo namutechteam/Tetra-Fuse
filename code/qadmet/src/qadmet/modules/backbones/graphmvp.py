@@ -88,6 +88,7 @@ class GraphMVPBackbone(nn.Module):
         proj_dropout: float = 0.0,
         pool: str = "mean",
         adaptor_dropout: float | None = None,
+        vocab_fill: Literal["random", "pretrained_rows"] = "random",
     ) -> None:
         super().__init__()
         import torch
@@ -123,28 +124,58 @@ class GraphMVPBackbone(nn.Module):
         if checkpoint_path is not None:
             ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
             gin_state = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
-            # OGB AtomEncoder categorical 임베딩 dim 이 paper(2021) vs 현 OGB 사이에
-            # 다를 수 있어 (e.g. chirality 4→5), shape 일치하는 키만 load.
+            # The OGB atom-feature vocabulary changed after the 2021 GraphMVP
+            # checkpoint: the chirality table grew from 4 to 5 rows (current OGB
+            # appends 'misc'), so atom_embedding_list.1.weight is (4, d) in the
+            # checkpoint but (5, d) here. `vocab_fill` decides what happens to
+            # such tables:
+            #   "random"          keep the random initialisation (the setting under
+            #                     which every Tetra-Fuse GraphMVP/MAP model was
+            #                     trained; the trained table is stored in the
+            #                     released PEFT weights and restored on loading).
+            #   "pretrained_rows" copy the overlapping checkpoint rows and keep only
+            #                     the extra rows random (recommended for new training).
+            if vocab_fill not in ("random", "pretrained_rows"):
+                raise ValueError(f"vocab_fill must be 'random' or 'pretrained_rows' (got {vocab_fill!r})")
             own_state = gin.state_dict()
-            filtered = {
-                k: v for k, v in gin_state.items()
-                if k in own_state and v.shape == own_state[k].shape
-            }
-            shape_skipped = [
-                (k, tuple(v.shape), tuple(own_state[k].shape))
-                for k, v in gin_state.items()
-                if k in own_state and v.shape != own_state[k].shape
-            ]
+            filtered, grown, shape_skipped = {}, [], []
+            for k, v in gin_state.items():
+                if k not in own_state:
+                    continue
+                tgt = own_state[k]
+                if v.shape == tgt.shape:
+                    filtered[k] = v
+                elif (v.dim() == 2 and tgt.dim() == 2 and v.shape[1] == tgt.shape[1]
+                      and v.shape[0] < tgt.shape[0]):
+                    if vocab_fill == "pretrained_rows":
+                        merged = tgt.clone()
+                        merged[: v.shape[0]] = v.to(tgt.dtype)
+                        filtered[k] = merged
+                    grown.append((k, tuple(v.shape), tuple(tgt.shape)))
+                else:
+                    shape_skipped.append((k, tuple(v.shape), tuple(tgt.shape)))
             missing, unexpected = gin.load_state_dict(filtered, strict=False)
+            if grown:
+                if vocab_fill == "pretrained_rows":
+                    logger.info(
+                        "GraphMVP: OGB vocabulary grew for %s; checkpoint rows copied, "
+                        "extra rows randomly initialised (vocab_fill='pretrained_rows').", grown,
+                    )
+                else:
+                    logger.info(
+                        "GraphMVP: OGB vocabulary grew for %s; table kept at random init "
+                        "(vocab_fill='random', as used for the published models). Released "
+                        "Tetra-Fuse weights overwrite this table, so predictions are unaffected; "
+                        "set vocab_fill='pretrained_rows' when training new models.", grown,
+                    )
             if shape_skipped:
-                logger.warning(
-                    "GraphMVP GIN 가중치 shape mismatch %d keys skipped (random init): %s",
-                    len(shape_skipped), shape_skipped[:4],
-                )
+                logger.warning("GraphMVP GIN weights: incompatible shapes, kept random init: %s", shape_skipped[:4])
+            handled = {k for k, _, _ in grown} | {k for k, _, _ in shape_skipped}
+            missing = [k for k in missing if k not in handled]
             if missing:
-                logger.warning("GraphMVP GIN 가중치 missing keys: %s", missing[:8])
+                logger.warning("GraphMVP GIN weights missing keys: %s", missing[:8])
             if unexpected:
-                logger.warning("GraphMVP GIN 가중치 unexpected keys: %s", unexpected[:8])
+                logger.warning("GraphMVP GIN weights unexpected keys: %s", unexpected[:8])
         else:
             logger.info("GraphMVP checkpoint_path=None — random-init smoke 모드")
 
