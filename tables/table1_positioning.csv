@@ -1,5 +1,12 @@
-Method,Encoder pool / heterogeneity,Fusion level,Combination & training,Benchmark & selection
-MolPROP [19],Language model (ChemBERTa-2) + graph (GCN/GATv2); 2 modalities,Feature-level (token->node concatenation); single jointly-trained model,Joint training; no ensemble selection; no meta-learner,MoleculeNet (7 tasks)
-FusionCLM [15],"Three homogeneous SMILES language models (ChemBERTa-2, MoLFormer, MolBERT)",Two-level prediction/feature stacking,Trained meta-learners (RF / NN) on losses+predictions,MoleculeNet (5 tasks)
-DCPM-ADMET [20],Dual-channel pre-trained model + molecular fingerprints,Feature-level fusion,Jointly-trained fusion head,ADMET (own split)
-Tetra-Fuse (this work),"Heterogeneous: SMILES transformer, descriptor- and 3D-pretrained GNNs, from-scratch D-MPNN, and a feature-fusion MAP model; 0D-3D, pretrained+scratch, STL+MTL","Both feature-level and prediction-level late fusion, compared in one framework",Parameter-free uniform mean; no meta-learner; no additional cross-modal pre-training,21 TDC ADMET (leaderboard-native) + external Polaris; validation-only exhaustive subset selection
+Study,Combined models,Combination level,Member count matched in the key comparison,Seed or fold averaging in reported scores,Per-task configuration,External blind evaluation
+MolPROP,Language model + graph network,"Feature level, jointly trained",Single model,Not reported,No,No
+FusionCLM,Three SMILES language models,Stacking with trained meta-learners,Not reported,Not reported,No,No
+DCPM-ADMET,Dual-component pretrained model + fingerprints,"Feature level, jointly trained head",Single model,Not reported,No,No
+MMFRL,"Multimodal relational learning, one graph architecture across modalities","Early, intermediate and late fusion compared",Not reported,Not reported,No,No
+MMELON,"Graph, image and text foundation models",Learned attention aggregator,Single aggregated model,Not reported,No,No
+Martínez Galindo et al.,Seven unimodal representations,Intermediate (concatenation) vs late (prediction mean),No (late: n models; intermediate: 1),Prediction averaging over seeds or folds,No,No
+Trimole-Hybrid,"Deep encoders, gated fusion, descriptor tree models",Feature and prediction level,No,Yes (seed-bag and fold-bag candidates),Yes,No
+ADMET reliability study,Foundation and conventional models across modalities,Prediction level,Not reported,Not reported,–,No
+Wasswa et al.,Unimodal and multimodal models (environmental properties),Early (feature concatenation) vs late (stacking / meta-learner),No,Yes,Yes,No
+Burenko & Vetrov (non-molecular),Unimodal networks,Feature concatenation vs deep ensembles,Parameter count matched; heterogeneous vs homogeneous ensembles at equal size,–,–,–
+Tetra-Fuse (this work),"Four encoders (descriptor-, SMILES-, 3D-pretrained; from scratch), a feature-fusion model, STL and MTL",Prediction level; feature-level model as member and as control,Yes,Primary scores without averaging over runs; averaged scores reported separately,No (one configuration for all tasks),Yes (Polaris ADME-Fang)
