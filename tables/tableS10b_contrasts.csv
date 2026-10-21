@@ -1,0 +1,30 @@
+contrast,delta,ci_low,ci_high,wins,ties,losses
+"m=4: heterogeneous vs same-encoder, mean of 4 encoders",0.2037,0.1639,0.2413,21.0,0.0,0.0
+"m=4: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·STL)",0.1115,0.035,0.2032,13.0,4.0,4.0
+"m=4: heterogeneous vs same-encoder, per-task validation-best encoder",0.0942,0.0138,0.1833,11.0,6.0,4.0
+"m=4: heterogeneous vs same-encoder, per-task test-best encoder (oracle)",-0.0313,-0.0598,-0.0026,3.0,9.0,9.0
+"m=4: heterogeneous vs same-model, validation-best of all 10 (MAP·STL)",0.0811,0.0044,0.1621,10.0,6.0,5.0
+"m=4: heterogeneous vs same-model, per-task validation-best of all 10",0.0833,0.0,0.1799,11.0,4.0,6.0
+"m=5: heterogeneous vs same-encoder, mean of 4 encoders",0.2004,0.1642,0.2362,21.0,0.0,0.0
+"m=5: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·STL)",0.1163,0.039,0.2081,13.0,4.0,4.0
+"m=5: heterogeneous vs same-encoder, per-task validation-best encoder",0.0923,0.0129,0.1809,11.0,5.0,5.0
+"m=5: heterogeneous vs same-encoder, per-task test-best encoder (oracle)",-0.0412,-0.0708,-0.0111,3.0,6.0,12.0
+"m=5: heterogeneous vs same-model, validation-best of all 10 (MAP·STL)",0.0716,-0.0026,0.1504,9.0,6.0,6.0
+"m=5: heterogeneous vs same-model, per-task validation-best of all 10",0.0786,-0.0106,0.1759,11.0,2.0,8.0
+"matched-seed heterogeneous (4) vs same-encoder, mean of 4 encoders",0.1919,0.1541,0.2269,20.0,1.0,0.0
+"matched-seed heterogeneous (4) vs same-encoder, validation-best encoder",0.0997,0.0209,0.1877,11.0,6.0,4.0
+"matched-seed heterogeneous (4) vs same-encoder, per-task validation-best",0.0824,-0.0012,0.1726,9.0,7.0,5.0
+"matched-seed heterogeneous (4) vs same-encoder, per-task test-best (oracle)",-0.0431,-0.0769,-0.0112,2.0,9.0,10.0
+"Tetra-Fuse vs same-encoder 5 runs, mean of 4 encoders",0.2082,0.1741,0.2406,21.0,0.0,0.0
+"Tetra-Fuse vs same-encoder 5 runs, validation-best encoder (CheMeleon·STL)",0.1241,0.0495,0.2106,14.0,4.0,3.0
+"Tetra-Fuse vs same-encoder 5 runs, per-task validation-best encoder",0.1002,0.0239,0.1869,12.0,5.0,4.0
+"Tetra-Fuse vs same-model 5 runs, validation-best of all 10 (MAP·STL)",0.0795,0.0165,0.1491,10.0,7.0,4.0
+"Tetra-Fuse vs same-model 5 runs, per-task validation-best of all 10",0.0864,0.0055,0.1786,12.0,4.0,5.0
+"Tetra-Fuse vs same-model 5 runs, per-task test-best of all 10 (oracle)",-0.0779,-0.1053,-0.0507,0.0,5.0,16.0
+E_div(2),0.1192,0.1018,0.1342,21.0,0.0,0.0
+E_div(3),0.1591,0.1321,0.1859,21.0,0.0,0.0
+E_div(4),0.2037,0.1639,0.2413,21.0,0.0,0.0
+E_div(5),0.2004,0.1642,0.2362,21.0,0.0,0.0
+"N = S(4,4) - S(1,1)",0.2917,0.2526,0.3278,21.0,0.0,0.0
+"E_cnt = S(4,1) - S(1,1)",0.088,0.066,0.1075,19.0,1.0,1.0
+count share E_cnt/N (descriptive),0.3016,0.2266,0.3785,,,

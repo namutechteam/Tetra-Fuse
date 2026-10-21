@@ -1,0 +1,10 @@
+Effect,Comparison (what is held fixed),Delta norm_score (95% CI),W/T/L
+Adding runs of one encoder,"1 → 4 runs, mean of the four pool encoders",+0.088 (0.066 to 0.108),19/1/1
+"Encoder heterogeneity, average control",4 members; 4 encoders vs 4 runs of one encoder (mean of four),+0.204 (0.164 to 0.241),21/0/0
+"Encoder heterogeneity, strongest validation-selected control",4 members; vs 4 runs of the validation-best encoder (CheMeleon·STL),+0.112 (0.035 to 0.203),13/4/4
+,4 members; vs 4 runs of the per-task validation-best encoder,+0.094 (0.014 to 0.183),11/6/4
+"Encoder heterogeneity, test-label oracle (descriptive)",4 members; vs 4 runs of the per-task test-best encoder,−0.031 (−0.060 to −0.003),3/9/9
+"Fusion level, unmatched","Late-3 (3 members) vs one MAP model, STL",+0.119 (0.056 to 0.177),–
+Ensembling the fusion model,"MAP×3 vs one MAP model, STL",+0.139 (0.096 to 0.185),–
+"Fusion level, matched","Late-3 vs MAP×3, STL / MTL",−0.020 (−0.074 to 0.034) / +0.018 (−0.017 to 0.056),–
+Averaging over runs,"Seed-averaged minus matched-seed, mean of 10 base models / Tetra-Fuse",+0.116 (range 0.079 to 0.187) / +0.043,–
