@@ -73,8 +73,8 @@ the same setup cell that recomputes everything from source; notebook 36 uses
 |---|---|
 | `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table S11, Table S7 |
 | `notebooks/31_complementarity.ipynb` (§3.1) | Figure 1, Table S1 |
-| `notebooks/36_controlled_comparisons.ipynb` (§2.7, §3.2–3.4) | Figure 2, Table 2, Tables S10a–c (incl. STL-only and MTL-only pools), Figures S7–S9, Supplementary Note S3 values |
-| `notebooks/32_fusion_comparison.ipynb` (§3.3–3.4) | Figure 3 (fusion level at matched member count), Figures S1–S3, Table S2, Table S3 |
+| `notebooks/36_controlled_comparisons.ipynb` (§2.7, §3.2–3.4) | Figure 2, Table 2, Tables S10a–c (incl. the STL-only, MTL-only and validation-stronger-variant pools), Figures S7–S9, Supplementary Note S3 values |
+| `notebooks/32_fusion_comparison.ipynb` (§3.3–3.4) | Figure 3 (fusion level at matched member count), Figures S1–S3, Table S2, Tables S3 and S3b |
 | `notebooks/33_heldout_test.ipynb` (§3.4) | Table 3 (per-task, with summary rows), Figures S4/S5, Table S8, Figure 4, Table S9 |
 | `notebooks/34_gain_analysis.ipynb` (§3.4–3.5) | Figure 5, Table S4, Figure S6 |
 | `notebooks/35_polaris_external.ipynb` (§3.6) | Figure 6, Table S6 |

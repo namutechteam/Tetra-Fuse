@@ -48,3 +48,13 @@ MTL-only,"m=4: heterogeneous vs same-encoder, mean of 4 encoders",0.127178,0.095
 MTL-only,"m=4: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·MTL)",0.029099,-0.016959,0.074272,7.0,9.0,5.0
 MTL-only,"m=4: heterogeneous vs same-encoder, per-task validation-best encoder",0.01195,-0.038871,0.068073,6.0,9.0,6.0
 MTL-only,"m=4: heterogeneous vs same-encoder, per-task test-best encoder (oracle)",-0.042216,-0.069385,-0.015712,1.0,10.0,10.0
+validation-stronger variant,E_div(2),0.117939,0.096711,0.136001,20.0,0.0,1.0
+validation-stronger variant,E_div(3),0.166311,0.130242,0.200315,20.0,0.0,1.0
+validation-stronger variant,E_div(4),0.189034,0.147085,0.228196,20.0,0.0,1.0
+validation-stronger variant,E_div(5),0.187253,0.145857,0.225507,20.0,0.0,1.0
+validation-stronger variant,"E_cnt = S(4,1) - S(1,1)",0.086574,0.063131,0.10795,20.0,1.0,0.0
+validation-stronger variant,"N = S(4,4) - S(1,1)",0.275608,0.230817,0.319526,21.0,0.0,0.0
+validation-stronger variant,"m=4: heterogeneous vs same-encoder, mean of 4 encoders",0.189034,0.147085,0.228196,20.0,0.0,1.0
+validation-stronger variant,"m=4: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·STL)",0.072555,0.000866,0.144513,12.0,7.0,2.0
+validation-stronger variant,"m=4: heterogeneous vs same-encoder, per-task validation-best encoder",0.118605,0.0305,0.211276,13.0,6.0,2.0
+validation-stronger variant,"m=4: heterogeneous vs same-encoder, per-task test-best encoder (oracle)",-0.028282,-0.072234,0.009476,4.0,11.0,6.0
