@@ -71,13 +71,13 @@ the same setup cell that recomputes everything from source; notebook 36 uses
 
 | Notebook | Produces |
 |---|---|
-| `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table 2, Table S7 |
+| `notebooks/00_pre_analysis.ipynb` | Setup + Table 1, Table S5, Table S11, Table S7 |
 | `notebooks/31_complementarity.ipynb` (§3.1) | Figure 1, Table S1 |
-| `notebooks/36_controlled_comparisons.ipynb` (§2.7, §3.2–3.4) | Figure 2, Table 3, Tables S10a–c, Figures S9–S11, Supplementary Note S3 values |
-| `notebooks/32_fusion_comparison.ipynb` (§3.3–3.4) | Figure 3 (C: fusion level at matched member count), Figures S1–S3, Table S2, Figure 4, Table S3 |
-| `notebooks/33_heldout_test.ipynb` (§3.4) | Table 4, Figures S6/S7, Table 5, Table S8, Figure 5, Figure S8, Table S9 |
-| `notebooks/34_gain_analysis.ipynb` (§3.4–3.5) | Figure 6, Table 6, Figures S4/S5, Table S4 |
-| `notebooks/35_polaris_external.ipynb` (§3.6) | Figure 7, Table S6 |
+| `notebooks/36_controlled_comparisons.ipynb` (§2.7, §3.2–3.4) | Figure 2, Table 2, Tables S10a–c (incl. STL-only and MTL-only pools), Figures S7–S9, Supplementary Note S3 values |
+| `notebooks/32_fusion_comparison.ipynb` (§3.3–3.4) | Figure 3 (fusion level at matched member count), Figures S1–S3, Table S2, Table S3 |
+| `notebooks/33_heldout_test.ipynb` (§3.4) | Table 3 (per-task, with summary rows), Figures S4/S5, Table S8, Figure 4, Table S9 |
+| `notebooks/34_gain_analysis.ipynb` (§3.4–3.5) | Figure 5, Table S4, Figure S6 |
+| `notebooks/35_polaris_external.ipynb` (§3.6) | Figure 6, Table S6 |
 
 ```bash
 for nb in notebooks/00_pre_analysis notebooks/3?_*; do
@@ -99,10 +99,10 @@ tables of notebook 36 go to `results/controlled_comparisons/`.
 | File | Role |
 |---|---|
 | `tfcc.py` | Scoring in the manuscript convention (raw metric per realization → mean → normalize once), the member-count × encoder-heterogeneity grid S(m, d), validation-only selection of same-encoder and same-model multi-run controls, the fusion-level comparison at matched member count, the seed-averaging effect, Table 3 and Table S10 |
-| `figs.py` | Figure 2 and Figure 3C |
-| `analysis_B_decomposition.py` | Note S3.3, Figure S9: specialization vs beyond-best-member decomposition of the loss reduction |
-| `analysis_C_similarity.py` | Note S3.4, Figure S10: gain by similarity of test molecules to the training data |
-| `analysis_2_uncertainty.py` | Note S3.6, Figure S11: member disagreement as an error ranker, heterogeneous vs same-encoder ensembles |
+| `figs.py` | Figure 2 and Figure 3 |
+| `analysis_B_decomposition.py` | Note S3.3, Figure S7 and Figure 5C: specialization vs beyond-best-member decomposition of the loss reduction |
+| `analysis_C_similarity.py` | Note S3.4, Figure S8: gain by similarity of test molecules to the training data |
+| `analysis_2_uncertainty.py` | Note S3.6, Figure S9: member disagreement as an error ranker, heterogeneous vs same-encoder ensembles |
 | `tf_common.py` | Shared loaders and the TDC metric / leaderboard normalization (same logic as `code/make_all1023.py`) |
 
 Intervals are task-bootstrap 95% percentile intervals (2,000 resamples of the 21 tasks,
@@ -114,23 +114,27 @@ seed 20261002).
 |---|---|
 | Figure 1 | No single base model is best across ADMET endpoints (matched-seed solo test norm_score, 10 models) |
 | Figure 2 | At equal member count, ensembles of different encoders outperform multi-run ensembles of one encoder, against average, validation-selected and oracle controls |
-| Figure 3 | MAP vs its constituent encoders (A, B); fusion level at matched member count: MAP, Late-3, MAP×3, MAP×5 and Tetra-Fuse (C) |
-| Figure 4 | Validation-only choice of the ensemble size (k-sweep, elbow at k=5) |
-| Figure 5 | Tetra-Fuse vs deployable single models: paired Wilcoxon forest plot |
-| Figure 6 | Validation→test transfer over all 1,023 subsets + endpoint-specific member strengths |
-| Figure 7 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
+| Figure 3 | Fusion level at matched member count: MAP, Late-3, MAP×3, MAP×5 and Tetra-Fuse |
+| Figure 4 | Tetra-Fuse vs deployable single models: paired Wilcoxon forest plot |
+| Figure 5 | Validation→test transfer over all 1,023 subsets, endpoint-specific member strengths and the loss decomposition (S, O, S − O) |
+| Figure 6 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
 | Figures S1–S8 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7), same-encoder five-run control (S8) |
-| Figures S9–S11 | Error decomposition (S9), gain by similarity quintile (S10), uncertainty quality (S11) |
-| Tables 1–6 | Comparison with prior fusion and ensemble studies; mechanism grouping; effects of model combination (Table 3); held-out-test summary; per-task results; member contributions |
-| Tables S1–S10 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; same-encoder five-run control; controlled comparisons (S10a per-task, S10b contrasts, S10c S(m, d) grid) |
+| Figures S9–S12 | Error decomposition (S9), gain by similarity quintile (S10), uncertainty quality (S11), MAP vs its constituent encoders (S12) |
+| Tables 1–3 | Comparison with prior fusion and ensemble studies; effects of model combination (Table 2); per-task results with summary rows (Table 3) |
+| Tables S1–S10 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; same-encoder five-run control; controlled comparisons (S10a per-task, S10b contrasts incl. STL-only/MTL-only pools, S10c S(m, d) grid); mechanism-informed task grouping (S11) |
 
 ### Figure and table numbering
 
 Release 1.1.0 (the ChemRxiv version) numbered the figures differently. Mapping from the
-1.1.0 files to this release: Figure 2 → Figure 3 (panel C redrawn at matched member
-count), Figure 3 → 4, Figure 4 → 5, Figure 5 → 6, Figure 6 → 7; Table 3 → 4, Table 4 → 5,
-Table 5 → 6. Figure 2, Table 3, Figures S9–S11 and Table S10 are new. Table 1 was
-rewritten to the current manuscript.
+1.1.0 files to this release: Figure 2A, B → Figure S12 (redrawn on the Table S2 basis),
+Figure 2C → Figure 3 (redrawn at matched member count), Figure 3 → 4, Figure 4 → 5,
+Figure 5 → 6, Figure 6 → 7; Table 2 → Table S11; Tables 3 and 4 → Table 3 (summary rows
+appended to the per-task table); Table 5 → Table 4. Figure 2, Table 2, Figures S9–S11 and
+Table S10 are new, and Table 1 was rewritten to the current manuscript. Ensemble norm_scores
+entering the significance tests are now compared with the baselines at full precision
+(Table S8, Fig. 5, Table S9).
+
+Manuscript v3-1 renumbering (this commit): Figure 4 → Figure S3; Figures 5–7 → 4–6, with Figure 5 gaining panel C (loss decomposition); Table 4 → Table S4 (the former correlation summary Table S4 is now `tables/extra_inter_model_corr.csv`); Figures S12, S2, S6, S7, S4, S9, S10 and S11 → Figures S1–S9 in that order. The former Figures S1, S3, S5 and S8 duplicate Table S2, Figure S2, Table S4 and Figure 2C/Table S9 and are still written, as `figures/extra_*.png`. Figure 1B now shows the four encoder values as points.
 
 ---
 
@@ -202,7 +206,7 @@ release/
 │   │   ├── leaderboards/{model}.csv      10 models; dataset,metric,ours,ours_std,rank,n_total,Top,Top_model
 │   │   ├── all1023.csv                   1,023-subset uniform-mean sweep (code/make_all1023.py regenerates it)
 │   │   ├── tdc_leaderboard_snapshot.json, task_registry.json, task_metadata.json
-│   │   └── polaris_leaderboard_full.json Polaris public submissions (Figure 7 input)
+│   │   └── polaris_leaderboard_full.json Polaris public submissions (Figure 6 input)
 │   └── polaris_external/         ← Polaris audit tables (not notebook inputs; see its README.md)
 ├── notebooks/                    ← AXIS A: seven independent regeneration notebooks
 ├── figures/  tables/             ← AXIS A outputs (PNG / CSV)
@@ -225,7 +229,7 @@ release/
     ├── select_checkpoints.py     ← resolve ambiguous checkpoints by measurement
     ├── audit_recipes.py          ← check shipped recipes against what was trained
     ├── make_all1023.py           ← regenerate all1023.csv from the prediction parquets
-    ├── followup/                 ← AXIS A: controlled comparisons (notebook 36, Figure 3C)
+    ├── followup/                 ← AXIS A: controlled comparisons (notebook 36, Figure 3)
     ├── make_tdc_submission.py    ← build TDC leaderboard submission scores
     ├── tdc_submission/           ← the resulting scores (21 benchmarks, evaluate_many format)
     ├── qadmet/                   ← the training/evaluation/inference engine

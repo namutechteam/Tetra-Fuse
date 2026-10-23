@@ -20,3 +20,6 @@ Half_Life_Obach,spearman,CFA,0.576 ± 0.025,0.551 ± 0.034,4,0.56,3
 Clearance_Hepatocyte_AZ,spearman,CFA,0.536 ± 0.020,0.495 ± 0.007,3,0.503,2
 Clearance_Microsome_AZ,spearman,MapLight + GNN,0.630 ± 0.010,0.629 ± 0.007,2,0.636,1
 LD50_Zhu,mae,BaseBoosting KyQVZ6b2,0.552 ± 0.009,0.588 ± 0.012,5,0.583,3
+Mean norm_score,,,,0.854,,0.897,
+Mean rank,,,,,3.95,,3.10
+Tasks ranked 1 / top 3 / top 5,,,,,2 / 11 / 15,,6 / 14 / 19

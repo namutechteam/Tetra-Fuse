@@ -4,7 +4,7 @@ FusionCLM,Three SMILES language models,Stacking with trained meta-learners,Not r
 DCPM-ADMET,Dual-component pretrained model + fingerprints,"Feature level, jointly trained head",Single model,Not reported,No,No
 MMFRL,"Multimodal relational learning, one graph architecture across modalities","Early, intermediate and late fusion compared",Not reported,Not reported,No,No
 MMELON,"Graph, image and text foundation models",Learned attention aggregator,Single aggregated model,Not reported,No,No
-Martínez Galindo et al.,Seven unimodal representations,Intermediate (concatenation) vs late (prediction mean),No (late: n models; intermediate: 1),Prediction averaging over seeds or folds,No,No
+Martínez Galindo et al.,Seven unimodal representations,Intermediate (concatenation) vs late (prediction mean),No (late: n models; intermediate: 1),Means of per-seed scores over five seeds; no averaging of predictions over runs,No,No
 Trimole-Hybrid,"Deep encoders, gated fusion, descriptor tree models",Feature and prediction level,No,Yes (seed-bag and fold-bag candidates),Yes,No
 ADMET reliability study,Foundation and conventional models across modalities,Prediction level,Not reported,Not reported,–,No
 Wasswa et al.,Unimodal and multimodal models (environmental properties),Early (feature concatenation) vs late (stacking / meta-learner),No,Yes,Yes,No

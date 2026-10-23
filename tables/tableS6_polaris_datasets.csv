@@ -1,7 +1,7 @@
-Endpoint,Polaris slug,Target variable,n (train+val),n (test),Our Pearson r,Rank,Best competing submission,Gap (ours − best)
-HLM_CLint,adme-fang-hclint-reg-v1,LOG_HLM_CLint,2230,576,0.7804,2/16,0.7957 (seqera-gradient),-0.0153
-RLM_CLint,adme-fang-rclint-reg-v1,LOG_RLM_CLint,2220,559,0.8033,1/11,0.7983 (1B_MPNN_MolGPS-ens_LargeMix),+0.0050
-MDR1_ER,adme-fang-perm-reg-v1,LOG_MDR1-MDCK_ER,1920,483,0.8381,3/15,0.8794 (1B_MPNN_MolGPS-ens_LargeMix),-0.0413
-Solubility,adme-fang-solu-reg-v1,LOG_SOLUBILITY,1578,400,0.6966,4/43,0.7700 (1B_MPNN_MolGPS-ens_LargeMix),-0.0734
-HPPB,adme-fang-hppb-reg-v1,LOG_HPPB,126,34,0.8884,1/19,0.8879 (1B_MPNN_LargeMix-and-Phenomics),+0.0005
-RPPB,adme-fang-rppb-reg-v1,LOG_RPPB,111,24,0.9049,2/19,0.9082 (1B_MPNN_LargeMix-and-Phenomics),-0.0033
+Endpoint,Polaris slug,Target variable,n (train+val),n (test),Our Pearson r,95% CI of r (Fisher z),Rank,Best competing submission,Gap (ours − best)
+HLM_CLint,adme-fang-hclint-reg-v1,LOG_HLM_CLint,2230,576,0.7804,0.746–0.810,2/16,0.7957 (seqera-gradient),-0.0153
+RLM_CLint,adme-fang-rclint-reg-v1,LOG_RLM_CLint,2220,559,0.8033,0.772–0.831,1/11,0.7983 (1B_MPNN_MolGPS-ens_LargeMix),+0.0050
+MDR1_ER,adme-fang-perm-reg-v1,LOG_MDR1-MDCK_ER,1920,483,0.8381,0.809–0.863,3/15,0.8794 (1B_MPNN_MolGPS-ens_LargeMix),-0.0413
+Solubility,adme-fang-solu-reg-v1,LOG_SOLUBILITY,1578,400,0.6966,0.642–0.744,4/43,0.7700 (1B_MPNN_MolGPS-ens_LargeMix),-0.0734
+HPPB,adme-fang-hppb-reg-v1,LOG_HPPB,126,34,0.8884,0.787–0.943,1/19,0.8879 (1B_MPNN_LargeMix-and-Phenomics),+0.0005
+RPPB,adme-fang-rppb-reg-v1,LOG_RPPB,111,24,0.9049,0.790–0.958,2/19,0.9082 (1B_MPNN_LargeMix-and-Phenomics),-0.0033

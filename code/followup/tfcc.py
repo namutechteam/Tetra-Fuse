@@ -9,7 +9,7 @@ notebooks and to ``code/homog_control.py``): a configuration with several realiz
 for every realization, averaging the raw values, and rank-normalizing ONCE against the
 leaderboard ("score -> mean -> norm").
 
-Runs: run i (i = 0..4) uses training seed i on TDC split seed i + 1; the five runs are paired,
+Runs: run i (i = 0..4) uses TDC split seed i and training seed i; the five runs are paired,
 not crossed, and share the same held-out test set, so their predictions can be averaged per
 molecule.
 """
@@ -98,7 +98,7 @@ def _assignments(combo, m, rng, cap=2000, nsamp=400):
     return sp
 
 
-def validation_selection(C: Ctx):
+def validation_selection(C: Ctx, pool=None):
     """Validation-only choice of same-encoder controls (no test labels)."""
     rows = []
     for mm in C.MODELS:
@@ -115,31 +115,33 @@ def validation_selection(C: Ctx):
         return sub.groupby("task").model.first().to_dict()
 
     k1 = C.A1023[C.A1023.k == 1].set_index("combo_key").val_within
-    return dict(global_pool=k1.loc[POOL].idxmax(), global_all=k1.idxmax(),
-                task_pool=per_task_best(POOL), task_all=per_task_best(C.MODELS))
+    pool = list(pool or POOL)
+    return dict(global_pool=k1.loc[pool].idxmax(), global_all=k1.idxmax(),
+                task_pool=per_task_best(pool), task_all=per_task_best(C.MODELS))
 
 
-def heterogeneity_grid(C: Ctx):
+def heterogeneity_grid(C: Ctx, pool=None):
     """Per-task table of every arm used in Fig. 2 and Table S10a (manuscript convention)."""
-    sel = validation_selection(C)
+    pool = list(pool or POOL)
+    sel = validation_selection(C, pool)
     rng = np.random.default_rng(SEED)
     grid = [(m, d) for m in range(1, 6) for d in range(1, min(m, 4) + 1)]
-    draws = {(m, d): [_assignments(c, m, rng) for c in itertools.combinations(POOL, d)] for m, d in grid}
+    draws = {(m, d): [_assignments(c, m, rng) for c in itertools.combinations(pool, d)] for m, d in grid}
     rows = []
     for t in C.TASKS:
         rec = dict(task=t, metric=C.REG[t]["metric"])
         for m, d in grid:
             rec[f"Het_{m}_{d}"] = np.mean([C.ms(t, sp) for sp in draws[(m, d)]])
         for d in range(1, 5):
-            rec[f"HetMS_{d}"] = np.mean([C.matched_seed(t, c) for c in itertools.combinations(POOL, d)])
+            rec[f"HetMS_{d}"] = np.mean([C.matched_seed(t, c) for c in itertools.combinations(pool, d)])
         for m in range(1, 6):
             hb = {b: C.multi_run(t, b, m) for b in C.MODELS}
-            rec[f"HomMean_{m}"] = np.mean([hb[b] for b in POOL])
+            rec[f"HomMean_{m}"] = np.mean([hb[b] for b in pool])
             rec[f"HomGlobalPool_{m}"] = hb[sel["global_pool"]]
             rec[f"HomGlobalAll_{m}"] = hb[sel["global_all"]]
             rec[f"HomTaskValPool_{m}"] = hb[sel["task_pool"][t]]
             rec[f"HomTaskValAll_{m}"] = hb[sel["task_all"][t]]
-            rec[f"HomTaskTestPool_{m}"] = max(hb[b] for b in POOL)
+            rec[f"HomTaskTestPool_{m}"] = max(hb[b] for b in pool)
             rec[f"HomTaskTestAll_{m}"] = max(hb.values())
             for b in C.MODELS:
                 rec[f"Hom[{b}]_{m}"] = hb[b]
@@ -155,12 +157,13 @@ def heterogeneity_contrasts(C: Ctx, P: pd.DataFrame):
     out = []
     for m in (4, 5):
         het = f"Het_{m}_4"
-        out += [c(het, f"HomMean_{m}", f"m={m}: heterogeneous vs same-encoder, mean of 4 encoders"),
-                c(het, f"HomGlobalPool_{m}", f"m={m}: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·STL)"),
-                c(het, f"HomTaskValPool_{m}", f"m={m}: heterogeneous vs same-encoder, per-task validation-best encoder"),
-                c(het, f"HomTaskTestPool_{m}", f"m={m}: heterogeneous vs same-encoder, per-task test-best encoder (oracle)"),
-                c(het, f"HomGlobalAll_{m}", f"m={m}: heterogeneous vs same-model, validation-best of all 10 (MAP·STL)"),
-                c(het, f"HomTaskValAll_{m}", f"m={m}: heterogeneous vs same-model, per-task validation-best of all 10")]
+        tag = "m=4" if m == 4 else "m=5 (four-encoder pool, S(5,4))"
+        out += [c(het, f"HomMean_{m}", f"{tag}: heterogeneous vs same-encoder, mean of 4 encoders"),
+                c(het, f"HomGlobalPool_{m}", f"{tag}: heterogeneous vs same-encoder, validation-best encoder (CheMeleon·STL)"),
+                c(het, f"HomTaskValPool_{m}", f"{tag}: heterogeneous vs same-encoder, per-task validation-best encoder"),
+                c(het, f"HomTaskTestPool_{m}", f"{tag}: heterogeneous vs same-encoder, per-task test-best encoder (oracle)"),
+                c(het, f"HomGlobalAll_{m}", f"{tag}: heterogeneous vs same-model, validation-best of all 10 (MAP·STL)"),
+                c(het, f"HomTaskValAll_{m}", f"{tag}: heterogeneous vs same-model, per-task validation-best of all 10")]
     out += [c("HetMS_4", "HomMean_4", "matched-seed heterogeneous (4) vs same-encoder, mean of 4 encoders"),
             c("HetMS_4", "HomGlobalPool_4", "matched-seed heterogeneous (4) vs same-encoder, validation-best encoder"),
             c("HetMS_4", "HomTaskValPool_4", "matched-seed heterogeneous (4) vs same-encoder, per-task validation-best"),
@@ -275,7 +278,7 @@ def table_s10(P, CT, G):
     num = P[[c for c, _ in cols]].rename(columns=dict(cols)).mean().round(3)  # means of unrounded values
     A.loc["Mean"] = pd.Series({**num.to_dict(), "Metric": "", "Val-best encoder (pool)": "", "Val-best model (all 10)": ""})
     A.index.name = "Task"
-    Bt = CT[["contrast", "delta", "ci_low", "ci_high", "wins", "ties", "losses"]].round(4)
+    Bt = CT[["contrast", "delta", "ci_low", "ci_high", "wins", "ties", "losses"]].round(6)
     Ct = G.pivot(index="m", columns="d", values="S").round(3)
     Ct.columns = [f"d = {d}" for d in Ct.columns]
     return A.reset_index(), Bt, Ct.reset_index()
