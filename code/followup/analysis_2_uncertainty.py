@@ -247,7 +247,7 @@ ypos = np.arange(len(PTs), dtype=float); ypos[PTs.grp.values == 0] += 1.0   # ga
 for yv, (_, r) in zip(ypos, PTs.iterrows()):
     a1.plot([r.rho_HOM_mean, r.rho_HET_mean], [yv, yv], color="0.75", lw=0.9, zorder=1)
 a1.scatter(PTs.rho_HOM_mean, ypos, s=16, color=C_HOM, facecolor="white", lw=0.9, zorder=2,
-           label="Homogeneous (5 seeds of one type; mean of 5 types)")
+           label="Same-encoder (5 runs of one type; mean of 5 types)")
 a1.scatter(PTs.rho_HET_mean, ypos, s=16, color=C_HET, zorder=3, label="Heterogeneous (5 Tetra-Fuse types; mean of 5 seeds)")
 a1.set_yticks(ypos); a1.set_yticklabels([SHORT[t] for t in PTs.task])
 a1.axvline(0, color="0.6", lw=0.6, zorder=0)
@@ -260,7 +260,7 @@ a1.text(1.0, ypos[-1] + 0.9, "classification", transform=a1.get_yaxis_transform(
 a1.set_ylim(-0.8, ypos[-1] + 1.6)
 a1.legend(loc="upper center", bbox_to_anchor=(0.42, -0.085), fontsize=6, handletextpad=0.3, borderaxespad=0)
 npos = int((PT.delta_rho > 0).sum())
-a1.set_title(f"Heterogeneous > homogeneous on {npos}/21 tasks")
+a1.set_title(f"Heterogeneous > same-encoder on {npos}/21 tasks")
 a1.margins(x=0.04)
 
 # (b) task-mean contrasts with 95 % CI
@@ -279,14 +279,14 @@ for (lab, r, prim), yv in zip(items, yy):
     a2.text(r.ci_high + 0.012, yv, f"{int(r.n_pos)}/{int(r.n_tasks)}", va="center", fontsize=6, color="0.35")
 a2.axvline(0, color="0.6", lw=0.6, zorder=0)
 a2.set_yticks(yy); a2.set_yticklabels([i[0] for i in items])
-a2.set_xlabel("Δρ, heterogeneous − homogeneous (task mean, 95% CI)")
+a2.set_xlabel("Δρ, heterogeneous − same-encoder (task mean, 95% CI)")
 pr = items[0][1]
-a2.set_title(f"Primary Δρ = {pr.estimate:.3f} [{pr.ci_low:.3f}, {pr.ci_high:.3f}]: {verdict}")
+a2.set_title(f"Primary Δρ = {pr.estimate:.3f} [{pr.ci_low:.3f}, {pr.ci_high:.3f}]")
 a2.margins(x=0.08, y=0.12)
 a2.text(0.99, 0.02, "heterogeneous better →", transform=a2.transAxes, ha="right", va="bottom", fontsize=6, color="0.35")
 
 # (c) relative mean u by similarity quintile
-for c, col, lab, off in [("u_HET_mean", C_HET, "Heterogeneous", -0.06), ("u_HOM_mean", C_HOM, "Homogeneous", 0.06)]:
+for c, col, lab, off in [("u_HET_mean", C_HET, "Heterogeneous", -0.06), ("u_HOM_mean", C_HOM, "Same-encoder", 0.06)]:
     rr = [srow(f"rel_mean_u_Q{b} [{c}]") for b in range(1, 6)]
     e = np.array([r.estimate for r in rr]); lo = np.array([r.ci_low for r in rr]); hi = np.array([r.ci_high for r in rr])
     a3.errorbar(X + off, e, yerr=[e - lo, hi - e], color=col, marker="o", ms=3.5, capsize=2, lw=1.1,

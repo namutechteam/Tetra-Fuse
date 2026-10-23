@@ -48,7 +48,7 @@ def figure2(C, P, G):
     for i in range(M.shape[0]):
         for j in range(M.shape[1]):
             v = M.values[i, j]
-            ax2.text(j, i, "—" if np.isnan(v) else f"{v:.2f}", ha="center", va="center", fontsize=6,
+            ax2.text(j, i, "—" if np.isnan(v) else f"{v:.3f}", ha="center", va="center", fontsize=6,
                      color=GREY if np.isnan(v) else ("white" if v < 0.75 else "black"))
     ax2.set_xticks(range(4)); ax2.set_xticklabels([1, 2, 3, 4]); ax2.set_yticks(range(5)); ax2.set_yticklabels([5, 4, 3, 2, 1])
     ax2.set_xlabel("Distinct encoders (d)"); ax2.set_ylabel("Members (m)"); ax2.set_title("Score rises mainly along d")
@@ -69,7 +69,7 @@ def figure2(C, P, G):
             c = C.contrast(P[a], P[b])
             ax3.plot([c["ci_low"], c["ci_high"]], [y0 + dy] * 2, color=col, lw=1)
             ax3.plot(c["delta"], y0 + dy, mk, color=col, ms=3.5, mfc=("white" if i == 5 else col))
-            ax3.text(0.29, y0 + dy, f"{c['delta']:+.3f}  ({c['wins']}/{c['ties']}/{c['losses']})", fontsize=6, va="center", color=col)
+            ax3.text(0.29, y0 + dy, f"{c['delta']:+.3f}  ({c['wins']}/{c['ties']}/{c['losses']})".replace("-", "\u2212"), fontsize=6, va="center", color=col)
     ax3.axvline(0, color=GREY, lw=0.6)
     ax3.set_yticks(range(len(rows))); ax3.set_yticklabels([r[0] for r in rows][::-1])
     ax3.set_xlabel("Δ norm_score vs multi-run ensemble of equal size (95% CI; win/tie/loss over 21 tasks)")
@@ -107,7 +107,7 @@ def panel_fusion_matched(ax, F, FC):
 
     def br(x1, x2, y, r):
         ax.plot([x1, x1, x2, x2], [y - 0.012, y, y, y - 0.012], color="#374151", lw=0.7)
-        ax.text((x1 + x2) / 2, y + 0.008, f"Δ {r.delta:+.3f} ({r.ci_low:.3f}, {r.ci_high:.3f})", ha="center", fontsize=6)
+        ax.text((x1 + x2) / 2, y + 0.008, f"Δ {r.delta:+.3f} ({r.ci_low:.3f}, {r.ci_high:.3f})".replace("-", "\u2212"), ha="center", fontsize=6)
     g = lambda lab: FC[FC.contrast == lab].iloc[0]
     br(pos[("stl", "Late3")], pos[("stl", "MAP3")], 0.84, g("STL: Late-3 vs MAP x3 (matched)"))
     br(pos[("mtl", "Late3")], pos[("mtl", "MAP3")], 0.84, g("MTL: Late-3 vs MAP x3 (matched)"))
