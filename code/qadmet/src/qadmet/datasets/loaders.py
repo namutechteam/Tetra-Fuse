@@ -1,34 +1,34 @@
-"""학습용 DataLoader 빌더 + collate 어댑터.
+"""DataLoader builder for training + collate adapter.
 
-본 모듈은 ``TdcAdmetFold`` 와 ``FeatureSpec`` 을 받아
-``MultitaskLitModule`` 의 batch dict 계약을 만족하는 PyTorch DataLoader 를
-만든다.
+This module takes ``TdcAdmetFold`` and ``FeatureSpec``, and
+builds a PyTorch DataLoader satisfying the batch dict contract of ``MultitaskLitModule``
+builds it.
 
-핵심 흐름:
-    1. ``build_modality_block`` — features.descriptors + features.embeddings 순서로
-       precomputed parquet 들을 SMILES 별로 stack 한 ``X_d_combined (N, ΣD)`` 와
-       모달리티별 slice 인덱스 맵을 만든다.
-    2. ``X_d_combined`` 을 chemprop ``MoleculeDatapoint`` 의 ``X_d`` 자리에 통째로
-       전달 → chemprop dataloader 가 batch 마다 ``TrainingBatch.X_d (B, ΣD)`` 로
-       반환.
-    3. ``make_collate_fn`` 이 chemprop collate_batch 위에 한 단계 더 얹어
-       descriptor slice 는 ``batch["X_d"]`` 로, embedding slice 는
-       ``batch["modalities"]`` dict 로 분리 → ``MultitaskLitModule`` 이 받는 dict
-       를 yield.
+Core flow:
+    1. ``build_modality_block`` — in the order features.descriptors + features.embeddings
+       stacks precomputed parquet files by SMILES to build ``X_d_combined (N, ΣD)`` and
+       a per-modality slice index map.
+    2. passes ``X_d_combined`` wholesale into the ``X_d`` slot of chemprop ``MoleculeDatapoint``
+       → chemprop dataloader turns it into ``TrainingBatch.X_d (B, ΣD)`` per batch and
+       returns it.
+    3. ``make_collate_fn`` adds one more layer on top of chemprop collate_batch,
+       splitting the descriptor slice into ``batch["X_d"]`` and the embedding slice into
+       the ``batch["modalities"]`` dict → the dict that ``MultitaskLitModule`` receives
+       is yielded.
 
-Why 이 구조 (Step B 디자인, 2026-05-01):
-    descriptor (rdkit2d / xtb / gfn_missing_vector) 는 옛 chemprop X_d concat
-    경로를 그대로 살린다 (DMPNN ``MPNN.fingerprint`` 가 fp 뒤에 X_d 를 concat → 출력
-    dim = d_h + d_xd). embedding (molformer / unimol2 frozen CLS, 또는 multi-backbone
-    인 LoRA path 의 token modality) 만 fusion 모듈로 보낸다. 이로써:
-        - descriptors 만 쓰는 recipe (mtl_dmpnn_rdkit / rdkit_xtb / +missing) 는
-          fusion 미사용 → 단일 backbone 학습이 옛 phase1.3a/b 와 동일 경로를 탄다.
-        - embeddings 가 추가된 recipe (mtl_with_molformer / mtl_dmpnn_molformer_lora)
-          는 fusion 입력 = ``[H_dmpnn(d_h+d_xd), *embeddings]`` 형태.
-    chemprop dataloader 의 shuffle/batching 매커니즘은 그대로 활용한다.
+Why this structure (Step B design, 2026-05-01):
+    descriptor (rdkit2d / xtb / gfn_missing_vector) keeps the old chemprop X_d concat
+    path as-is (DMPNN ``MPNN.fingerprint`` concats X_d after fp → output
+    dim = d_h + d_xd). embedding (molformer / unimol2 frozen CLS, or multi-backbone's
+    token modality from the LoRA path) alone is sent to the fusion module. As a result:
+        - recipes using only descriptors (mtl_dmpnn_rdkit / rdkit_xtb / +missing)
+          don't use fusion → single-backbone training follows the same path as the old phase1.3a/b.
+        - recipes with embeddings added (mtl_with_molformer / mtl_dmpnn_molformer_lora)
+          have fusion input in the form ``[H_dmpnn(d_h+d_xd), *embeddings]``.
+    chemprop dataloader's shuffle/batching mechanism is reused as-is.
 
 Lazy import:
-    ``chemprop`` / ``torch`` 는 함수 안에서만 import.
+    ``chemprop`` / ``torch`` are imported only within functions.
 """
 
 from __future__ import annotations
@@ -51,22 +51,22 @@ logger = get_logger("qadmet.datasets.loaders")
 LOG_TRANSFORM_TASKS: frozenset[str] = frozenset(
     {"VDss_Lombardo", "Half_Life_Obach", "Clearance_Hepatocyte_AZ", "Clearance_Microsome_AZ"}
 )
-"""regression target 에 ``log1p`` 를 씌우는 task 집합 (옛 ``pipeline_mtl.LOG_TRANSFORM_TASKS``)."""
+"""Set of tasks that apply ``log1p`` to the regression target (old ``pipeline_mtl.LOG_TRANSFORM_TASKS``)."""
 
 _XTB_KEY = "xtb"
 _XTB_MASK_KEY = "gfn_missing_vector"
 
-#: 사전계산 parquet/lmdb 가 없고 SMILES 로부터 collate 단계에서 즉석 생성되는 modality.
-#: graphmvp_data: collate 가 SMILES → ``torch_geometric.data.Batch`` 변환 → graphmvp
-#: backbone 이 consumes. on-the-fly 변환 비용이 작아 LMDB precompute 불필요.
+#: Modality with no precomputed parquet/lmdb, generated on-the-fly from SMILES at the collate stage.
+#: graphmvp_data: collate converts SMILES → ``torch_geometric.data.Batch`` → graphmvp
+#: backbone consumes it. on-the-fly conversion cost is low, so LMDB precompute is unnecessary.
 SYNTHETIC_MODALITY_KEYS: frozenset[str] = frozenset({"graphmvp_data"})
 
 
 def expand_descriptors(descriptors: Sequence[str]) -> list[str]:
-    """xtb 가 포함된 경우 gfn_missing_vector 를 바로 뒤에 자동 삽입.
+    """When xtb is included, automatically insert gfn_missing_vector right after it.
 
-    recipe 에 gfn_missing_vector 를 직접 쓰지 않아도 xtb 와 항상 같이 흐른다.
-    이미 포함되어 있으면 no-op.
+    Even if the recipe doesn't explicitly specify gfn_missing_vector, it always flows together with xtb.
+    No-op if it's already included.
     """
     result = list(descriptors)
     if _XTB_KEY in result and _XTB_MASK_KEY not in result:
@@ -80,12 +80,12 @@ def expand_descriptors(descriptors: Sequence[str]) -> list[str]:
 
 @dataclass
 class ModalityBlock:
-    """한 modality 의 (N, dim) 텐서 + 메타.
+    """The (N, dim) tensor + metadata for a single modality.
 
     Attributes:
-        name: modality 키 (FEATURE_BUILDERS 에 등록된 이름).
-        dim: 채널 수.
-        array: (N, dim) float32. SMILES 누락 행은 0 (zeros) 으로 채움.
+        name: modality key (name registered in FEATURE_BUILDERS).
+        dim: number of channels.
+        array: (N, dim) float32. Rows with missing SMILES are filled with 0 (zeros).
     """
 
     name: str
@@ -94,7 +94,7 @@ class ModalityBlock:
 
 
 def _builder_columns(name: str) -> tuple[list[str], int]:
-    """builder 클래스에서 columns + dim 을 가져온다 (인스턴스화 1회만)."""
+    """Fetch columns + dim from the builder class (instantiated only once)."""
     cls = FEATURE_BUILDERS.get(name)
     builder = cls()
     return list(builder.columns), int(builder.output_dim)
@@ -105,19 +105,19 @@ def build_modality_block(
     name: str,
     parquet_path: Path,
 ) -> ModalityBlock:
-    """단일 modality 의 (N, dim) 텐서를 SMILES 순서대로 만든다.
+    """Build the (N, dim) tensor for a single modality in SMILES order.
 
     Args:
-        smiles: 행 순서를 결정하는 SMILES 리스트 (정렬 안 됨, fold 의 원본 순서 유지).
-        name: FEATURE_BUILDERS 키.
-        parquet_path: 해당 modality 의 사전 계산 parquet 위치 (``ParquetStore``).
+        smiles: SMILES list that determines row order (unsorted, preserves the fold's original order).
+        name: FEATURE_BUILDERS key.
+        parquet_path: location of the precomputed parquet for that modality (``ParquetStore``).
 
     Returns:
-        ``ModalityBlock(name, dim, array)``. 누락 SMILES 는 zeros 채움.
+        ``ModalityBlock(name, dim, array)``. Missing SMILES are filled with zeros.
     """
     cols, dim = _builder_columns(name)
     store = ParquetStore(parquet_path)
-    arr = store.lookup(list(smiles), cols)  # (N, dim), 누락 NaN.
+    arr = store.lookup(list(smiles), cols)  # (N, dim), missing values are NaN.
     arr = np.nan_to_num(arr, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
     return ModalityBlock(name=name, dim=dim, array=arr)
 
@@ -127,10 +127,10 @@ def build_modality_block(
 
 @dataclass
 class ModalityScalerState:
-    """train fold 에서 학습된 modality 별 scaler 상태.
+    """Per-modality scaler state learned from the train fold.
 
-    NaN-safe StandardScaler — train_arr 에서 mean/std 만 계산해 transform 시 적용.
-    ``molformer_tokens`` 처럼 정수 토큰 modality 는 ``skip_keys`` 로 우회한다.
+    NaN-safe StandardScaler — computes mean/std only from train_arr and applies them at transform time.
+    Integer-token modalities like ``molformer_tokens`` are bypassed via ``skip_keys``.
     """
 
     means: dict[str, np.ndarray]
@@ -148,8 +148,8 @@ class ModalityScalerState:
         return np.nan_to_num(out, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
 
 
-# ``molformer_tokens`` 는 token_id (정수) + attention mask (0/1) — scaling 대상 아님.
-# ``gfn_missing_vector`` 는 binary 0/1 mask — standardize 시 의미 훼손.
+# ``molformer_tokens`` is token_id (integer) + attention mask (0/1) — not a scaling target.
+# ``gfn_missing_vector`` is a binary 0/1 mask — standardizing destroys its meaning.
 DEFAULT_SCALE_SKIP: tuple[str, ...] = ("molformer_tokens", "gfn_missing_vector")
 
 
@@ -159,11 +159,11 @@ def fit_modality_scalers(
     clip: float = 10.0,
     skip_keys: tuple[str, ...] = DEFAULT_SCALE_SKIP,
 ) -> ModalityScalerState:
-    """train modality blocks 에서 mean/std 산출. clip ±10 (옛 코드 관습).
+    """Compute mean/std from train modality blocks. clip ±10 (old code convention).
 
-    xTB 블록: ``gfn_missing_vector`` 가 함께 있으면 모든 채널이 관측된 행만으로
-    fit (QW-MTL observed-only strategy). 0-imputed 결측치가 분포를 왜곡하는 것을 방지.
-    관측 행 < 2 이면 전체 행으로 fallback (옛 ``fit_xd_scalers`` 와 동일).
+    xTB block: if ``gfn_missing_vector`` is present, fit using only rows where all channels
+    are observed (QW-MTL observed-only strategy). Prevents 0-imputed missing values from distorting the distribution.
+    Falls back to all rows if observed rows < 2 (same as the old ``fit_xd_scalers``).
     """
     means: dict[str, np.ndarray] = {}
     stds: dict[str, np.ndarray] = {}
@@ -191,10 +191,10 @@ def fit_modality_scalers(
 def stack_modality_blocks(
     blocks: list[ModalityBlock],
 ) -> tuple[np.ndarray | None, dict[str, slice], dict[str, int]]:
-    """modality block 리스트 → (X_d_combined, slices, dims).
+    """modality block list → (X_d_combined, slices, dims).
 
     Returns:
-        - X_d_combined: ``(N, ΣD)`` float32. blocks 가 비어있으면 ``None``.
+        - X_d_combined: ``(N, ΣD)`` float32. ``None`` if blocks is empty.
         - slices: ``{name: slice(start, end)}``.
         - dims: ``{name: D}``.
     """
@@ -215,14 +215,14 @@ def stack_modality_blocks(
 # ---------------------------------------------------------------------------- collate adapter
 
 
-# 프로세스 + path 별 LMDB env 캐시 — 같은 process 내에서 같은 LMDB 를 두 번 open 하면
-# ``lmdb.Error: environment is already open in this process`` 가 발생하므로 공유한다.
-# DataLoader worker fork 후엔 ``os.getpid()`` 가 달라져 새로 open (정상 동작).
+# LMDB env cache per process + path — opening the same LMDB twice within the same process
+# causes ``lmdb.Error: environment is already open in this process``, so it's shared.
+# After a DataLoader worker fork, ``os.getpid()`` differs, so it opens anew (expected behavior).
 _LMDB_ENV_CACHE: dict[tuple[int, str], Any] = {}
 
 
 def _get_shared_lmdb_txn(path: str):
-    """프로세스 단위로 LMDB env/txn 캐시. 같은 path 첫 호출 시 open, 이후 재사용."""
+    """Caches LMDB env/txn per process. Opens on first call for a given path, reuses thereafter."""
     import os
     import lmdb  # type: ignore
 
@@ -236,13 +236,13 @@ def _get_shared_lmdb_txn(path: str):
 
 
 class _PairedChempropLmdbDataset:
-    """chemprop dataset + LMDB feat 동시 인덱싱 (MTL UniMol2 LoRA 경로용).
+    """Simultaneous indexing of chemprop dataset + LMDB feat (for the MTL UniMol2 LoRA path).
 
-    base chemprop dataset 의 ``__getitem__`` 결과와 LMDB 의 (smiles → feat dict)
-    lookup 결과를 튜플로 묶어 반환. (process, path) 별 env 캐시 공유.
+    base chemprop dataset's ``__getitem__`` result and LMDB's (smiles → feat dict)
+    lookup result bundled into a tuple and returned. Shares env cache per (process, path).
 
-    None feat (LMDB miss) 는 그대로 반환 — collate 가 placeholder 채우고 presence
-    mask 로 fusion 단계에서 해당 modality 차단.
+    None feat (LMDB miss) is returned as-is — collate fills in the placeholder and presence
+    mask blocks the corresponding modality at the fusion stage.
     """
 
     def __init__(self, chemprop_dset, smiles_list: Sequence[str], lmdb_path: Path) -> None:
@@ -271,21 +271,21 @@ def make_collate_fn_with_lmdb(
     embedding_slices: Mapping[str, slice],
     lmdb_modality: str,
 ):
-    """LMDB feat 를 inject 하는 collate (UniMol2 LoRA MTL 경로).
+    """Collate that injects LMDB feat (UniMol2 LoRA MTL path).
 
-    base ``make_collate_fn`` 과 동일 책임 + LMDB 에서 받은 feat dict 들을
-    vendored ``collate_unimolv2`` 로 합쳐 ``batch["modalities"][lmdb_modality]`` 에
-    dict 로 주입. ``lit_module`` 의 unimol2_lora input adapter 가 ``__consumed__``
-    슬롯에서 같은 dict 를 읽는다.
+    Same responsibility as base ``make_collate_fn`` + merges feat dicts received from LMDB
+    via vendored ``collate_unimolv2`` and injects them into ``batch["modalities"][lmdb_modality]``
+    as a dict. The unimol2_lora input adapter in ``lit_module`` reads the same dict from the ``__consumed__``
+    slot.
 
     Args:
-        descriptor_slices / embedding_slices: ``make_collate_fn`` 과 동일.
-        lmdb_modality: LMDB modality 이름 (예: ``"unimol2_lmdb"``). consumes 되어
-            fusion 입력에서 빠지므로 차원은 의미 없음.
+        descriptor_slices / embedding_slices: same as ``make_collate_fn``.
+        lmdb_modality: LMDB modality name (e.g. ``"unimol2_lmdb"``). Since it is consumed,
+            it is excluded from fusion input, so the dimension is meaningless.
 
     Note:
-        feat None 인 항목 (LMDB miss / featurize 실패) 은 batch 에서 제거. 전부
-        제거되면 ``None`` 반환 → Lightning skip.
+        Items with feat None (LMDB miss / featurize failure) are removed from the batch. If
+        all are removed, returns ``None`` → Lightning skip.
     """
     import torch
 
@@ -293,11 +293,11 @@ def make_collate_fn_with_lmdb(
 
     def _collate(items):
         # items: list of (chemprop_item, feat_dict_or_None)
-        # missing handling: 누락 sample 도 batch 에 유지 (placeholder feat 으로 forward 통과)
-        # 후 fusion 단계에서 ``unimol2_present`` mask 로 해당 modality alpha 무효화.
+        # missing handling: keep missing samples in the batch too (pass forward with placeholder feat)
+        # then invalidate the corresponding modality alpha via the ``unimol2_present`` mask at the fusion stage.
         present_flags = [f is not None for (_cp, f) in items]
         if not any(present_flags):
-            return None  # 전부 missing → batch 자체 skip
+            return None  # all missing → skip the batch itself
         placeholder = next(f for (_cp, f) in items if f is not None)
         feats_filled = [f if f is not None else placeholder for (_cp, f) in items]
         cp_items = [cp for (cp, _f) in items]
@@ -318,7 +318,7 @@ def make_collate_fn_with_lmdb(
         from qadmet.modules.backbones._vendor import unimol_v2 as uv2
 
         unimol2_batch = uv2.collate_unimolv2(feats_filled)
-        modalities[lmdb_modality] = unimol2_batch  # dict — consumes 경로로만 흐름.
+        modalities[lmdb_modality] = unimol2_batch  # dict — flows only through the consumes path.
 
         present_mask = torch.tensor(present_flags, dtype=torch.bool)  # (B,)
         modality_present: dict[str, Any] = {lmdb_modality: present_mask}
@@ -337,10 +337,10 @@ def make_collate_fn_with_lmdb(
 
 
 class _ChempropSmilesDataset:
-    """chemprop dataset + SMILES 동시 인덱싱 (synthetic modality 경로용).
+    """Indexes chemprop dataset + SMILES simultaneously (for synthetic modality path).
 
-    items: ``(chemprop_item, smiles)``. collate 가 SMILES 로부터 PyG Batch 등
-    synthetic modality payload 를 즉석 생성한다.
+    items: ``(chemprop_item, smiles)``. collate generates PyG Batch etc.
+    synthetic modality payload on the fly from SMILES.
     """
 
     def __init__(self, chemprop_dset, smiles_list: Sequence[str]) -> None:
@@ -355,7 +355,7 @@ class _ChempropSmilesDataset:
 
 
 class _PairedChempropLmdbSmilesDataset(_PairedChempropLmdbDataset):
-    """LMDB + SMILES 동시 인덱싱 (LMDB modality + synthetic modality 동시 사용)."""
+    """Indexes LMDB + SMILES simultaneously (for simultaneous use of LMDB modality + synthetic modality)."""
 
     def __getitem__(self, idx: int):
         cp_item, feat = super().__getitem__(idx)
@@ -368,24 +368,24 @@ def make_collate_fn_with_graphmvp(
     lmdb_modality: str | None,
     graphmvp_key: str = "graphmvp_data",
 ):
-    """graphmvp synthetic modality + (옵션) LMDB modality 동시 지원 collate.
+    """Collate that supports graphmvp synthetic modality + (optional) LMDB modality simultaneously.
 
-    SMILES → PyG Batch 변환을 collate 단계에서 수행 (precompute 불필요). LMDB 경로와
-    조합되면 unimol2 feat dict 까지 함께 합쳐 ``modalities`` dict 의 다른 키로 노출.
+    Performs SMILES → PyG Batch conversion at the collate stage (no precompute needed). When combined
+    with the LMDB path, also merges the unimol2 feat dict and exposes it under another key of the ``modalities`` dict.
 
     Args:
-        descriptor_slices / embedding_slices: ``make_collate_fn`` 과 동일.
-        lmdb_modality: LMDB modality 이름 (예: "unimol2_lmdb"). None 이면 LMDB 경로 우회.
-        graphmvp_key: synthetic modality 키 — backbone consumes 와 일치해야 함.
+        descriptor_slices / embedding_slices: same as ``make_collate_fn``.
+        lmdb_modality: LMDB modality name (e.g. "unimol2_lmdb"). If None, bypasses the LMDB path.
+        graphmvp_key: synthetic modality key — must match the backbone consumes.
 
-    Items 형태 (loader 가 dataset 을 어떻게 wrap 하느냐에 따라):
-        - LMDB 없음:    ``(chemprop_item, smiles)`` — ``_ChempropSmilesDataset``.
-        - LMDB 있음:    ``(chemprop_item, lmdb_feat_or_None, smiles)`` —
+    Items shape (depends on how loader wraps the dataset):
+        - No LMDB:    ``(chemprop_item, smiles)`` — ``_ChempropSmilesDataset``.
+        - With LMDB:    ``(chemprop_item, lmdb_feat_or_None, smiles)`` —
           ``_PairedChempropLmdbSmilesDataset``.
 
     Note:
-        graphmvp invalid SMILES 는 1-atom placeholder + presence False 로 처리되어
-        fusion 단계에서 alpha 차단. LMDB miss 는 placeholder feat + presence False.
+        graphmvp invalid SMILES is treated as a 1-atom placeholder + presence False, which
+        blocks alpha at the fusion stage. LMDB miss is placeholder feat + presence False.
     """
     import torch
 
@@ -405,7 +405,7 @@ def make_collate_fn_with_graphmvp(
             smis = [it[2] for it in items]
             lmdb_present_flags = [f is not None for f in feats]
             if not any(lmdb_present_flags):
-                # 모든 LMDB miss 인 batch → 학습 의미 없음. skip.
+                # batch where all are LMDB miss → no meaning for training. skip.
                 return None
             placeholder = next(f for f in feats if f is not None)
             feats_filled = [f if f is not None else placeholder for f in feats]
@@ -429,14 +429,14 @@ def make_collate_fn_with_graphmvp(
             from qadmet.modules.backbones._vendor import unimol_v2 as uv2
 
             unimol2_batch = uv2.collate_unimolv2(feats_filled)
-            modalities[lmdb_modality] = unimol2_batch  # dict — consumes 경로로만.
+            modalities[lmdb_modality] = unimol2_batch  # dict — only via consumes path.
             modality_present[lmdb_modality] = torch.tensor(
                 lmdb_present_flags, dtype=torch.bool
             )
 
         # ---- graphmvp synthetic modality ----
         graphmvp_batch, graphmvp_present = smiles_batch_to_pyg(smis)
-        modalities[graphmvp_key] = graphmvp_batch  # PyG Batch — consumes 경로로만.
+        modalities[graphmvp_key] = graphmvp_batch  # PyG Batch — only via consumes path.
         modality_present[graphmvp_key] = graphmvp_present
 
         return {
@@ -458,23 +458,23 @@ def make_collate_fn(
 ):
     """chemprop ``collate_batch`` → ``MultitaskLitModule`` batch dict.
 
-    descriptor 와 embedding modality 둘 다 chemprop ``X_d`` 단일 채널에 stack 된
-    상태로 들어오므로, 본 collate 가 두 그룹으로 split 한다.
+    Both descriptor and embedding modality arrive stacked into chemprop's single ``X_d`` channel,
+    so this collate splits them into two groups.
 
     Args:
-        descriptor_slices: ``{name: slice(start, end)}`` X_d 안에서 descriptor 의
-            범위. 비어있으면 ``batch["X_d"] = None`` 으로 DMPNN backbone 이
-            descriptor 없이 동작.
-        embedding_slices: ``{name: slice(start, end)}`` X_d 안에서 embedding 의
-            범위. ``batch["modalities"]`` dict 의 key 가 된다 (fusion 입력).
+        descriptor_slices: ``{name: slice(start, end)}`` range of descriptor within X_d.
+            If empty, ``batch["X_d"] = None`` so that the DMPNN backbone
+            operates without a descriptor.
+        embedding_slices: ``{name: slice(start, end)}`` range of embedding within X_d.
+            Becomes a key of the ``batch["modalities"]`` dict (fusion input).
 
     Returns:
-        ``collate_fn`` callable. PyTorch DataLoader 의 ``collate_fn`` 인자에 사용.
+        ``collate_fn`` callable. Used for the ``collate_fn`` argument of PyTorch DataLoader.
 
     Note:
-        descriptor 는 stack 시 embedding 보다 먼저 배치되므로 (loaders 에서 그 순서로
-        쌓음), 보통은 contiguous slice 다. 그러나 본 함수는 slice 가 contiguous 인지
-        가정하지 않고 명시적으로 ``torch.cat`` 한다 — 옛 비-순차 stacking 에도 안전.
+        Since descriptor is placed before embedding when stacked (stacked in that order in
+        loaders), it is usually a contiguous slice. However, this function does not assume the slice is contiguous
+        and explicitly does ``torch.cat`` — safe even for old non-sequential stacking.
     """
     import torch
 
@@ -492,7 +492,7 @@ def make_collate_fn(
                     desc_parts[0] if len(desc_parts) == 1 else torch.cat(desc_parts, dim=1)
                 )
             for name, sl in embedding_slices.items():
-                # slice 결과를 float tensor 로 보장 (token modality 도 float 으로 통과 — backbone adapter 가 .long() 등으로 캐스트).
+                # ensure slice result is a float tensor (token modality also passes through as float — backbone adapter casts via .long() etc.).
                 modalities[name] = x_d[:, sl].float()
         return {
             "bmg": tb.bmg,
@@ -500,37 +500,37 @@ def make_collate_fn(
             "X_d": x_d_for_backbone,
             "modalities": modalities,
             "targets": tb.Y,
-            "sample_weights": None,  # batch 단위 weight 는 LitModule.task_weights buffer 가 담당.
+            "sample_weights": None,  # per-batch weight is handled by the LitModule.task_weights buffer.
         }
 
     return _collate
 
 
-# ---------------------------------------------------------------------------- 통합 빌더
+# ---------------------------------------------------------------------------- Unified builder
 
 
 @dataclass
 class FoldLoaders:
-    """한 seed fold 에 대한 dataloader 묶음.
+    """Bundle of dataloaders for one seed fold.
 
     Attributes:
-        train_loader / val_loader: PyTorch DataLoader (collate 가 dict 반환).
-            ``val_loader`` 는 학습 중 EarlyStopping 모니터용 (outer-merged val).
+        train_loader / val_loader: PyTorch DataLoader (collate returns a dict).
+            ``val_loader`` is for EarlyStopping monitoring during training (outer-merged val).
         val_loaders: ``{task_name: (DataLoader, smiles_list, y_true)}``.
-            task 별 val 예측용 — OOF stacking (Step 4.2 InverseVariance) 의 입력.
-            ``test_loaders`` 와 동일 패턴: 한 task 의 finite val 행만 골라 single-task
-            loader 로 빌드 + 같은 modality scaler 적용.
+            for per-task val prediction — input to OOF stacking (Step 4.2 InverseVariance).
+            Same pattern as ``test_loaders``: selects only finite val rows of one task into single-task
+            loader and applies the same modality scaler.
         test_loaders: ``{task_name: (DataLoader, smiles_list, y_true)}``.
-            test 는 task 별로 별도 dataloader (옛 train_mtl_mpnn 패턴).
-        modality_dims: ``{name: D}`` 모든 modality (descriptors + embeddings) 의 차원.
-            runner 가 descriptors 합 (= DMPNN d_xd) 과 embeddings 합 (= fusion 입력)
-            을 분리 산출하는 데 사용한다.
-        modality_keys_order: descriptors 순서 + embeddings 순서.
-        descriptor_dim_total: descriptor 들 차원 합 (= DMPNN backbone 의 ``d_xd``).
-            descriptors 가 비어있으면 0.
-        scaler_state: train fit 된 ModalityScalerState (val/test loader 도 같은 상태로 transform).
-        output_scaler: regression normalize 용 sklearn StandardScaler (옛 train_dset.normalize_targets 결과). None 일 수 있음.
-        log_tasks: log1p 적용된 regression task 이름 set (예측 후 expm1 역변환에 필요).
+            test has a separate dataloader per task (old train_mtl_mpnn pattern).
+        modality_dims: ``{name: D}`` dimension of all modalities (descriptors + embeddings).
+            used by the runner to separately compute the sum of descriptors (= DMPNN d_xd) and the sum of embeddings (= fusion input)
+            .
+        modality_keys_order: descriptors order + embeddings order.
+        descriptor_dim_total: sum of descriptor dimensions (= DMPNN backbone's ``d_xd``).
+            0 if descriptors is empty.
+        scaler_state: ModalityScalerState fit on train (val/test loader also transform with the same state).
+        output_scaler: sklearn StandardScaler for regression normalization (result of the old train_dset.normalize_targets). Can be None.
+        log_tasks: set of regression task names with log1p applied (needed for expm1 inverse transform after prediction).
     """
 
     train_loader: Any
@@ -552,7 +552,7 @@ def _build_chemprop_dataset(
     *,
     n_workers: int,
 ):
-    """chemprop ``make_datapoints`` → ``make_dataset`` 호출 wrap."""
+    """Wraps chemprop ``make_datapoints`` → ``make_dataset`` calls."""
     from chemprop.cli.utils.parsing import make_datapoints, make_dataset
 
     dps, _ = make_datapoints(
@@ -578,7 +578,7 @@ def _build_torch_loader(
     pin_memory: bool,
     collate_fn,
 ):
-    """순수 PyTorch DataLoader — chemprop build_dataloader 우회 (collate_fn override 위해)."""
+    """Pure PyTorch DataLoader — bypasses chemprop build_dataloader (to override collate_fn)."""
     import torch
     from torch.utils.data import DataLoader
 
@@ -612,24 +612,24 @@ def prepare_fold_loaders(
     seed: int = 0,
     apply_log_transform: bool = True,
 ) -> FoldLoaders:
-    """한 fold 의 train/val/test DataLoader 일괄 생성.
+    """Builds train/val/test DataLoader for a single fold in one batch.
 
     Args:
-        fold: ``load_fold`` 결과.
-        feature_spec: ``FeatureSpec`` (descriptors + embeddings 순서).
-        task_names: target 컬럼 순서.
-        task_types: 길이 ``len(task_names)``, 각 task 의 ``"regression"`` / ``"classification"``.
-        parquet_root: precompute 산출물 파일들의 부모 디렉토리.
-            각 modality 는 ``{parquet_root}/{name}.parquet`` 가정.
-        parquet_paths: modality 별 명시 path map. 누락 키는 ``parquet_root/{name}.parquet``
-            컨벤션으로 fallback. 옛 데이터(``data/rdkit_2d.parquet`` 등 비-컨벤션 이름)를
-            바로 쓸 때 사용.
-        batch_size / num_workers / seed: chemprop dataloader 옵션.
-        apply_log_transform: regression task 중 ``LOG_TRANSFORM_TASKS`` 에 포함된 컬럼에
-            ``log1p`` 적용 (옛 코드 ``pipeline_mtl.py:468-473``).
+        fold: result of ``load_fold``.
+        feature_spec: ``FeatureSpec`` (descriptors + embeddings order).
+        task_names: target column order.
+        task_types: length ``len(task_names)``, each task's ``"regression"`` / ``"classification"``.
+        parquet_root: parent directory of precompute output files.
+            assumes each modality is at ``{parquet_root}/{name}.parquet``.
+        parquet_paths: explicit path map per modality. Missing keys fall back to ``parquet_root/{name}.parquet``
+            convention. Used when using legacy data (non-convention names such as ``data/rdkit_2d.parquet``)
+            directly.
+        batch_size / num_workers / seed: chemprop dataloader options.
+        apply_log_transform: applies ``log1p`` to columns included in ``LOG_TRANSFORM_TASKS`` among
+            regression tasks (legacy code ``pipeline_mtl.py:468-473``).
 
     Returns:
-        ``FoldLoaders`` — train/val/test loader + 메타.
+        ``FoldLoaders`` — train/val/test loader + metadata.
     """
     import torch
 
@@ -651,8 +651,8 @@ def prepare_fold_loaders(
     pp_map: dict[str, Path] = dict(parquet_paths or {})
     lmdb_map: dict[str, Path] = dict(lmdb_paths or {})
 
-    # LMDB modality 는 parquet block stack 에 들어가지 않음 — 별도 collate 로 inject.
-    # synthetic modality (graphmvp_data 등) 는 SMILES 로부터 collate 단계에서 즉석 생성.
+    # LMDB modality is not included in the parquet block stack — injected via separate collate.
+    # synthetic modality (e.g. graphmvp_data) is generated on-the-fly from SMILES during the collate step.
     parquet_modality_keys = [
         k for k in modality_keys_order
         if k not in lmdb_map and k not in SYNTHETIC_MODALITY_KEYS
@@ -663,18 +663,18 @@ def prepare_fold_loaders(
     ]
     if len(lmdb_modality_keys) > 1:
         raise NotImplementedError(
-            f"여러 LMDB modality 동시 사용 미지원 (현재 {lmdb_modality_keys}). "
-            f"한 번에 하나만 가능."
+            f"Using multiple LMDB modalities simultaneously is not supported (currently {lmdb_modality_keys}). "
+            f"Only one at a time is allowed."
         )
     if len(synthetic_modality_keys) > 1:
         raise NotImplementedError(
-            f"여러 synthetic modality 동시 사용 미지원 (현재 {synthetic_modality_keys})."
+            f"Using multiple synthetic modalities simultaneously is not supported (currently {synthetic_modality_keys})."
         )
 
     def _resolve(name: str) -> Path:
         return pp_map.get(name, parquet_root / f"{name}.parquet")
 
-    # ---- modality blocks (train/val/test 각각, 같은 scaler 적용) ----
+    # ---- modality blocks (train/val/test each, same scaler applied) ----
     train_blocks_dict: dict[str, ModalityBlock] = {}
     val_blocks_dict: dict[str, ModalityBlock] = {}
     train_smiles = train_df["Drug"].tolist()
@@ -684,18 +684,18 @@ def prepare_fold_loaders(
         parquet = _resolve(name)
         if not parquet.exists():
             raise FileNotFoundError(
-                f"modality {name!r} 의 사전 계산 parquet 누락: {parquet}. "
-                f"`qadmet precompute --recipe recipes/precompute/{name}.yaml` 으로 먼저 빌드."
+                f"Missing precomputed parquet for modality {name!r}: {parquet}. "
+                f"Build it first with `qadmet precompute --recipe recipes/precompute/{name}.yaml`."
             )
         train_blocks_dict[name] = build_modality_block(train_smiles, name, parquet)
         val_blocks_dict[name] = build_modality_block(val_smiles, name, parquet)
 
-    # LMDB modality 존재 여부 검증.
+    # Verify existence of LMDB modality.
     for name in lmdb_modality_keys:
         if not lmdb_map[name].exists():
             raise FileNotFoundError(
-                f"modality {name!r} 의 LMDB 누락: {lmdb_map[name]}.\n"
-                f"  옛 precompute LMDB (atomic feature dict) 가 필요합니다."
+                f"Missing LMDB for modality {name!r}: {lmdb_map[name]}.\n"
+                f"  Legacy precompute LMDB (atomic feature dict) is required."
             )
 
     scaler_state: ModalityScalerState | None = None
@@ -728,7 +728,7 @@ def prepare_fold_loaders(
     descriptor_slices = {k: slices[k] for k in descriptor_keys if k in slices}
     embedding_slices = {k: slices[k] for k in embedding_keys if k in slices}
     descriptor_dim_total = sum(modality_dims.get(k, 0) for k in descriptor_keys)
-    # LMDB modality 도 modality_dims 에 sentinel 등록 (lit_module 검증 통과용 — fusion 입력 미사용).
+    # LMDB modality is also registered as a sentinel in modality_dims (to pass lit_module validation — not used as fusion input).
     for name in lmdb_modality_keys:
         modality_dims.setdefault(name, 1)
     for name in synthetic_modality_keys:
@@ -742,7 +742,7 @@ def prepare_fold_loaders(
     train_dset = _build_chemprop_dataset(train_smiles, train_y, train_xd, n_workers=num_workers)
     val_dset = _build_chemprop_dataset(val_smiles, val_y, val_xd, n_workers=num_workers)
 
-    # ---- regression target normalize (옛 train_dset.normalize_targets) ----
+    # ---- regression target normalize (legacy train_dset.normalize_targets) ----
     output_scaler = None
     has_regression = any(t == "regression" for t in task_types)
     if has_regression:
@@ -762,7 +762,7 @@ def prepare_fold_loaders(
     lmdb_modality = lmdb_modality_keys[0] if lmdb_modality_keys else None
     synthetic_modality = synthetic_modality_keys[0] if synthetic_modality_keys else None
     if synthetic_modality is not None:
-        # graphmvp_data — collate 가 SMILES → PyG Batch. LMDB 와 조합 가능.
+        # graphmvp_data — collate converts SMILES → PyG Batch. Can be combined with LMDB.
         collate_fn = make_collate_fn_with_graphmvp(
             descriptor_slices, embedding_slices, lmdb_modality, synthetic_modality,
         )
@@ -800,14 +800,14 @@ def prepare_fold_loaders(
         smis: list[str],
         y_true_arr: np.ndarray,
     ):
-        """task 별 val/test 단일-task loader 빌더.
+        """Builder for per-task val/test single-task loader.
 
         Why:
-            chemprop dataloader 는 SMILES 를 보존하지 않는다. OOF stacking 에서
-            (seed, task, smiles) 키로 base 예측들을 결합하려면 입력 순서 = SMILES 리스트
-            를 직접 보존한 채 loader 를 만들어야 한다.
+            chemprop dataloader does not preserve SMILES. In OOF stacking,
+            to combine base predictions by (seed, task, smiles) key, the input order = SMILES list
+            must be preserved directly when building the loader.
 
-        같은 modality scaler / collate / chemprop 빌더를 재사용한다.
+        Reuses the same modality scaler / collate / chemprop builder.
         """
         dummy_y = np.full((len(smis), len(task_names)), np.nan, dtype=np.float32)
         per_blocks: list[ModalityBlock] = []
@@ -840,11 +840,11 @@ def prepare_fold_loaders(
         )
         return per_loader, smis, y_true_arr
 
-    # ---- val loaders (per-task) — OOF stacking 입력 ----
-    # fold.val_df 는 outer-merged DataFrame ([Drug, task1, task2, ...]).
-    # task 컬럼 dropna 하면 그 task 에 finite Y 가 있는 (Drug, Y) 행 묶음을 얻는다.
+    # ---- val loaders (per-task) — OOF stacking input ----
+    # fold.val_df is an outer-merged DataFrame ([Drug, task1, task2, ...]).
+    # dropna on the task column yields the set of (Drug, Y) rows with finite Y for that task.
     val_loaders: dict[str, tuple[Any, list[str], np.ndarray]] = {}
-    val_df_orig = fold.val_df  # log1p 적용 *전* — y_true 는 원본 스케일.
+    val_df_orig = fold.val_df  # *before* log1p is applied — y_true is in the original scale.
     for task_name in task_names:
         if task_name not in val_df_orig.columns:
             continue
@@ -881,20 +881,20 @@ def prepare_fold_loaders(
 
 @dataclass
 class StlLoaders:
-    """STL (단일 task) 학습용 dataloader 묶음.
+    """Bundle of dataloaders for STL (single task) training.
 
     Why:
-        ``FoldLoaders`` 는 22-task MTL 가정으로 ``test_loaders`` 가 dict 였으나
-        STL 은 task 1 개 학습 → val/test 단일 loader 로 충분하다. LoRA backbone
-        (MoLFormer/UniMol2) 은 chemprop 그래프가 필요 없어 별도 dataset/collate
-        를 사용한다.
+        ``FoldLoaders`` assumed 22-task MTL, so ``test_loaders`` was a dict,
+        but STL trains a single task → a single val/test loader suffices. LoRA backbone
+        (MoLFormer/UniMol2) does not need chemprop graphs, so a separate dataset/collate
+        is used.
 
     Attributes:
         train_loader / val_loader / test_loader: PyTorch DataLoader.
-        val_smiles / test_smiles: 입력 순서 SMILES 리스트 (val 은 OOF stacking 용).
-        val_y_true / test_y_true: log1p 적용 *전* 원본 y (예측 후 비교용).
-        output_scaler: regression Y normalize ``(StandardScaler, slice)`` 또는 None.
-        log_task: 본 task 가 ``log1p`` 변환 대상인지 (예측 후 expm1 역변환).
+        val_smiles / test_smiles: SMILES list in input order (val is for OOF stacking).
+        val_y_true / test_y_true: original y *before* log1p is applied (for comparison after prediction).
+        output_scaler: regression Y normalize ``(StandardScaler, slice)`` or None.
+        log_task: whether this task is subject to ``log1p`` transform (expm1 inverse transform after prediction).
     """
 
     train_loader: Any
@@ -909,22 +909,22 @@ class StlLoaders:
 
 
 def filter_fold_to_task(fold: TdcAdmetFold, task_name: str) -> TdcAdmetFold:
-    """MTL fold → STL fold (한 task 만 남김, NaN 행 제거).
+    """MTL fold → STL fold (keeps only one task, removes NaN rows).
 
     Why:
-        MTL fold 의 train/val 은 outer-merged DataFrame 으로 다른 task NaN 가 많다.
-        STL 은 본 task target 이 finite 인 행만 학습 대상이므로 ``dropna`` 한다.
+        train/val of MTL fold is an outer-merged DataFrame with many NaNs for other tasks.
+        STL trains only on rows where this task's target is finite, so ``dropna`` is applied.
 
     Args:
-        fold: ``load_fold`` 결과.
-        task_name: 추출할 task 컬럼 이름.
+        fold: result of ``load_fold``.
+        task_name: name of the task column to extract.
 
     Returns:
-        ``TdcAdmetFold`` — train/val 은 (Drug, task_name) 만, test_dfs 는 해당 task 만.
+        ``TdcAdmetFold`` — train/val have only (Drug, task_name), test_dfs only that task.
     """
     if task_name not in fold.train_df.columns:
         raise KeyError(
-            f"task {task_name!r} 가 fold.train_df 컬럼에 없음: "
+            f"task {task_name!r} not found in fold.train_df columns: "
             f"{list(fold.train_df.columns)}"
         )
     train_df = (
@@ -949,7 +949,7 @@ def filter_fold_to_task(fold: TdcAdmetFold, task_name: str) -> TdcAdmetFold:
 
 
 def _token_collate_fn():
-    """MoLFormer-LoRA STL 용 collate.
+    """Collate for MoLFormer-LoRA STL.
 
     TensorDataset (token_ids, attention_mask, y) → ``MultitaskLitModule`` batch dict.
     """
@@ -971,12 +971,12 @@ def _token_collate_fn():
 
 
 def _lookup_tokens(smiles: Sequence[str], parquet_path: Path) -> tuple[np.ndarray, np.ndarray]:
-    """molformer_tokens parquet 에서 (token_ids, attention_mask) 를 lookup.
+    """Lookup (token_ids, attention_mask) from molformer_tokens parquet.
 
     Returns:
         - token_ids (N, L) int64.
         - attention_mask (N, L) int64.
-    누락 SMILES 는 0 (pad) 으로 채움 — backbone 이 attention_mask=0 으로 무시.
+    Missing SMILES filled with 0 (pad) — backbone ignores via attention_mask=0.
     """
     from qadmet.features.builders.molformer_tokens import MolFormerTokensBuilder
 
@@ -984,7 +984,7 @@ def _lookup_tokens(smiles: Sequence[str], parquet_path: Path) -> tuple[np.ndarra
     cols = builder.columns  # tok_000..tok_{L-1}, msk_000..msk_{L-1}
     L = builder.max_length
     store = ParquetStore(parquet_path)
-    arr = store.lookup(list(smiles), cols)  # (N, 2L) — int 가 NaN-safe 로 float
+    arr = store.lookup(list(smiles), cols)  # (N, 2L) — int becomes float for NaN-safety
     arr = np.nan_to_num(arr, nan=0.0).astype(np.int64)
     token_ids = arr[:, :L]
     attention_mask = arr[:, L:]
@@ -1002,18 +1002,18 @@ def prepare_stl_molformer_loaders(
     seed: int = 0,
     apply_log_transform: bool = True,
 ) -> StlLoaders:
-    """MoLFormer-LoRA STL 학습용 loader 빌더.
+    """Loader builder for MoLFormer-LoRA STL training.
 
-    옛 ``run_stl_molformer_lora.py`` 의 token-only 학습 경로를 ``MultitaskLitModule``
-    인터페이스로 옮긴다.
+    Moves the token-only training path from the old ``run_stl_molformer_lora.py`` to the ``MultitaskLitModule``
+    interface.
 
     Args:
-        fold: MTL ``load_fold`` 결과 (전체 22 task 컬럼).
-        task_name / task_type: 학습 대상 task 와 type.
-        tokens_parquet: ``molformer_tokens`` builder 산출물 parquet 경로.
-        batch_size / num_workers / seed: DataLoader 옵션.
-        apply_log_transform: regression task 가 LOG_TRANSFORM_TASKS 에 속하면 log1p
-            적용 (학습/검증 입력만; ``y_true`` 는 원본 보존).
+        fold: MTL ``load_fold`` result (all 22 task columns).
+        task_name / task_type: target task and its type for training.
+        tokens_parquet: path to the parquet output of the ``molformer_tokens`` builder.
+        batch_size / num_workers / seed: DataLoader options.
+        apply_log_transform: if the regression task belongs to LOG_TRANSFORM_TASKS, apply log1p
+            (training/validation inputs only; ``y_true`` keeps the original values).
 
     Returns:
         ``StlLoaders``.
@@ -1031,7 +1031,7 @@ def prepare_stl_molformer_loaders(
     val_y = sub.val_df[task_name].to_numpy(dtype=np.float32)
     test_y_true = test_df["Y"].to_numpy(dtype=np.float32)
 
-    # --- log1p (옛 코드 동일) ---
+    # --- log1p (same as old code) ---
     log_task = apply_log_transform and task_type == "regression" and task_name in LOG_TRANSFORM_TASKS
     if log_task:
         train_y_in = np.log1p(train_y)
@@ -1105,10 +1105,10 @@ def prepare_stl_molformer_loaders(
 
 
 class _SmilesYDataset:
-    """``(smiles, y)`` 인덱싱 — graphmvp STL collate 의 입력.
+    """``(smiles, y)`` indexing — input for graphmvp STL collate.
 
-    feature 변환은 collate 단계 (``smiles_batch_to_pyg``) 에서 일괄 수행하므로
-    ``__getitem__`` 은 메타만 반환한다.
+    Since feature conversion is performed in batch at the collate stage (``smiles_batch_to_pyg``),
+    ``__getitem__`` returns only the metadata.
     """
 
     def __init__(self, smiles: Sequence[str], y: np.ndarray) -> None:
@@ -1123,13 +1123,13 @@ class _SmilesYDataset:
 
 
 def _graphmvp_stl_collate_fn():
-    """GraphMVP STL 용 collate.
+    """Collate for GraphMVP STL.
 
-    items: list of ``(smiles, y)``. SMILES 묶음을 ``smiles_batch_to_pyg`` 로
-    PyG Batch + presence mask 로 변환. invalid SMILES 는 1-atom placeholder +
-    presence False — graphmvp adapter 가 그대로 backbone 에 흘려보내고 head
-    학습 시 sample 단위 영향력을 낮추는 효과는 없지만 (STL 단일 modality 라
-    presence mask 활용 fusion 이 없음), backbone forward 자체는 안전.
+    items: list of ``(smiles, y)``. Converts the batch of SMILES via ``smiles_batch_to_pyg``
+    into a PyG Batch + presence mask. Invalid SMILES become a 1-atom placeholder +
+    presence False — the graphmvp adapter passes it straight through to the backbone, and the head
+    has no effect of reducing per-sample influence during training (since STL is a single modality,
+    there's no fusion using the presence mask), but the backbone forward pass itself is safe.
     """
     import torch
 
@@ -1159,17 +1159,17 @@ def prepare_stl_graphmvp_loaders(
     seed: int = 0,
     apply_log_transform: bool = True,
 ) -> StlLoaders:
-    """GraphMVP STL 학습용 loader 빌더.
+    """Loader builder for GraphMVP STL training.
 
-    synthetic modality — 사전 계산물(parquet/LMDB) 불필요. collate 가 SMILES 를
-    PyG Batch (OGB 9-d atom / 3-d bond feat) 로 즉석 변환.
+    synthetic modality — no precomputed artifacts (parquet/LMDB) needed. The collate converts SMILES
+    into a PyG Batch (OGB 9-d atom / 3-d bond feat) on the fly.
 
     Args:
-        fold: MTL ``load_fold`` 결과.
-        task_name / task_type: 학습 대상 task.
-        batch_size / num_workers / seed: DataLoader 옵션.
-        apply_log_transform: regression + LOG_TRANSFORM_TASKS 일 때 log1p
-            (학습/검증 입력만; ``y_true`` 는 원본 보존).
+        fold: MTL ``load_fold`` result.
+        task_name / task_type: target task for training.
+        batch_size / num_workers / seed: DataLoader options.
+        apply_log_transform: apply log1p when regression + LOG_TRANSFORM_TASKS
+            (training/validation inputs only; ``y_true`` keeps the original values).
 
     Returns:
         ``StlLoaders``.
@@ -1255,10 +1255,10 @@ def prepare_stl_graphmvp_loaders(
 
 
 def _unimol2_collate_fn():
-    """UniMol2-LoRA STL 용 collate.
+    """Collate for UniMol2-LoRA STL.
 
-    items: list of feat dict (vendored ``mol2unimolv2`` 결과 + ``__y__``).
-    None (featurize 실패) 항목은 제거. 빈 batch 는 ``None`` 반환 (Lightning skip).
+    items: list of feat dict (vendored ``mol2unimolv2`` result + ``__y__``).
+    Removes None entries (featurize failures). Returns ``None`` for an empty batch (Lightning skip).
     """
     import torch
 
@@ -1282,10 +1282,10 @@ def _unimol2_collate_fn():
 
 
 class _UniMol2LmdbDataset:
-    """LMDB 기반 Uni-Mol2 feature dict dataset.
+    """LMDB-based Uni-Mol2 feature dict dataset.
 
-    옛 ``run_stl_unimol2_lora.UniMol2Dataset`` 와 동등 — 워커 별 lazy LMDB open.
-    필요한 키만 lookup 하고 ``__y__`` / ``__smi__`` 메타를 함께 반환한다.
+    Equivalent to the old ``run_stl_unimol2_lora.UniMol2Dataset`` — lazy LMDB open per worker.
+    Looks up only the needed keys and returns them together with ``__y__`` / ``__smi__`` metadata.
     """
 
     def __init__(self, smiles_list: Sequence[str], y: np.ndarray, lmdb_path: Path) -> None:
@@ -1333,18 +1333,18 @@ def prepare_stl_unimol2_loaders(
     seed: int = 0,
     apply_log_transform: bool = True,
 ) -> StlLoaders:
-    """UniMol2-LoRA STL 학습용 loader 빌더.
+    """Loader builder for UniMol2-LoRA STL training.
 
-    옛 ``run_stl_unimol2_lora.py`` 의 LMDB 기반 학습 경로를 그대로 옮긴다.
-    LMDB 는 옛 precompute 산출물 (``data/embeddings/unimol2_features.lmdb``) 를 그대로
-    재사용한다 — vendored ``mol2unimolv2`` 결과 dict 를 pickle 로 저장한 것.
+    Carries over the LMDB-based training path from the old ``run_stl_unimol2_lora.py`` as-is.
+    The LMDB reuses the old precompute output (``data/embeddings/unimol2_features.lmdb``) as-is
+    — it is the vendored ``mol2unimolv2`` result dict saved via pickle.
 
     Args:
-        fold: MTL load_fold 결과.
-        task_name / task_type: 학습 대상 task.
-        lmdb_path: LMDB 파일 경로.
+        fold: MTL load_fold result.
+        task_name / task_type: target task for training.
+        lmdb_path: path to the LMDB file.
         batch_size / num_workers / seed.
-        apply_log_transform: regression + LOG_TRANSFORM_TASKS 일 때 log1p.
+        apply_log_transform: apply log1p when regression + LOG_TRANSFORM_TASKS.
 
     Returns:
         ``StlLoaders``.

@@ -1,30 +1,30 @@
 """Group-Routed Modality Fusion (GR-MF) — per-group static gate over modality projections.
 
 Why:
-    robust_attention 의 per-sample 동적 gate 는 학습 초기 norm/init 에 따라 modality
-    collapse 가 일어남 (weak modality 가 살고 strong 이 죽음). GR-MF 는 gate 를
-    *per-group 정적 weight* 로 두어 RGR (rich-get-richer) 다이내믹을 구조적으로
-    제거하고, stacking 의 per-task modality routing 인사이트를 fusion 단에 직접
-    옮긴다.
+    robust_attention's per-sample dynamic gate depends on norm/init at early training, so modality
+    collapse occurs (weak modality survives, strong one dies). GR-MF fixes the gate
+    as a *per-group static weight*, structurally removing the RGR (rich-get-richer) dynamic
+    and carries stacking's per-task modality routing insight directly into the fusion stage
+    .
 
-설계:
+Design:
     1. per-modality LayerNorm + Linear (d_m → output_dim) → z'_m  (B, D)
     2. [optional] cross-modal enrichment: stack → (B, K, D)
        → TransformerEncoderLayer × cross_modal_layers (modality-as-token self-attn)
-       → z''_m. presence_mask 가 있으면 key_padding_mask 로 missing modality 차단.
-    3. per-group static gate W ∈ R^{n_groups × K} (learnable, gate_init_std 가우시안).
-       presence 가 있으면 missing modality logit 을 -inf 로 masked_fill 후 softmax.
+       → z''_m. If presence_mask exists, block missing modality via key_padding_mask.
+    3. per-group static gate W ∈ R^{n_groups × K} (learnable, gate_init_std Gaussian).
+       If presence exists, masked_fill missing modality logit with -inf then softmax.
        α ∈ (B, n_groups, K).
     4. weighted sum: z_g[b] = Σ_m α[b,g,m] · z''[b,m,:]  ∈ R^D.
-    5. shared output_proj (Linear D→D, identity-init) — GradNorm shared_layer 후보.
+    5. shared output_proj (Linear D→D, identity-init) — GradNorm shared_layer candidate.
 
 Returns:
-    z: (B, n_groups, output_dim).  ← GroupedRoutedHead 에서 group 별 slice 해서 사용.
-    alpha: (B, K)  ← group 평균 (lit_module 의 logging 호환). 진단은 ``last_group_alpha``.
+    z: (B, n_groups, output_dim).  ← Used by GroupedRoutedHead, sliced per group.
+    alpha: (B, K)  ← group average (for lit_module logging compatibility). Diagnostics via ``last_group_alpha``.
 
 Note:
-    fusion.output_dim 은 *group 단위* dim (D) 을 의미. head 는 (B, n_groups, D) 를
-    그대로 받아 group_idx 로 slice.
+    fusion.output_dim means the *per-group* dim (D). head takes (B, n_groups, D) and
+    slices it directly by group_idx.
 """
 
 from __future__ import annotations
@@ -40,21 +40,21 @@ class GroupRoutedFusion(nn.Module):
     """Per-group static-gate fusion over K modality projections.
 
     Args:
-        input_dims: 길이 K. 각 modality 의 입력 차원.
-        groups: causal grouping 의 group name 순서. fusion 출력의 group axis 가 이 순서.
-            반드시 head 와 동일한 순서를 공유해야 한다 (lit_module 이 주입).
-        output_dim: per-group fused vector 의 차원 D (head 의 input_dim).
-        cross_modal_layers: modality-as-token transformer layer 수.
-            0 이면 enrichment 없이 순수 projection + gate.
-        cross_modal_heads: TransformerEncoderLayer 의 nhead. output_dim % heads == 0 필요.
+        input_dims: length K. Input dimension of each modality.
+        groups: group name order from causal grouping. The fusion output's group axis follows this order.
+            Must share the exact same order as head (injected by lit_module).
+        output_dim: dimension D of the per-group fused vector (head's input_dim).
+        cross_modal_layers: number of modality-as-token transformer layers.
+            If 0, pure projection + gate with no enrichment.
+        cross_modal_heads: nhead of TransformerEncoderLayer. Requires output_dim % heads == 0.
         cross_modal_ffn_mult: FFN hidden = output_dim * mult.
         cross_modal_dropout: TransformerEncoderLayer dropout.
-        gate_temperature: softmax(W / τ) 의 τ.
-        gate_init_std: group_gate (n_groups, K) 의 N(0, std) 초기화. 작게 두면 초기
-            α≈1/K 균등. STL OOF affinity prior 가 있으면 ``init_gate_prior`` 로 덮어쓴다.
-        pre_norm: per-modality LayerNorm 적용 여부.
-        use_output_proj: 마지막에 Linear(D, D, identity-init) 1 단 추가. GradNorm
-            shared_layer 후보 (모든 task 의 forward 가 통과, 항상 trainable).
+        gate_temperature: τ in softmax(W / τ).
+        gate_init_std: N(0, std) initialization of group_gate (n_groups, K). Keeping it small yields initial
+            α≈1/K uniform. If an STL OOF affinity prior exists, overwritten via ``init_gate_prior``.
+        pre_norm: whether to apply per-modality LayerNorm.
+        use_output_proj: adds one Linear(D, D, identity-init) stage at the end. GradNorm
+            shared_layer candidate (all tasks' forward pass through it, always trainable).
     """
 
     def __init__(
@@ -75,16 +75,16 @@ class GroupRoutedFusion(nn.Module):
         self.K = len(input_dims)
         if self.K < 2:
             raise ValueError(
-                f"GroupRoutedFusion 은 K>=2 modality 필요, K={self.K}"
+                f"GroupRoutedFusion requires K>=2 modality, K={self.K}"
             )
         self.groups = list(groups)
         self.n_groups = len(self.groups)
         if self.n_groups < 1:
-            raise ValueError("GroupRoutedFusion 은 최소 1 group 필요")
+            raise ValueError("GroupRoutedFusion requires at least 1 group")
         if output_dim % cross_modal_heads != 0 and cross_modal_layers > 0:
             raise ValueError(
-                f"output_dim({output_dim}) 가 cross_modal_heads({cross_modal_heads}) "
-                "로 나눠떨어지지 않음."
+                f"output_dim({output_dim}) and cross_modal_heads({cross_modal_heads}) "
+                "are not evenly divisible."
             )
         self.output_dim = output_dim
         self.gate_temperature = gate_temperature
@@ -118,7 +118,7 @@ class GroupRoutedFusion(nn.Module):
         else:
             self.cross_modal = None
 
-        # per-group static gate: 작은 가우시안 → 초기 α≈1/K. 학습으로 group 별 modality 선호 발견.
+        # per-group static gate: small Gaussian → initial α≈1/K. Learns per-group modality preference through training.
         self.group_gate = nn.Parameter(
             torch.randn(self.n_groups, self.K) * gate_init_std
         )
@@ -132,15 +132,15 @@ class GroupRoutedFusion(nn.Module):
             self.output_proj = None
 
     def set_presence_mask(self, mask: Tensor) -> None:
-        """다음 forward 1회에 한해 modality presence (B, K) bool 적용."""
+        """Apply modality presence (B, K) bool for the next forward call only."""
         self._presence_mask = mask
 
     def init_gate_prior(self, prior: Tensor) -> None:
-        """STL OOF affinity 등의 prior 로 group_gate 를 덮어쓴다.
+        """Overwrites group_gate with a prior such as STL OOF affinity.
 
         Args:
-            prior: (n_groups, K) softmax 이전 logit. 보통 log(affinity) 또는
-                z-scored corr block-mean 등.
+            prior: (n_groups, K) logit before softmax. Usually log(affinity) or
+                z-scored corr block-mean, etc.
         """
         if prior.shape != self.group_gate.shape:
             raise ValueError(
@@ -152,13 +152,13 @@ class GroupRoutedFusion(nn.Module):
 
     @property
     def last_group_alpha(self) -> Tensor | None:
-        """직전 forward 의 (B, n_groups, K) gate 분포. 진단/로깅용."""
+        """Gate distribution (B, n_groups, K) from the previous forward. For diagnostics/logging."""
         return self._last_group_alpha
 
     def forward(self, embeddings: list[Tensor]) -> tuple[Tensor, Tensor]:
         if len(embeddings) != self.K:
             raise ValueError(
-                f"K={self.K} 개 embedding 필요, 받은 수: {len(embeddings)}"
+                f"K={self.K} embeddings required, received: {len(embeddings)}"
             )
 
         if self.input_norms is not None:
@@ -171,7 +171,7 @@ class GroupRoutedFusion(nn.Module):
         presence = self._presence_mask
         if presence is not None:
             presence = presence.to(device=z.device, dtype=torch.bool)
-            # 전부 missing 인 row → 모두 present 로 fallback (NaN 방지).
+            # Row where all are missing → fallback to all present (prevents NaN).
             any_present = presence.any(dim=-1, keepdim=True)
             presence = presence | ~any_present
             self._presence_mask = None
@@ -180,7 +180,7 @@ class GroupRoutedFusion(nn.Module):
             kpm = ~presence if presence is not None else None
             z = self.cross_modal(z, src_key_padding_mask=kpm)
 
-        # per-group gate logits, presence 가 있으면 missing modality 차단.
+        # per-group gate logits, block missing modality if presence exists.
         logits = self.group_gate.unsqueeze(0).expand(B, -1, -1)  # (B, n_groups, K)
         if presence is not None:
             mask_broadcast = presence.unsqueeze(1).expand(B, self.n_groups, K)
@@ -193,10 +193,10 @@ class GroupRoutedFusion(nn.Module):
         if self.output_proj is not None:
             z_group = self.output_proj(z_group)
 
-        # Train 시에는 live tensor 그대로 (KL-to-uniform reg 가 backward 해야 함).
-        # Eval/predict 는 graph 가 없으므로 같은 tensor 가 자연스럽게 no-grad.
+        # During train, keep the live tensor as-is (KL-to-uniform reg must backward through it).
+        # Eval/predict has no graph, so the same tensor is naturally no-grad.
         self._last_group_alpha = alpha
 
-        # lit_module 의 alpha logging 호환: (B, K) — n_groups 평균.
+        # Compatible with lit_module's alpha logging: (B, K) — n_groups average.
         alpha_compat = alpha.mean(dim=1)
         return z_group, alpha_compat

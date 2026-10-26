@@ -1,35 +1,35 @@
 """Mixed-task GradNorm loss (Chen et al. 2018, ICML).
 
-수식:
+Formulas:
 
-    L_main(t) = Σ_k w_k(t) · L̄_k(t)                             # main backward (W 만 업데이트)
-    G_W^(k)(t) = w_k(t) · ||∇_W L̄_k(t)||_2                       # shared layer 그라디언트 norm
-    L̃_k(t) = L̄_k(t) / L̄_k(0)                                    # 상대 학습 진척
+    L_main(t) = Σ_k w_k(t) · L̄_k(t)                             # main backward (update W only)
+    G_W^(k)(t) = w_k(t) · ||∇_W L̄_k(t)||_2                       # shared layer gradient norm
+    L̃_k(t) = L̄_k(t) / L̄_k(0)                                    # relative training progress
     r_k(t) = L̃_k / mean_k L̃                                     # inverse training rate
     target_k(t) = mean_k G_W · r_k^α                             # constant (no grad)
-    L_grad(t) = Σ_k |G_W^(k) - target_k|                         # aux backward (w 만 업데이트)
+    L_grad(t) = Σ_k |G_W^(k) - target_k|                         # aux backward (update w only)
 
-각 step 마다:
-    1) preds, L̄_k 계산 (graph 보존)
-    2) ||∇_W L̄_k||_2 를 ``autograd.grad(..., create_graph=False)`` 로 산출 → 스칼라 상수.
-    3) G_W^(k) = w_k · ||∇_W L̄_k||_2 (w 에 대해서만 미분가능, W 그라디언트 흐름 차단).
-    4) L_grad backward → w.grad 누적.
-    5) L_main = (w.detach() · L̄_k).sum() backward → W, head, backbone .grad 누적.
-       (w 는 detach 로 main backward 에서 제외, 오직 L_grad 만 w 를 학습.)
+At each step:
+    1) Compute preds, L̄_k (preserve graph)
+    2) Compute ||∇_W L̄_k||_2 via ``autograd.grad(..., create_graph=False)`` → scalar constant.
+    3) G_W^(k) = w_k · ||∇_W L̄_k||_2 (differentiable only with respect to w, blocks W gradient flow).
+    4) L_grad backward → accumulate w.grad.
+    5) L_main = (w.detach() · L̄_k).sum() backward → accumulate W, head, backbone .grad.
+       (w is excluded from main backward via detach, only L_grad trains w.)
     6) opt_main.step(), opt_w.step().
-    7) w 를 양수+합=K 로 renormalize.
+    7) Renormalize w to positive + sum=K.
 
-본 클래스는 **per-task loss 만 계산**한다. shared-layer 그라디언트와 w 업데이트는
-``MultitaskLitModule._gradnorm_training_step`` 가 manual optimization 으로 처리한다.
+This class **computes only the per-task loss**. The shared-layer gradient and w update are
+handled by ``MultitaskLitModule._gradnorm_training_step`` via manual optimization.
 
-``task_weighting`` (inverse-freq prior) 는 GradNorm 의 동적 w 와 곱하면 해석이 모호해지므로
-``MixedTaskGradNormLoss`` 는 task_weights 인자를 받지만 검증만 하고 buffer 에 1 로
-강제한다 (runner 도 task_weighting=null 강제). w 초기값은 모두 1 (GradNorm 표준).
+Since multiplying ``task_weighting`` (inverse-freq prior) by GradNorm's dynamic w makes the interpretation ambiguous,
+``MixedTaskGradNormLoss`` accepts a task_weights argument but only validates it, forcing the buffer to 1
+(the runner also enforces task_weighting=null). The initial value of w is all 1 (GradNorm standard).
 
 Note:
-    - log_var 없음 (Kendall σ 대체가 목적).
-    - per-task NaN mask 처리는 ``mixed_task_uncertainty`` 와 동일.
-    - dead task (모든 row NaN) 의 G 는 자동으로 0 → target 도 r=0 으로 작아져 self-consistent.
+    - No log_var (intended to replace Kendall σ).
+    - per-task NaN mask handling is identical to ``mixed_task_uncertainty``.
+    - For a dead task (all rows NaN), G automatically becomes 0 → target also shrinks to r=0, making it self-consistent.
 """
 
 from __future__ import annotations
@@ -46,25 +46,25 @@ class MixedTaskGradNormLoss(nn.Module):
     """GradNorm dynamic task weighting loss (mixed reg + clf).
 
     Args:
-        n_tasks: task 수.
-        task_types: ``"regression"`` | ``"classification"`` 라벨 (길이 n_tasks).
-        task_weights: GradNorm 은 inverse-freq prior 와 호환 안 됨. None 또는 all-ones
-            이외 입력 시 ``ValueError``. runner 에서 ``task_weighting=null`` 강제.
-        classification: PER_TASK_LOSSES clf 키.
-        regression: PER_TASK_LOSSES reg 키.
-        alpha: GradNorm restoring force (Chen et al. 2018). ADMET asymmetric 권장값 1.5.
-        shared_layer: GradNorm 그라디언트 norm 을 측정할 LitModule attribute path
-            (예: ``"backbone.proj.0"``). None 이면 LitModule 이 backbone 의 마지막
-            ``nn.Linear`` 를 auto-detect.
+        n_tasks: number of tasks.
+        task_types: ``"regression"`` | ``"classification"`` labels (length n_tasks).
+        task_weights: GradNorm is not compatible with inverse-freq prior. None or all-ones
+            raises ``ValueError`` for any other input. The runner enforces ``task_weighting=null``.
+        classification: PER_TASK_LOSSES clf key.
+        regression: PER_TASK_LOSSES reg key.
+        alpha: GradNorm restoring force (Chen et al. 2018). Recommended value 1.5 for ADMET asymmetric.
+        shared_layer: LitModule attribute path for measuring the GradNorm gradient norm
+            (e.g. ``"backbone.proj.0"``). If None, the LitModule auto-detects the last
+            ``nn.Linear`` of the backbone.
 
     Forward:
         preds (B, n_tasks), targets (B, n_tasks), sample_weights (B,) | None.
-        Returns: 가중합 ``(w · L̄_k).sum()`` (scalar). 학습 시엔 LitModule 이 이 값을
-        무시하고 ``per_task_losses`` + 수동 backward 를 사용한다.
+        Returns: the weighted sum ``(w · L̄_k).sum()`` (scalar). During training, the LitModule
+        ignores this value and uses ``per_task_losses`` + manual backward.
 
     Sidecars:
-        ``_last_task_loss``: (n_tasks,) detached. 에폭별 평균 누적용 (기존 LitModule
-            로깅 경로와 호환).
+        ``_last_task_loss``: (n_tasks,) detached. For per-epoch average accumulation (compatible with existing LitModule
+            logging path).
     """
 
     def __init__(
@@ -88,9 +88,9 @@ class MixedTaskGradNormLoss(nn.Module):
             )
             if not torch.allclose(tw, torch.ones_like(tw)):
                 raise ValueError(
-                    "mixed_task_gradnorm: task_weights 가 uniform 이 아님. "
-                    "GradNorm 은 동적으로 task weight 를 학습하므로 inverse-freq prior 와 "
-                    "함께 쓰면 해석이 모호함. recipe 에서 task_weighting=null 로 설정하세요."
+                    "mixed_task_gradnorm: task_weights is not uniform. "
+                    "Since GradNorm dynamically learns task weight, combining with inverse-freq prior "
+                    "makes interpretation ambiguous. Set task_weighting=null in the recipe."
                 )
         self.n_tasks = n_tasks
         self.task_types = list(task_types)
@@ -99,7 +99,7 @@ class MixedTaskGradNormLoss(nn.Module):
         self.alpha = float(alpha)
         self.shared_layer_name: str | None = shared_layer
 
-        # GradNorm 동적 weight (Chen et al. 2018). 초기값 1, 학습 후 renormalize → sum=K.
+        # GradNorm dynamic weight (Chen et al. 2018). Initial value 1, renormalize after training → sum=K.
         self.w = nn.Parameter(torch.ones(n_tasks))
 
     # ---- public API for LitModule ----
@@ -113,9 +113,9 @@ class MixedTaskGradNormLoss(nn.Module):
         """(n_tasks,) per-task **mean** loss with graph (no w weighting applied).
 
         Why:
-            GradNorm 알고리즘은 raw L̄_k 와 G_W^(k) 를 별도 흐름으로 사용한다.
-            ``forward`` 가 weighted sum 만 반환하면 LitModule 이 L̄_k 를 다시 계산해야
-            하므로, 한 forward path 로 둘 다 노출.
+            The GradNorm algorithm uses raw L̄_k and G_W^(k) as separate flows.
+            If ``forward`` returns only the weighted sum, the LitModule would need to recompute L̄_k
+            so both are exposed via a single forward path.
         """
         if preds.shape != targets.shape:
             raise ValueError(f"preds/targets shape mismatch: {preds.shape} vs {targets.shape}")
@@ -142,11 +142,11 @@ class MixedTaskGradNormLoss(nn.Module):
         targets: Tensor,
         sample_weights: Tensor | None = None,
     ) -> Tensor:
-        """Validation / fallback 경로용. LitModule training_step 은 본 함수 미사용.
+        """For the validation / fallback path. LitModule training_step does not use this function.
 
-        ``(w · L̄_k).sum()`` 을 반환. w 가 detach 안 된 상태이므로 일반적 backward 호출
-        시 w 도 ∂L/∂w_k = L̄_k 로 잘못 업데이트될 수 있다 — LitModule manual path 에서는
-        ``per_task_losses`` 를 직접 호출.
+        Returns ``(w · L̄_k).sum()``. Since w is not detached, a normal backward call
+        could incorrectly update w as well via ∂L/∂w_k = L̄_k — in the LitModule manual path,
+        call ``per_task_losses`` directly.
         """
         task_loss = self.per_task_losses(preds, targets, sample_weights)
         return (self.w * task_loss).sum()

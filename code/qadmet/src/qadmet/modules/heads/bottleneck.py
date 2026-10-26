@@ -1,4 +1,4 @@
-"""BottleneckHead: Z (B, input_dim) → (B, n_tasks). grouped.py trunk 재사용."""
+"""BottleneckHead: Z (B, input_dim) → (B, n_tasks). reuses trunk from grouped.py."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from .registry import HEADS
 
 @HEADS.register("bottleneck")
 class BottleneckHead(nn.Module):
-    """단일 입력 → bottleneck MLP → n_tasks projection.
+    """Single input → bottleneck MLP → n_tasks projection.
 
     Args:
-        input_dim: Z 차원.
-        n_tasks: 출력 차원.
-        trunk_hidden: 첫 번째 hidden size. 두 번째는 //2.
-        dropout: 첫 ReLU 뒤 dropout 확률.
+        input_dim: Z dimension.
+        n_tasks: output dimension.
+        trunk_hidden: first hidden size. Second is //2.
+        dropout: dropout probability after first ReLU.
     """
 
     def __init__(

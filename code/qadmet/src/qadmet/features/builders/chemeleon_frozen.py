@@ -1,19 +1,19 @@
 """CheMeleon frozen pooled embedding builder (2048-dim, pre-projection).
 
-frozen-backbone ablation 용 — LoRA/adapter 를 전혀 학습하지 않고 fusion+head 만
-학습할 때 매 epoch GNN 재계산을 피하기 위해 frozen pooled embedding 을 미리 parquet 로
-저장한다.
+frozen-backbone ablation — LoRA/adapter is never trained, only fusion+head
+To avoid recomputing the GNN every epoch during training, frozen pooled embeddings are precomputed into parquet
+and saved.
 
-frozen pooled embedding 정의:
+frozen pooled embedding definition:
     ``bn(agg(message_passing(bmg), bmg.batch))`` — frozen MP → frozen MeanAggregation →
-    frozen BN. adapter / proj 는 거치지 않는다 (사전학습 GNN 만).
+    frozen BN. Does not pass through adapter / proj (pretrained GNN only).
 
 Note:
-    - chemprop BatchMolGraph 생성은 학습 경로(loaders.py ``_build_chemprop_dataset``)와
-      동일하게 ``make_datapoints`` → ``make_dataset`` → ``collate_batch`` 로 만든다.
-    - 사전학습 GNN 은 항상 frozen — adapter_kind/n_adapter_layers 는 (생성은 되지만)
-      직접 submodule 을 호출하므로 사용되지 않는다.
-    - 무거운 의존성(chemprop)은 method 안에서만 import.
+    - chemprop BatchMolGraph generation follows the training path (loaders.py ``_build_chemprop_dataset``) and
+      is built identically via ``make_datapoints`` → ``make_dataset`` → ``collate_batch``.
+    - The pretrained GNN is always frozen — adapter_kind/n_adapter_layers is (created but)
+      not used, since submodules are called directly.
+    - Heavy dependencies (chemprop) are imported only inside the method.
 """
 
 from __future__ import annotations
@@ -63,8 +63,8 @@ class CheMeleonFrozenBuilder(PrecomputeBase):
         from qadmet.modules.backbones.chemeleon import CheMeleonBackbone
 
         logger.info("building CheMeleon frozen backbone from %s", self.checkpoint_path)
-        # adapter_kind="lora_gin" + n_adapter_layers=1 은 최소 비용 — adapter 는 생성되지만
-        # frozen submodule(message_passing/agg/bn)만 직접 호출하므로 사용되지 않는다.
+        # adapter_kind="lora_gin" + n_adapter_layers=1 is minimal cost — adapter is created but
+        # not used, since only the frozen submodule(message_passing/agg/bn) is called directly.
         backbone = CheMeleonBackbone(
             checkpoint_path=self.checkpoint_path,
             adapter_kind="lora_gin",
@@ -86,7 +86,7 @@ class CheMeleonFrozenBuilder(PrecomputeBase):
 
         for start in range(0, len(smiles), self.gpu_batch_size):
             chunk = smiles[start : start + self.gpu_batch_size]
-            # 학습 경로와 동일한 chemprop dataset 구성 (dummy targets, no descriptors).
+            # chemprop dataset construction identical to the training path (dummy targets, no descriptors).
             dset = _build_chemprop_dataset(
                 chunk,
                 np.zeros((len(chunk), 1), dtype=np.float32),
@@ -96,7 +96,7 @@ class CheMeleonFrozenBuilder(PrecomputeBase):
             items = [dset[i] for i in range(len(dset))]
             tb = collate_batch(items)
             bmg = tb.bmg
-            bmg.to(self.device)  # in-place — None 반환.
+            bmg.to(self.device)  # in-place — returns None.
             with torch.no_grad():
                 # frozen message_passing → frozen agg → frozen bn (NO adapter, NO proj).
                 pooled = mpnn.bn(mpnn.agg(mpnn.message_passing(bmg), bmg.batch))

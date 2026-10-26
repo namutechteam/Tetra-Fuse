@@ -1,11 +1,11 @@
-"""ensembles 도메인의 Registry 인스턴스.
+"""Registry instances for the ensembles domain.
 
-세 종류:
-    - ``STRATEGIES``: ``MetaLearner`` 서브클래스 등록 (옛 stacking v1~v6).
-    - ``META_MODELS``: scikit-learn 류 추정기 래퍼 (XGBoost / Ridge / LogReg).
-    - ``CALIBRATORS``: Platt / isotonic 보정기 (선택, v6 hybrid 등에서 사용).
+Three kinds:
+    - ``STRATEGIES``: registers ``MetaLearner`` subclasses (legacy stacking v1~v6).
+    - ``META_MODELS``: wrappers for scikit-learn-style estimators (XGBoost / Ridge / LogReg).
+    - ``CALIBRATORS``: Platt / isotonic calibrators (optional, used in v6 hybrid etc.).
 
-각 Registry 는 ``EnsembleSpec.strategy / meta_model / calibrator`` 문자열로 lookup.
+Each Registry is looked up by the ``EnsembleSpec.strategy / meta_model / calibrator`` string.
 """
 
 from __future__ import annotations

@@ -53,14 +53,14 @@ warnings.filterwarnings("ignore")
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--train-root", default="/nas/tk_ahn/ADMET-MTL/qadmet/artifacts/train")
+    ap.add_argument("--train-root", default="./artifacts/train")
     ap.add_argument("--predictions-root",
-                    default="/nas/tk_ahn/ADMET-MTL/paper_release/data/recompute_data/predictions")
+                    default="../data/recompute_data/predictions")
     ap.add_argument("--recipes-root",
-                    default="/nas/tk_ahn/ADMET-MTL/paper_release/code/qadmet/recipes")
-    ap.add_argument("--weights-root", default="/nas/tk_ahn/tetrafuse_weights",
+                    default="./qadmet/recipes")
+    ap.add_argument("--weights-root", default="./tetrafuse_weights",
                     help="export tree (only needs target_scalers.json at this stage)")
-    ap.add_argument("--out", default="/nas/tk_ahn/tetrafuse_weights")
+    ap.add_argument("--out", default="./tetrafuse_weights")
     ap.add_argument("--members", nargs="*", default=None)
     ap.add_argument("--inference-path", default="/tmp/inf",
                     help="directory holding the tfpkg inference package")

@@ -1,13 +1,13 @@
-"""TDC ADMET group 로더.
+"""TDC ADMET group loader.
 
-옛 ``merge_tdc_datasets`` (scripts-old/pipeline_mtl.py:371-400) 와 동일한 outer-merge
-로직을 제공하되, chemprop 객체화는 별도 단계로 분리한다 (학습 코드의 책임).
+Same outer-merge as the old ``merge_tdc_datasets`` (scripts-old/pipeline_mtl.py:371-400)
+logic, but separates chemprop objectification into a separate step (the responsibility of the training code).
 
-본 모듈의 출력:
+Output of this module:
     TdcAdmetFold(train_df, val_df, test_dfs, samples_per_task)
-    - train_df / val_df: SMILES outer-merged DataFrame, target 컬럼은 task 이름과 동일.
-    - test_dfs: {task_name: DataFrame} (각 task 별로 그대로 보존).
-    - samples_per_task: {task_name: int} 학습 셋 row 수 (inverse-frequency 가중치 산출용).
+    - train_df / val_df: SMILES outer-merged DataFrame, target column is the same as the task name.
+    - test_dfs: {task_name: DataFrame} (preserved as-is per task).
+    - samples_per_task: {task_name: int} number of training-set rows (for computing inverse-frequency weights).
 """
 
 from __future__ import annotations
@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class TdcAdmetFold:
-    """TDC scaffold split 한 fold 의 데이터 묶음."""
+    """Data bundle for one fold of a TDC scaffold split."""
 
     train_df: pd.DataFrame
     val_df: pd.DataFrame
@@ -36,22 +36,22 @@ class TdcAdmetFold:
 
 
 def _merge(dfs: list[pd.DataFrame]) -> pd.DataFrame:
-    """SMILES (Drug) outer merge — 한 task 만 있으면 그대로 반환."""
+    """SMILES (Drug) outer merge — returns as-is if only one task is present."""
     if len(dfs) == 1:
         return dfs[0]
     return reduce(lambda l, r: pd.merge(l, r, how="outer", on="Drug"), dfs)
 
 
 def load_fold(task_set_name: str, seed: int, *, group=None) -> TdcAdmetFold:
-    """TDC admet_group 한 seed fold 를 로드한다.
+    """Loads one seed fold of the TDC admet_group.
 
     Args:
-        task_set_name: ``TASK_SETS`` 에 등록된 이름 (예: "tdc_admet_22").
-        seed: TDC ``get_train_valid_split(seed=...)`` 에 그대로 전달.
-        group: 외부 주입용 (테스트 등). None 이면 ``tdc.benchmark_group.admet_group``
-               를 새로 생성.
+        task_set_name: name registered in ``TASK_SETS`` (e.g. "tdc_admet_22").
+        seed: passed through as-is to TDC ``get_train_valid_split(seed=...)``.
+        group: for external injection (e.g. testing). If None, ``tdc.benchmark_group.admet_group``
+               is newly created.
     """
-    # TDC22 + PXR3 = 25-task 통합 분기 (plan_details.md §2.4) — pxr_ 보다 먼저 매칭.
+    # TDC22 + PXR3 = 25-task unified branch (plan_details.md §2.4) — matched before pxr_.
     if task_set_name.startswith("tdc_pxr_25"):
         from qadmet.datasets.tdc_pxr import load_tdc_pxr_fold
         return load_tdc_pxr_fold(task_set_name, seed, group=group)
@@ -60,7 +60,7 @@ def load_fold(task_set_name: str, seed: int, *, group=None) -> TdcAdmetFold:
         from qadmet.datasets.polaris_fang import load_polaris_fang_fold
         return load_polaris_fang_fold(task_set_name, seed, group=group)
 
-    # PXR challenge 분기 — HuggingFace 로부터 직접 로드 (TDC 와 별개)
+    # PXR challenge branch — loaded directly from HuggingFace (separate from TDC)
     if task_set_name.startswith("pxr_"):
         from qadmet.datasets.pxr_activity import load_pxr_fold
         return load_pxr_fold(task_set_name, seed)
@@ -102,11 +102,11 @@ def load_fold(task_set_name: str, seed: int, *, group=None) -> TdcAdmetFold:
 
 
 def collect_smiles(task_set_name: str, *, seeds: Sequence[int] = (0,), group=None) -> list[str]:
-    """task_set 의 모든 fold 에서 등장하는 SMILES 합집합.
+    """Union of SMILES appearing across all folds of task_set.
 
     Why:
-        precompute 스크립트가 학습 전에 TDC SMILES 를 모두 모아 feature 를 만든다.
-        매번 fold 를 로드하지 않고 캐시 가능한 함수로 분리.
+        The precompute script gathers all TDC SMILES before training to build features.
+        Separated into a cacheable function instead of loading the fold each time.
     """
     ts = TASK_SETS.get(task_set_name)
     if group is None:
@@ -127,14 +127,14 @@ def collect_smiles(task_set_name: str, *, seeds: Sequence[int] = (0,), group=Non
     return sorted(smis)
 
 
-# ---------------------------------------------------------------------------- registry 등록
+# ---------------------------------------------------------------------------- registry registration
 
 @DATASETS.register("tdc_admet_22")
 class TdcAdmet22:
-    """DatasetSpec(name="tdc_admet_22") 매핑용 placeholder.
+    """Placeholder for DatasetSpec(name="tdc_admet_22") mapping.
 
-    실제 로딩은 ``load_fold`` 가 담당한다. 본 클래스는 registry lookup 시
-    DatasetSpec 의 의도(어느 task_set 을 사용할지)를 문서화하는 역할만.
+    Actual loading is handled by ``load_fold``. This class, during registry lookup,
+    only documents the intent of DatasetSpec (which task_set to use).
     """
 
     task_set = "tdc_admet_22"
@@ -145,7 +145,7 @@ class TdcAdmet22:
 
 @DATASETS.register("tdc_admet_5_sanity")
 class TdcAdmet5Sanity:
-    """4-modality overfit 진단용 5-task sanity (TaskSet ``tdc_admet_5_sanity``)."""
+    """5-task sanity for diagnosing 4-modality overfit (TaskSet ``tdc_admet_5_sanity``)."""
 
     task_set = "tdc_admet_5_sanity"
 

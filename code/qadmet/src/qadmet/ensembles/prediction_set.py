@@ -1,23 +1,23 @@
-"""``PredictionSet`` — 한 base 모델의 (seed, task, split) 별 예측 묶음.
+"""``PredictionSet`` — prediction bundle per (seed, task, split) for a single base model.
 
-``train`` runner 가 만든 ``predictions.parquet`` (long 포맷) 를 단일 진입점으로
-재해석한다. 옛 ``run_stacking_v1.py`` 의 ``load_phase1_1_preds`` /
-``load_phase2_stl_preds`` (JSON per-(task,seed)) 가 이 클래스로 통합된다.
+``predictions.parquet`` (long format) created by the ``train`` runner, through a single entry point,
+is reinterpreted. The old ``run_stacking_v1.py``'s ``load_phase1_1_preds`` /
+``load_phase2_stl_preds`` (JSON per-(task,seed)) are consolidated into this class.
 
-스키마:
+Schema:
     [seed, task, split, smiles, y_true, y_pred]
 
     - seed: int
-    - task: str (TDC ADMET task 이름, 예: "Caco2_Wang")
+    - task: str (TDC ADMET task name, e.g., "Caco2_Wang")
     - split: str ("val" | "test")
     - smiles: str
-    - y_true: float (분류면 0/1)
-    - y_pred: float (raw — 분류 task 는 logit 또는 prob, base 모델별 정의 따름)
+    - y_true: float (0/1 for classification)
+    - y_pred: float (raw — for classification tasks, logit or prob, depending on each base model's definition)
 
-조회 방법:
-    1. ``PredictionSet.from_artifact(name, store)`` — 가장 최근 train artifact 자동 resolve.
-    2. ``PredictionSet.from_artifact(name, store, run_id=...)`` — 특정 run.
-    3. ``PredictionSet.from_parquet(path, name)`` — 임의 path 직접 로드 (옛 결과 wrap 용).
+Lookup methods:
+    1. ``PredictionSet.from_artifact(name, store)`` — automatically resolves the most recent train artifact.
+    2. ``PredictionSet.from_artifact(name, store, run_id=...)`` — a specific run.
+    3. ``PredictionSet.from_parquet(path, name)`` — loads directly from an arbitrary path (for wrapping legacy results).
 """
 
 from __future__ import annotations
@@ -38,13 +38,13 @@ VALID_SPLITS: frozenset[str] = frozenset({"val", "test"})
 
 @dataclass
 class PredictionSet:
-    """한 base 모델의 long-format 예측 + lineage 메타데이터.
+    """Long-format predictions + lineage metadata for a single base model.
 
     Attributes:
-        name: base 모델 식별자 (보통 train recipe 이름. ex: "mtl_dmpnn_grouped").
-        df: predictions long DataFrame. 위 ``REQUIRED_COLUMNS`` 보유 보장.
-        artifact: 원본 ``Artifact`` (직접 parquet 로드 시 None).
-        source_path: 실제 로드된 parquet 경로 (디버그용).
+        name: base model identifier (usually the train recipe name. ex: "mtl_dmpnn_grouped").
+        df: predictions long DataFrame. Guaranteed to contain the ``REQUIRED_COLUMNS`` above.
+        artifact: original ``Artifact`` (None when loaded directly from parquet).
+        source_path: actual loaded parquet path (for debugging).
     """
 
     name: str
@@ -62,19 +62,19 @@ class PredictionSet:
         run_id: str | None = None,
         kind: str = "train",
     ) -> "PredictionSet":
-        """train artifact 로부터 ``predictions.parquet`` 자동 로드.
+        """Automatically loads ``predictions.parquet`` from a train artifact.
 
         Args:
-            name: artifact 이름 (recipe ``name`` 필드).
-            store: ArtifactStore 인스턴스.
-            run_id: 특정 run 지정. None 이면 ``store.latest`` 의 결과.
-            kind: artifact 종류. 기본 ``"train"`` — ``predict`` 등 다른 kind 도 호환.
+            name: artifact name (the recipe's ``name`` field).
+            store: ArtifactStore instance.
+            run_id: specifies a particular run. If None, uses the result of ``store.latest``.
+            kind: artifact kind. Default ``"train"`` — also compatible with other kinds such as ``predict``.
 
         Returns:
             PredictionSet.
 
         Raises:
-            FileNotFoundError: artifact 가 없거나 predictions.parquet 미존재.
+            FileNotFoundError: artifact does not exist or predictions.parquet is missing.
         """
         if run_id is not None:
             artifact = store.load(kind, name, run_id)
@@ -82,17 +82,17 @@ class PredictionSet:
             artifact = store.latest(kind, name)
             if artifact is None:
                 raise FileNotFoundError(
-                    f"artifact 미발견: kind={kind} name={name}. 학습을 먼저 돌리세요."
+                    f"artifact not found: kind={kind} name={name}. Run training first."
                 )
         pq_path = artifact.data_dir / "predictions.parquet"
         if not pq_path.exists():
-            raise FileNotFoundError(f"predictions.parquet 없음: {pq_path}")
+            raise FileNotFoundError(f"predictions.parquet not found: {pq_path}")
         df = _load_and_validate(pq_path)
         return cls(name=name, df=df, artifact=artifact, source_path=pq_path)
 
     @classmethod
     def from_parquet(cls, path: Path | str, *, name: str) -> "PredictionSet":
-        """임의 parquet 직접 로드 (테스트·옛 결과 변환용)."""
+        """Loads directly from an arbitrary parquet (for testing/legacy result conversion)."""
         p = Path(path)
         df = _load_and_validate(p)
         return cls(name=name, df=df, artifact=None, source_path=p)
@@ -117,16 +117,16 @@ class PredictionSet:
         task: str | None = None,
         seed: int | None = None,
     ) -> pd.DataFrame:
-        """필터링된 long DataFrame 반환 (얕은 사본).
+        """Returns a filtered long DataFrame (shallow copy).
 
         Why:
-            stacking strategy 가 보통 split="test" / per-task 단위로 결합하므로,
-            같은 필터를 여러 base 에 일관되게 적용할 단일 진입점이 필요.
+            Since stacking strategies usually combine by split="test" / per-task units,
+            a single entry point is needed to apply the same filter consistently across multiple bases.
         """
         df = self.df
         if split is not None:
             if split not in VALID_SPLITS:
-                raise ValueError(f"split 은 {sorted(VALID_SPLITS)} 중 하나: {split!r}")
+                raise ValueError(f"split must be one of {sorted(VALID_SPLITS)}: {split!r}")
             df = df[df["split"] == split]
         if task is not None:
             df = df[df["task"] == task]
@@ -138,19 +138,19 @@ class PredictionSet:
 # ---------------------------------------------------------------------------- helpers
 
 def _load_and_validate(path: Path) -> pd.DataFrame:
-    """parquet 로드 후 schema 검증 + dtype 정규화."""
+    """Validates schema and normalizes dtypes after loading parquet."""
     df = pd.read_parquet(path)
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
     if missing:
         raise ValueError(
-            f"PredictionSet schema 위반: {path} 에 누락 컬럼 {missing}. "
-            f"필수: {list(REQUIRED_COLUMNS)}"
+            f"PredictionSet schema violation: missing columns {missing} in {path}. "
+            f"required: {list(REQUIRED_COLUMNS)}"
         )
-    # split 값 검증.
+    # Validate split values.
     bad = set(df["split"].unique()) - VALID_SPLITS
     if bad:
-        raise ValueError(f"PredictionSet split 값 위반: {bad} (허용: {sorted(VALID_SPLITS)})")
-    # dtype 정규화 (parquet 변환 시 float32 가 섞이는 케이스 대비).
+        raise ValueError(f"PredictionSet split value violation: {bad} (allowed: {sorted(VALID_SPLITS)})")
+    # Normalize dtypes (to handle cases where float32 gets mixed in during parquet conversion).
     df = df.assign(
         seed=df["seed"].astype("int64"),
         task=df["task"].astype("string"),
@@ -165,10 +165,10 @@ def _load_and_validate(path: Path) -> pd.DataFrame:
 def stack_predictions(
     predictions: Iterable[PredictionSet],
 ) -> dict[str, PredictionSet]:
-    """이름별 PredictionSet 사전. 같은 이름 충돌 시 ValueError."""
+    """Dict of PredictionSet by name. Raises ValueError on name collision."""
     out: dict[str, PredictionSet] = {}
     for ps in predictions:
         if ps.name in out:
-            raise ValueError(f"PredictionSet 이름 충돌: {ps.name}")
+            raise ValueError(f"PredictionSet name collision: {ps.name}")
         out[ps.name] = ps
     return out

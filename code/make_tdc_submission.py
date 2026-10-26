@@ -14,8 +14,8 @@ to every other leaderboard entry.
 
 Usage:
     python make_tdc_submission.py \
-        --baselines /nas/tk_ahn/ADMET-MTL/qadmet_public/artifacts/baselines \
-        --tdc-path  /nas/tk_ahn/.tdc_data \
+        --baselines ./artifacts/baselines \
+        --tdc-path  ./tdc_data \
         --out-dir   ./tdc_submission
 """
 import argparse, json, os, sys
@@ -56,8 +56,8 @@ def ensemble_test_pred(dfs, task, seed):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--baselines", default="/nas/tk_ahn/ADMET-MTL/qadmet_public/artifacts/baselines")
-    ap.add_argument("--tdc-path",  default="/nas/tk_ahn/.tdc_data")
+    ap.add_argument("--baselines", default="./artifacts/baselines")
+    ap.add_argument("--tdc-path",  default="./tdc_data")
     ap.add_argument("--out-dir",   default="./tdc_submission")
     ap.add_argument("--include-bioavailability", action="store_true",
                     help="include Bioavailability_Ma (excluded by default: unreliable leaderboard rank)")

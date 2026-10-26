@@ -1,13 +1,13 @@
-"""feature 캐시 추상화.
+"""feature cache abstraction.
 
-ParquetStore: SMILES indexed parquet 파일. 옛 6 종 precompute 스크립트가 매번
-재구현하던 read/append/lookup/resume 패턴을 한 클래스로 압축한다.
+ParquetStore: SMILES indexed parquet file. The old 6 precompute scripts each
+reimplemented the read/append/lookup/resume pattern; condensed here into a single class.
 
-규약:
-- 첫 컬럼은 항상 ``smiles`` (lookup 키).
-- 나머지 컬럼은 builder 가 자유롭게 정의 (예: rd_000..rd_199).
-- ``upsert(rows)`` 는 같은 SMILES 가 이미 있으면 덮어쓴다.
-- ``lookup(smiles_list, columns)`` 는 누락 SMILES 행을 NaN 으로 채운 (N, len(columns)) array 를 반환.
+Conventions:
+- The first column is always ``smiles`` (lookup key).
+- The remaining columns are freely defined by the builder (e.g. rd_000..rd_199).
+- ``upsert(rows)`` overwrites if the same SMILES already exists.
+- ``lookup(smiles_list, columns)`` returns an (N, len(columns)) array with missing SMILES rows filled with NaN.
 """
 
 from __future__ import annotations
@@ -20,21 +20,21 @@ import pandas as pd
 
 
 class ParquetStore:
-    """SMILES indexed parquet feature 캐시."""
+    """SMILES indexed parquet feature cache."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
 
-    # ----------------------------------------------------------------- 읽기
+    # ----------------------------------------------------------------- Read
     def exists(self) -> bool:
         return self.path.exists()
 
     def load(self) -> pd.DataFrame:
         if not self.exists():
-            raise FileNotFoundError(f"ParquetStore 파일 없음: {self.path}")
+            raise FileNotFoundError(f"ParquetStore file not found: {self.path}")
         df = pd.read_parquet(self.path)
         if "smiles" not in df.columns:
-            raise ValueError(f"{self.path}: 'smiles' 컬럼이 필요합니다.")
+            raise ValueError(f"{self.path}: 'smiles' column is required.")
         return df
 
     def load_or_empty(self, columns: Sequence[str]) -> pd.DataFrame:
@@ -47,11 +47,11 @@ class ParquetStore:
             return set()
         return set(self.load()["smiles"].tolist())
 
-    # ----------------------------------------------------------------- 쓰기
+    # ----------------------------------------------------------------- Write
     def upsert(self, df: pd.DataFrame) -> None:
-        """SMILES 충돌 시 새 값으로 덮어쓰기. 컬럼 일관성 검사."""
+        """Overwrite with new value on SMILES collision. Checks column consistency."""
         if "smiles" not in df.columns:
-            raise ValueError("upsert: df 에 'smiles' 컬럼 필요")
+            raise ValueError("upsert: df requires 'smiles' column")
         if self.exists():
             existing = self.load()
             keep = existing[~existing["smiles"].isin(df["smiles"])]
@@ -61,21 +61,21 @@ class ParquetStore:
             self.path.parent.mkdir(parents=True, exist_ok=True)
         merged.to_parquet(self.path, index=False)
 
-    # ----------------------------------------------------------------- 조회
+    # ----------------------------------------------------------------- Lookup
     def lookup(
         self, smiles_list: Sequence[str], columns: Sequence[str]
     ) -> np.ndarray:
-        """SMILES 리스트 순서대로 (N, D) 배열. 누락 행은 NaN."""
+        """(N, D) array in order of the SMILES list. Missing rows are NaN."""
         df = self.load() if self.exists() else pd.DataFrame(columns=["smiles", *columns])
         missing = [c for c in columns if c not in df.columns]
         if missing:
-            raise ValueError(f"{self.path}: 누락된 컬럼 {missing[:5]} ...")
+            raise ValueError(f"{self.path}: missing columns {missing[:5]} ...")
         lookup_df = df.set_index("smiles")[list(columns)]
         out = np.full((len(smiles_list), len(columns)), np.nan, dtype=np.float32)
         for i, smi in enumerate(smiles_list):
             if smi in lookup_df.index:
                 row = lookup_df.loc[smi]
-                if isinstance(row, pd.DataFrame):  # 중복 SMILES 보호.
+                if isinstance(row, pd.DataFrame):  # Guard against duplicate SMILES.
                     row = row.iloc[0]
                 out[i] = row.to_numpy(dtype=np.float32)
         return out

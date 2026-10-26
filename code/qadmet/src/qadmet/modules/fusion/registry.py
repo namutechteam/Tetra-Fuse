@@ -1,4 +1,4 @@
-"""FUSIONS registry — FusionSpec.type 으로 lookup."""
+"""FUSIONS registry — lookup by FusionSpec.type."""
 
 from __future__ import annotations
 

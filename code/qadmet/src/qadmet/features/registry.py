@@ -1,7 +1,7 @@
-"""FeatureBuilderRegistry: 모달리티별 feature 계산기 등록.
+"""FeatureBuilderRegistry: Registers feature calculators per modality.
 
-각 builder 는 ``compute(smiles_list) -> dict[str, np.ndarray]`` 인터페이스만 만족하면 된다.
-구체 builder 는 ``qadmet.features.builders.*`` 에 위치한다.
+Each builder only needs to satisfy the ``compute(smiles_list) -> dict[str, np.ndarray]`` interface.
+Concrete builders are located in ``qadmet.features.builders.*``.
 """
 
 from __future__ import annotations

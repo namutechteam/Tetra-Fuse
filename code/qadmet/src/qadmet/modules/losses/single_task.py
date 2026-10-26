@@ -1,14 +1,14 @@
-"""Single-task loss — STL 학습용 thin wrapper.
+"""Single-task loss — STL training thin wrapper.
 
-옛 STL 코드 (``run_stl_dmpnn_rdkit.py``, ``run_stl_molformer_lora.py``,
-``run_stl_unimol2_lora.py``) 는 task 별 ``F.binary_cross_entropy_with_logits``
-또는 ``F.mse_loss`` 를 직접 호출했다. 본 모듈은 그 동작을 ``LOSSES`` registry
-항목 ``"single_task"`` 로 편입시켜 STL runner 가 ``LossSpec(type="single_task")``
-하나만 보고 동일하게 빌드할 수 있게 한다.
+Legacy STL code (``run_stl_dmpnn_rdkit.py``, ``run_stl_molformer_lora.py``,
+``run_stl_unimol2_lora.py``) called, per task, ``F.binary_cross_entropy_with_logits``
+or ``F.mse_loss`` directly. This module folds that behavior into the ``LOSSES`` registry
+entry ``"single_task"``, allowing the STL runner to look at a single ``LossSpec(type="single_task")``
+and build identically.
 
 Why:
-    MTL Kendall/Mixed loss 와 동일한 ``MultitaskLitModule`` 인터페이스를 STL 에서도
-    사용한다. n_tasks=1 강제 + NaN-safe mask + sample_weights 지원.
+    The ``MultitaskLitModule`` interface identical to the MTL Kendall/Mixed loss is also
+    used in STL. Enforces n_tasks=1 + NaN-safe mask + sample_weights support.
 """
 
 from __future__ import annotations
@@ -20,16 +20,16 @@ from .registry import LOSSES, PER_TASK_LOSSES
 
 @LOSSES.register("single_task")
 class SingleTaskLoss(nn.Module):
-    """단일 task 학습용 thin loss wrapper.
+    """Single-task training thin loss wrapper.
 
     Args:
         task_type: ``"regression"`` | ``"classification"``.
-        classification: PER_TASK_LOSSES clf 키 (기본 ``"bce_with_logits"``).
-        regression: PER_TASK_LOSSES reg 키 (기본 ``"masked_mse"`` — 옛 STL MSE 동등).
+        classification: PER_TASK_LOSSES clf key (default ``"bce_with_logits"``).
+        regression: PER_TASK_LOSSES reg key (default ``"masked_mse"`` — equivalent to legacy STL MSE).
 
     Forward:
-        preds (B, 1): regression 은 scaled space, classification 은 logits.
-        targets (B, 1): NaN 가능 — finite mask 자동 적용.
+        preds (B, 1): regression is scaled space, classification is logits.
+        targets (B, 1): NaN possible — finite mask automatically applied.
         sample_weights (B,) | None.
         Returns: scalar mean loss.
     """
@@ -43,13 +43,13 @@ class SingleTaskLoss(nn.Module):
         super().__init__()
         if task_type not in ("regression", "classification"):
             raise ValueError(
-                f"task_type 은 'regression' 또는 'classification': {task_type!r}"
+                f"task_type must be 'regression' or 'classification': {task_type!r}"
             )
         self.task_type = task_type
         self.classification_key = classification
         self.regression_key = regression
         self._fn_key = regression if task_type == "regression" else classification
-        # 등록 누락 빠른 fail.
+        # Fail fast on missing registration.
         _ = PER_TASK_LOSSES.get(self._fn_key)
 
     def forward(
@@ -64,7 +64,7 @@ class SingleTaskLoss(nn.Module):
             )
         if preds.size(1) != 1:
             raise ValueError(
-                f"single_task 는 n_tasks=1 만 지원 (받음: {preds.size(1)})"
+                f"single_task supports only n_tasks=1 (got: {preds.size(1)})"
             )
         fn = PER_TASK_LOSSES.get(self._fn_key)
         per_elem = fn(preds, targets)  # (B, 1), reduction=none

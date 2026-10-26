@@ -7,7 +7,7 @@ evaluation:
   kwargs:
     target: stl_molformer_lora
     target_kind: train
-    target_run_id: aa4e18e3c732   # ← train 출력 run_id 붙여넣기
+    target_run_id: aa4e18e3c732   # ← Paste the run_id output from train
     split: test
     task_set: tdc_admet_22
     column: ensemble_mean
@@ -17,6 +17,6 @@ evaluation:
       use_cache: true
 
 notes: |
-  STL MoLFormer-XL + LoRA (seeds 0-4) 런의 TDC leaderboard 랭킹 산출.
-  target_run_id 는 stl_molformer_lora_seed01234.yaml train 실행이 출력한 run_id 로 교체.
-  산출물: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top 점수).
+  Computes TDC leaderboard ranking for STL MoLFormer-XL + LoRA (seeds 0-4) run.
+  Replace target_run_id with the run_id output by the stl_molformer_lora_seed01234.yaml train run.
+  Output: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top score).

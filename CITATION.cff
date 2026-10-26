@@ -4,18 +4,14 @@ title: "Tetra-Fuse: Encoder Heterogeneity Improves ADMET Prediction at Matched E
 authors:
   - family-names: An
     given-names: Taekyeong
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
   - family-names: Han
     given-names: Herim
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
   - family-names: Lee
     given-names: Jin Hee
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
   - family-names: Yeom
     given-names: Min Sun
-    # orcid: https://orcid.org/0000-0000-0000-0000  # TODO: add ORCID
 version: 2.0.0
-date-released: 2026-10-21
+date-released: 2026-10-26
 license: Apache-2.0
 doi: 10.5281/zenodo.21802319
 repository-code: "https://github.com/namutechteam/Tetra-Fuse"

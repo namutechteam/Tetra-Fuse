@@ -246,9 +246,9 @@ def pick_final_checkpoint(dirpath: str, filenames) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--train-root", default="/nas/tk_ahn/ADMET-MTL/qadmet/artifacts/train",
+    ap.add_argument("--train-root", default="./artifacts/train",
                     help="qadmet artifacts/train root holding the training runs")
-    ap.add_argument("--weights-root", default="/nas/tk_ahn/ADMET-MTL/qadmet/data/weights",
+    ap.add_argument("--weights-root", default="./qadmet/data/weights",
                     help="directory with the pretrained backbone files")
     ap.add_argument("--out", default="weights", help="output root (weights/)")
     ap.add_argument("--fp16", action="store_true", help="store as float16 (half the size)")

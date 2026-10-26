@@ -26,7 +26,7 @@ loss: !include _base/loss/single_task.yaml
 trainer: !include _base/trainer/stl_lora.yaml
 
 notes: |
-  옛 phase4 STL MoLFormer-XL + LoRA (q/v rank=16) 동등.
-  학습 입력: precomputed token_ids/attention_mask (molformer_tokens.parquet, MAX_LEN=202).
-  보조 modality 없음 (LoRA 단독). MEMORY 의 "LoRA 우선" 방침에 따라 정확 동작 우선 항목.
-  Step 3.6c 부터: trainer.lr_lora=5e-5 / lr=1e-3 분리 적용 (옛 run_stl_molformer_lora 와 동등).
+  Legacy phase4 STL MoLFormer-XL + LoRA (q/v rank=16) equivalent.
+  Training input: precomputed token_ids/attention_mask (molformer_tokens.parquet, MAX_LEN=202).
+  No auxiliary modality (LoRA only). Per MEMORY's "LoRA-first" policy, item prioritizing correct behavior.
+  From Step 3.6c onward: trainer.lr_lora=5e-5 / lr=1e-3 applied separately (equivalent to legacy run_stl_molformer_lora).

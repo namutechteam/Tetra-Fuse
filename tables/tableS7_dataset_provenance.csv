@@ -1,10 +1,10 @@
 TDC task,TDC category,Original dataset / source,Primary reference
 Solubility_AqSolDB,Absorption,AqSolDB curated aqueous solubility,"Sorkun et al., Sci Data 2019, 6:143 (doi:10.1038/s41597-019-0151-1)"
 Caco2_Wang,Absorption,Caco-2 cell permeability,"Wang et al., J Chem Inf Model 2016, 56(4):763–773 (doi:10.1021/acs.jcim.5b00642)"
-HIA_Hou,Absorption,Human intestinal absorption,"Hou et al., J Chem Inf Model 2007, ADME evaluation 7 (doi:10.1021/ci600343x)"
-Bioavailability_Ma,Absorption,Oral bioavailability,Ma et al. 2008 (as attributed by TDC)
-Lipophilicity_AstraZeneca,Absorption,Lipophilicity (logD 7.4),AstraZeneca 2016 (ChEMBL deposit; as attributed by TDC)
-PPBR_AZ,Distribution,Plasma protein binding rate,AstraZeneca 2016 (ChEMBL deposit; as attributed by TDC)
+HIA_Hou,Absorption,Human intestinal absorption,"Hou et al., J Chem Inf Model 2007, 47(1):208–218 (doi:10.1021/ci600343x)"
+Bioavailability_Ma,Absorption,Oral bioavailability,"Ma et al., J Pharm Biomed Anal 2008, 47(4–5):677–682 (doi:10.1016/j.jpba.2008.03.023)"
+Lipophilicity_AstraZeneca,Absorption,Lipophilicity (logD 7.4),"Wenlock & Tomkinson, AstraZeneca deposit in ChEMBL (CHEMBL3301361), 2015 (doi:10.6019/CHEMBL3301361; dated 2016 by TDC)"
+PPBR_AZ,Distribution,Plasma protein binding rate,"Wenlock & Tomkinson, AstraZeneca deposit in ChEMBL (CHEMBL3301361), 2015 (doi:10.6019/CHEMBL3301361; dated 2016 by TDC)"
 VDss_Lombardo,Distribution,Volume of distribution at steady state,"Lombardo & Jing, J Chem Inf Model 2016, 56(10):2042–2052 (doi:10.1021/acs.jcim.6b00044)"
 BBB_Martins,Distribution,Blood–brain barrier penetration,"Martins et al., J Chem Inf Model 2012, 52(6):1686–1697 (doi:10.1021/ci300124c)"
 CYP2C9_Veith,Metabolism,CYP2C9 inhibition,"Veith et al., Nat Biotechnol 2009, 27(11):1050–1055 (doi:10.1038/nbt.1581)"
@@ -13,11 +13,11 @@ CYP3A4_Veith,Metabolism,CYP3A4 inhibition,"Veith et al., Nat Biotechnol 2009, 27
 CYP2C9_Substrate_CarbonMangels,Metabolism,CYP2C9 substrate,"Carbon-Mangels & Hutter, Mol Inform 2011, 30(10):885–895 (doi:10.1002/minf.201100069)"
 CYP2D6_Substrate_CarbonMangels,Metabolism,CYP2D6 substrate,"Carbon-Mangels & Hutter, Mol Inform 2011, 30(10):885–895 (doi:10.1002/minf.201100069)"
 CYP3A4_Substrate_CarbonMangels,Metabolism,CYP3A4 substrate,"Carbon-Mangels & Hutter, Mol Inform 2011, 30(10):885–895 (doi:10.1002/minf.201100069)"
-Clearance_Hepatocyte_AZ,Excretion,Hepatocyte intrinsic clearance,AstraZeneca 2016 (ChEMBL deposit; as attributed by TDC)
-Clearance_Microsome_AZ,Excretion,Microsomal intrinsic clearance,AstraZeneca 2016 (ChEMBL deposit; as attributed by TDC)
+Clearance_Hepatocyte_AZ,Excretion,Hepatocyte intrinsic clearance,"Wenlock & Tomkinson, AstraZeneca deposit in ChEMBL (CHEMBL3301361), 2015 (doi:10.6019/CHEMBL3301361; dated 2016 by TDC)"
+Clearance_Microsome_AZ,Excretion,Microsomal intrinsic clearance,"Wenlock & Tomkinson, AstraZeneca deposit in ChEMBL (CHEMBL3301361), 2015 (doi:10.6019/CHEMBL3301361; dated 2016 by TDC)"
 Half_Life_Obach,Excretion,Drug half-life / IV PK,"Obach et al., Drug Metab Dispos 2008, 36(7):1385–1405 (doi:10.1124/dmd.108.020479)"
 Pgp_Broccatelli,Absorption,P-glycoprotein inhibition,"Broccatelli et al., J Med Chem 2011, 54(6):1740–1751 (doi:10.1021/jm101421d)"
-hERG,Toxicity,hERG channel blockade,Wang et al. 2016 (as attributed by TDC)
+hERG,Toxicity,hERG channel blockade,"Wang et al., Mol Pharm 2016, 13(8):2855–2866 (doi:10.1021/acs.molpharmaceut.6b00471)"
 AMES,Toxicity,Ames mutagenicity,"Xu et al., J Chem Inf Model 2012, 52(11):2840–2847 (doi:10.1021/ci300400a)"
-DILI,Toxicity,Drug-induced liver injury,Xu et al. 2015 (as attributed by TDC)
+DILI,Toxicity,Drug-induced liver injury,"Xu et al., J Chem Inf Model 2015, 55(10):2085–2093 (doi:10.1021/acs.jcim.5b00238)"
 LD50_Zhu,Toxicity,Acute oral toxicity (LD50),"Zhu et al., Chem Res Toxicol 2009, 22(12):1913–1921 (doi:10.1021/tx900189p)"

@@ -1,6 +1,6 @@
-"""qadmet CLI entry — 단일 ``qadmet`` 명령 + 서브커맨드.
+"""qadmet CLI entry — single ``qadmet`` command + subcommands.
 
-사용 예::
+Usage example::
 
     qadmet train --recipe recipes/train/mtl_dmpnn_grouped.yaml
     qadmet precompute --recipe recipes/precompute/rdkit2d.yaml
@@ -11,11 +11,11 @@
     qadmet recipe validate <path...>
 
 Note:
-    별도의 ``predict`` 서브커맨드는 두지 않는다 — ``train`` runner 가
-    학습 직후 val + test split 모두에 대한 ``predictions.parquet`` 를
-    artifact 로 저장하므로 (Step 4.2 부터), 그 결과가 곧 PredictionSet
-    이다. 추후 학습 없이 외부 데이터에 대한 추론이 필요해지면 그때
-    ``runners/predict.py`` + recipe 를 추가한다.
+    A separate ``predict`` subcommand is not provided — the ``train`` runner
+    saves ``predictions.parquet`` for both val + test splits immediately after training
+    as an artifact (since Step 4.2), so that result is itself the PredictionSet
+    . If inference on external data without training becomes necessary later, then
+    add ``runners/predict.py`` + recipe at that time.
 """
 
 from __future__ import annotations
@@ -28,16 +28,16 @@ from qadmet.cli._argparse_yaml import add_recipe_args, add_runtime_args
 
 
 def _run_with_recipe(args: argparse.Namespace, expected_kind: str) -> int:
-    """공통: recipe 로드 → ExperimentRunner.run."""
-    # 지연 import — 무거운 의존(torch 등) 최소화.
+    """Common: load recipe → ExperimentRunner.run."""
+    # Lazy import — minimize heavy dependencies (torch, etc.).
     from qadmet.core.experiment import ExperimentRunner
     from qadmet.core.recipe import load_recipe
-    import qadmet.runners  # noqa: F401  — runner 등록 트리거
+    import qadmet.runners  # noqa: F401  — triggers runner registration
 
     spec = load_recipe(args.recipe, overrides=args.override or [])
     if spec.kind != expected_kind:
         sys.stderr.write(
-            f"recipe.kind={spec.kind!r} 가 기대값({expected_kind!r}) 과 다릅니다.\n"
+            f"recipe.kind={spec.kind!r} does not match expected value ({expected_kind!r}).\n"
         )
         return 2
 
@@ -61,7 +61,7 @@ def _cmd_lineage_show(args: argparse.Namespace) -> int:
     store = ArtifactStore()
     art = store.latest(args.kind, args.name)
     if art is None:
-        sys.stderr.write(f"artifact 없음: kind={args.kind} name={args.name}\n")
+        sys.stderr.write(f"artifact not found: kind={args.kind} name={args.name}\n")
         return 1
     chain = trace_dependencies(store, art)
     print(to_dot(chain))
@@ -157,30 +157,30 @@ def _cmd_predict(args) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="qadmet",
-        description="qadmet — TDC ADMET 멀티태스크 연구 플랫폼",
+        description="qadmet — TDC ADMET multi-task research platform",
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     # train / precompute / stack / evaluate
     for kind in ("train", "precompute", "stack", "evaluate"):
-        p = sub.add_parser(kind, help=f"{kind} recipe 실행")
+        p = sub.add_parser(kind, help=f"run {kind} recipe")
         add_recipe_args(p)
         if kind == "train":
             add_runtime_args(p)
         p.set_defaults(_cmd=lambda a, k=kind: _run_with_recipe(a, k))
 
     # lineage show <kind> <name>
-    p_lineage = sub.add_parser("lineage", help="lineage 서브커맨드")
+    p_lineage = sub.add_parser("lineage", help="lineage subcommand")
     sub_lineage = p_lineage.add_subparsers(dest="lineage_cmd", required=True)
-    p_show = sub_lineage.add_parser("show", help="artifact lineage 그래프 출력 (graphviz dot)")
+    p_show = sub_lineage.add_parser("show", help="print artifact lineage graph (graphviz dot)")
     p_show.add_argument("kind", choices=("train", "precompute", "stack", "evaluate"))
     p_show.add_argument("name")
     p_show.set_defaults(_cmd=_cmd_lineage_show)
 
     # artifacts list
-    p_arts = sub.add_parser("artifacts", help="artifacts 서브커맨드")
+    p_arts = sub.add_parser("artifacts", help="artifacts subcommand")
     sub_arts = p_arts.add_subparsers(dest="artifacts_cmd", required=True)
-    p_list = sub_arts.add_parser("list", help="저장된 artifact 목록")
+    p_list = sub_arts.add_parser("list", help="list saved artifacts")
     p_list.add_argument("--kind", default=None)
     p_list.set_defaults(_cmd=_cmd_artifacts_list)
 
@@ -188,33 +188,33 @@ def main(argv: list[str] | None = None) -> int:
     # predict — SMILES -> ADMET endpoints using the released weights
     p_pred = sub.add_parser(
         "predict",
-        help="SMILES 로부터 22 ADMET endpoint 예측 (배포 가중치 사용)")
+        help="predict 22 ADMET endpoints from SMILES (uses deployed weights)")
     p_pred.add_argument("--smiles", nargs="*", default=None,
-                        help="SMILES 문자열 (여러 개 가능)")
+                        help="SMILES string (multiple allowed)")
     p_pred.add_argument("--input", default=None,
-                        help="SMILES 파일 (.txt = 한 줄에 하나, .csv = --smiles-column)")
+                        help="SMILES file (.txt = one per line, .csv = --smiles-column)")
     p_pred.add_argument("--smiles-column", default="smiles",
-                        help="--input 이 CSV 일 때 읽을 열 이름 (기본 smiles)")
+                        help="column name to read when --input is CSV (default smiles)")
     p_pred.add_argument("--output", default=None,
-                        help="결과 CSV 경로 (생략 시 stdout)")
+                        help="output CSV path (stdout if omitted)")
     p_pred.add_argument("--weights-root", default="weights",
-                        help="PEFT 가중치 트리 (weights/README.md 참고)")
+                        help="PEFT weights tree (see weights/README.md)")
     p_pred.add_argument("--recipes-root", default="code/qadmet/recipes",
-                        help="recipe 디렉토리")
+                        help="recipe directory")
     p_pred.add_argument("--repo-root", default="code/qadmet",
-                        help="백본 체크포인트 경로(data/weights/...)의 기준 디렉토리")
+                        help="base directory for backbone checkpoint path (data/weights/...)")
     p_pred.add_argument("--tasks", nargs="*", default=None,
-                        help="예측할 endpoint 부분집합 (기본: 전체 22개)")
+                        help="subset of endpoints to predict (default: all 22)")
     p_pred.add_argument("--seeds", nargs="*", type=int, default=[0, 1, 2, 3, 4],
-                        help="평균낼 seed (기본 0-4 = 논문 앙상블)")
-    p_pred.add_argument("--device", default="cpu", help="cpu 또는 cuda")
+                        help="seeds to average (default 0-4 = paper ensemble)")
+    p_pred.add_argument("--device", default="cpu", help="cpu or cuda")
     p_pred.add_argument("--batch-size", type=int, default=32)
     p_pred.set_defaults(_cmd=_cmd_predict)
 
     # recipe validate
-    p_rec = sub.add_parser("recipe", help="recipe 서브커맨드")
+    p_rec = sub.add_parser("recipe", help="recipe subcommand")
     sub_rec = p_rec.add_subparsers(dest="recipe_cmd", required=True)
-    p_val = sub_rec.add_parser("validate", help="recipe YAML 들이 schema 통과하는지 검증")
+    p_val = sub_rec.add_parser("validate", help="validate that recipe YAMLs pass schema")
     p_val.add_argument("paths", nargs="+")
     p_val.set_defaults(_cmd=_cmd_recipe_validate)
 

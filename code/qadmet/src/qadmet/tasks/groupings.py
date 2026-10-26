@@ -1,10 +1,10 @@
-"""task grouping 헬퍼.
+"""task grouping helper.
 
-grouping 표현 형식::
+grouping representation format::
 
     grouping = {"transporter": ("HIA_Hou", "Pgp_Broccatelli", ...), ...}
 
-학습 코드(GroupedHead 등)가 사용하기 쉬운 형태로 변환하는 유틸을 제공한다.
+Provides a utility to convert into a form that is easy for training code (GroupedHead, etc.) to use.
 """
 
 from __future__ import annotations
@@ -15,14 +15,14 @@ from typing import Mapping, Sequence
 def task_to_group_index(
     grouping: Mapping[str, Sequence[str]], task_order: Sequence[str]
 ) -> list[int]:
-    """task_order 의 각 task 가 속한 그룹 인덱스(0..G-1) 리스트.
+    """List of group indices (0..G-1) each task in task_order belongs to.
 
     Why:
-        GroupedHead 가 task → group routing 시 사용. 같은 인덱스 매핑을 학습/평가
-        양쪽에서 일관되게 쓸 수 있도록 헬퍼로 분리.
+        GroupedHead uses this for task → group routing. The same index mapping across
+        both training/evaluation sides is separated into a helper for consistent use.
 
     Raises:
-        ValueError: task_order 의 task 가 어느 그룹에도 없으면.
+        ValueError: if a task in task_order does not belong to any group.
     """
     name_to_idx: dict[str, int] = {}
     for gi, (gname, members) in enumerate(grouping.items()):
@@ -36,7 +36,7 @@ def task_to_group_index(
         else:
             out.append(name_to_idx[t])
     if missing:
-        raise ValueError(f"grouping 에 누락된 task: {missing}")
+        raise ValueError(f"task missing from grouping: {missing}")
     return out
 
 

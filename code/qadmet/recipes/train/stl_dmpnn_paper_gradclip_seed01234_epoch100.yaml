@@ -2,12 +2,12 @@ name: stl_dmpnn_paper_gradclip
 kind: train
 
 # STL D-MPNN graph-only baseline (paper-faithful control), with gradient clipping.
-# stl_dmpnn_paper_seed01234.yaml 은 lr=1e-3 flat schedule + no grad clip 으로
-# full-backbone scratch D-MPNN 학습이 여러 task/seed 에서 발산(best_val=inf,
-# Bioavailability_Ma AUROC 0.408 등) → TDC mean rank 18.45 의 broken control.
-# 이 변형은 동일 프로토콜에 gradient_clip_val=1.0 만 추가해 발산을 막는다.
-# (PEFT 대조군 stl_chemeleon_adaptivegnn_paper 는 trainable subset 이 작아 clip
-#  불필요했으나, scratch full-backbone 은 표준 안전장치로 grad clip 필요.)
+# stl_dmpnn_paper_seed01234.yaml uses lr=1e-3 flat schedule + no grad clip, causing
+# full-backbone scratch D-MPNN training to diverge across multiple task/seed (best_val=inf,
+# Bioavailability_Ma AUROC 0.408, etc.) → broken control with TDC mean rank 18.45.
+# This variant adds only gradient_clip_val=1.0 to the same protocol to prevent divergence.
+# (PEFT control stl_chemeleon_adaptivegnn_paper has a small trainable subset, so clip
+#  was unnecessary, but scratch full-backbone requires grad clip as a standard safeguard.)
 
 dataset: !include _base/dataset/tdc_admet_22.yaml
 
@@ -39,5 +39,5 @@ trainer:
     gradient_clip_val: 1.0
 
 notes: |
-  stl_dmpnn_paper 의 발산 수정본. lr/epochs/patience/bs/precision 모두 동일,
-  gradient_clip_val=1.0 만 추가. fair STL↔STL backbone 비교용 정상 control.
+  Divergence fix for stl_dmpnn_paper. lr/epochs/patience/bs/precision all identical,
+  Only gradient_clip_val=1.0 added. Normal control for fair STL↔STL backbone comparison.

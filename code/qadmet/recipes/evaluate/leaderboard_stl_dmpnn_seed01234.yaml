@@ -7,7 +7,7 @@ evaluation:
   kwargs:
     target: stl_dmpnn_paper_gradclip
     target_kind: train
-    target_run_id: 2604320e583c   # ← train 출력 run_id 붙여넣기
+    target_run_id: 2604320e583c   # ← paste the run_id output from train here
     split: test
     task_set: tdc_admet_22
     column: ensemble_mean

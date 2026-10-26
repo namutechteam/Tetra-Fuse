@@ -1,7 +1,7 @@
-"""``TrainerSpec`` → lightning ``Trainer`` 빌더.
+"""``TrainerSpec`` → lightning ``Trainer`` builder.
 
-옛 ``train_mtl_mpnn`` (scripts-old/pipeline_mtl.py:1409-1413) 의 Trainer 인자
-조합을 그대로 가져온다::
+Trainer arguments from the old ``train_mtl_mpnn`` (scripts-old/pipeline_mtl.py:1409-1413)
+combination brought over as-is::
 
     pl.Trainer(
         max_epochs=epochs, accelerator=accelerator, devices=1,
@@ -10,9 +10,9 @@
     )
 
 Why dedicated builder:
-    Trainer 인자 (precision, deterministic, gradient_clip 등) 를 한 곳에 모아
-    spec 변경에 일관되게 대응한다. 옛 코드는 함수 내부에 인자가 흩어져 있어
-    실험 비교 시 hard-coded 값이 새는 문제가 있었다.
+    Gathers Trainer arguments (precision, deterministic, gradient_clip, etc.) in one place
+    to respond consistently to spec changes. In the old code, arguments were scattered inside the function,
+    causing hard-coded values to leak during experiment comparisons.
 """
 
 from __future__ import annotations
@@ -40,36 +40,36 @@ def build_trainer(
     deterministic: bool = False,
     save_last: bool = False,
 ) -> Any:
-    """``TrainerSpec`` → lightning ``Trainer`` 인스턴스.
+    """``TrainerSpec`` → lightning ``Trainer`` instance.
 
     Args:
-        spec: TrainerSpec (max_epochs / patience / precision / early_stopping 등).
-        ckpt_dir: ModelCheckpoint 저장 디렉토리 (seed 별로 다르게 줄 것).
-        log_dir: CSVLogger 출력 디렉토리. None 이면 logger 비활성.
-        monitor / mode: 콜백·체크포인트 공통 모니터.
-        accelerator: ``"gpu"`` / ``"cpu"`` / None (None 이면 CUDA 자동 감지).
-        devices: 사용 device 수.
-        strategy: ``"ddp"`` / None. None 이면 Lightning auto (single → SingleDevice).
-            ``"ddp"`` 면 DDPStrategy 인스턴스를 빌드 (find_unused_parameters 반영).
-        num_nodes: 다중 노드 수 (보통 1).
-        find_unused_parameters: DDPStrategy 옵션. False 가 기본 (성능 우선).
-            forward path 가 batch 마다 다른 파라미터를 건드릴 때만 True.
-        ddp_static_graph: DDPStrategy 의 ``static_graph`` 옵션. True 가 기본
-            (find_unused_parameters=True 와 함께 쓸 때 NCCL hang 회피용 — 첫
-            iteration 의 used-param set 을 캐싱해서 rank 간 일관성 보장).
-            PyTorch 공식 권장: ``find_unused_parameters=True`` 만 단독 사용 시
-            grad 준비 순서가 rank 마다 어긋나 NCCL allreduce 가 spin-wait deadlock
-            가능. 본 모델 (GroupedHead) 은 forward 에서 모든 trunk + head 호출이
-            보장돼 static_graph 가정 만족.
-        deterministic: True 면 ``Trainer(deterministic=True)`` 로 재현성 강화.
+        spec: TrainerSpec (max_epochs / patience / precision / early_stopping, etc.).
+        ckpt_dir: ModelCheckpoint save directory (should differ per seed).
+        log_dir: CSVLogger output directory. If None, logger is disabled.
+        monitor / mode: common monitor for callbacks/checkpoints.
+        accelerator: ``"gpu"`` / ``"cpu"`` / None (if None, auto-detects CUDA).
+        devices: number of devices to use.
+        strategy: ``"ddp"`` / None. If None, Lightning auto (single → SingleDevice).
+            If ``"ddp"``, builds a DDPStrategy instance (reflecting find_unused_parameters).
+        num_nodes: number of multi-nodes (usually 1).
+        find_unused_parameters: DDPStrategy option. Default is False (performance priority).
+            Set True only when the forward path touches different parameters per batch.
+        ddp_static_graph: DDPStrategy's ``static_graph`` option. Default is True
+            (used to avoid NCCL hangs when combined with find_unused_parameters=True — caches
+            the used-param set of the first iteration to ensure consistency across ranks).
+            PyTorch official recommendation: when using ``find_unused_parameters=True`` alone,
+            the grad-ready order can diverge per rank, causing NCCL allreduce spin-wait deadlock
+            possible. This model (GroupedHead) guarantees that all trunk + head calls occur in forward,
+            satisfying the static_graph assumption.
+        deterministic: if True, strengthens reproducibility via ``Trainer(deterministic=True)``.
 
     Returns:
-        lightning.pytorch.Trainer 인스턴스.
+        lightning.pytorch.Trainer instance.
 
     Note:
-        Trainer 인자 우선순위: defaults < ``spec.kwargs`` < 본 함수의 명시 인자.
-        ``devices/strategy/num_nodes`` 등 CLI 에서 흘러온 값이 recipe 의
-        ``trainer.kwargs`` 값을 이긴다.
+        Trainer argument priority: defaults < ``spec.kwargs`` < explicit arguments of this function.
+        Values flowed in from the CLI, such as ``devices/strategy/num_nodes``, override the recipe's
+        ``trainer.kwargs`` values.
     """
     import lightning as L
 
@@ -99,7 +99,7 @@ def build_trainer(
         log_path = Path(log_dir)
         pl_logger = CSVLogger(save_dir=str(log_path.parent), name=log_path.name)
 
-    # strategy 값에 따라 DDPStrategy 인스턴스 또는 문자열 처리.
+    # Handle as DDPStrategy instance or string depending on strategy value.
     resolved_strategy: Any = "auto"
     if strategy is not None:
         if strategy == "ddp":
@@ -110,7 +110,7 @@ def build_trainer(
                 static_graph=ddp_static_graph,
             )
         else:
-            # ddp_spawn / fsdp / deepspeed 등 — 문자열 그대로 전달, Lightning 이 해석.
+            # ddp_spawn / fsdp / deepspeed, etc. — pass string as-is, Lightning interprets it.
             resolved_strategy = strategy
 
     trainer_kwargs: dict[str, Any] = {
@@ -124,7 +124,7 @@ def build_trainer(
         "enable_model_summary": False,
         "deterministic": deterministic,
     }
-    # 우선순위: defaults < spec.kwargs < 명시 인자 (CLI).
+    # Priority: defaults < spec.kwargs < explicit arguments (CLI).
     trainer_kwargs.update(dict(spec.kwargs))
     trainer_kwargs["devices"] = devices
     trainer_kwargs["num_nodes"] = num_nodes

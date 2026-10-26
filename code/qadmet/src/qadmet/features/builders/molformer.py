@@ -1,8 +1,8 @@
 """MoLFormer-XL frozen embedding builder (768-dim pooler_output).
 
-옛 ``scripts-old/precompute_molformer.py`` 의 핵심 로직을 ``PrecomputeBase`` 위에 재구성.
+Reorganized the core logic of ``scripts-old/precompute_molformer.py`` (legacy) on top of ``PrecomputeBase``.
 - transformers ``AutoModel.from_pretrained(..., deterministic_eval=True, trust_remote_code=True)``.
-- 모델·토크나이저는 첫 ``compute_batch`` 호출 시 lazy 초기화 (멀티 batch 재사용).
+- Model/tokenizer lazily initialized on first ``compute_batch`` call (reused across multiple batches).
 
 Reference:
     Ross et al., "Large-Scale Chemical Language Representations Capture
@@ -34,7 +34,7 @@ class MolFormerBuilder(PrecomputeBase):
     name = "molformer"
     column_prefix = "mf_"
     output_dim = EMBED_DIM
-    default_batch_size = 4096  # 외부 batch — 내부에서 다시 gpu_batch_size 로 쪼갬.
+    default_batch_size = 4096  # Outer batch — internally re-split into gpu_batch_size chunks.
     default_checkpoint_every = 4096
 
     def __init__(
@@ -52,7 +52,7 @@ class MolFormerBuilder(PrecomputeBase):
     def _ensure_loaded(self) -> None:
         if self._model is not None:
             return
-        import torch  # noqa: F401  — device 결정에 필요.
+        import torch  # noqa: F401  — needed for device determination.
         from transformers import AutoModel, AutoTokenizer  # type: ignore
 
         logger.info("loading %s", MODEL_ID)

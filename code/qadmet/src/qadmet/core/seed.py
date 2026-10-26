@@ -1,7 +1,7 @@
-"""seed 표준화. lightning seed_everything 이 있으면 우선 위임.
+"""Seed standardization. Delegate to lightning seed_everything first if available.
 
-``seed_everything(seed)`` 한 번 호출로 random / numpy / torch (cpu+cuda) 모두 설정.
-deterministic 옵션은 학습 시 큰 비용이 들 수 있어 호출자가 명시적으로 선택하게 한다.
+``seed_everything(seed)`` sets up random / numpy / torch (cpu+cuda) all at once with a single call.
+The deterministic option can incur significant cost during training, so let the caller choose it explicitly.
 """
 
 from __future__ import annotations
@@ -11,9 +11,9 @@ import random
 
 
 def seed_everything(seed: int, *, deterministic: bool = False) -> int:
-    """주어진 seed 로 모든 RNG 를 초기화한다."""
+    """Initializes all RNGs with the given seed."""
     if not isinstance(seed, int):
-        raise TypeError(f"seed 는 int 여야 합니다: {type(seed)}")
+        raise TypeError(f"seed must be an int: {type(seed)}")
 
     os.environ["PYTHONHASHSEED"] = str(seed)
     random.seed(seed)

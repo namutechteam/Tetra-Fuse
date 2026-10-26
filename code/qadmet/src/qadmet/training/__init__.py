@@ -1,11 +1,11 @@
-"""학습 루프 빌더 — Lightning Trainer / Callback / seed loop.
+"""Training loop builder — Lightning Trainer / Callback / seed loop.
 
-본 패키지는 ``TrainerSpec`` 를 받아 lightning ``Trainer`` 인스턴스와 표준
-콜백을 만든다. 학습 데이터·모델 빌드는 ``qadmet.runners.train`` 의 책임.
+This package takes ``TrainerSpec`` and builds a lightning ``Trainer`` instance and standard
+callbacks. Building training data/model is the responsibility of ``qadmet.runners.train``.
 
 Lazy import:
-    ``lightning`` 은 sub-module 안에서만 import. 본 ``__init__`` 자체는
-    ``qadmet`` 다른 곳에서 import 해도 lightning 을 끌어들이지 않는다.
+    ``lightning`` is imported only within sub-modules. This ``__init__`` itself
+    does not pull in lightning even when imported from elsewhere in ``qadmet``.
 """
 
 from qadmet.training.callbacks import build_callbacks, extract_best_val_loss

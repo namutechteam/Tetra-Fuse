@@ -1,23 +1,23 @@
-"""다수 결과 (신규 artifact + 옛 phase CSV) 를 wide pivot 으로 합치고 W/L/T
-요약을 계산한다.
+"""Merge multiple results (new artifact + old phase CSV) into a wide pivot and compute W/L/T
+summary.
 
-옛 ``compare_experiments.py`` / ``compare_all_experiments.py`` 의 책임을 흡수.
-지원하는 입력:
+Absorbs the responsibilities of the old ``compare_experiments.py`` / ``compare_all_experiments.py``.
+Supported inputs:
 
-- 신규 artifact: ``per_task_metric_df`` 출력 ``(dataset, metric, mean, std,
+- New artifact: ``per_task_metric_df`` output ``(dataset, metric, mean, std,
   ensemble_mean, ensemble_median, ...)``.
-- 옛 phase result CSV: 같은 컬럼 모양 (`load_legacy_csv` 가 7-컬럼 정규화).
+- Old phase result CSV: same column shape (`load_legacy_csv` normalizes to 7 columns).
 
-핵심 출력 두 가지:
+Two main outputs:
 
 - ``build_pivot``: wide DataFrame ``(dataset, metric, [series1, series2, ...])``.
-  series 마다 한 컬럼. ``column`` 인자로 어떤 metric 컬럼을 비교할지 선택
+  one column per series. The ``column`` argument selects which metric column to compare
   (``"mean"`` | ``"ensemble_mean"`` | ``"ensemble_median"``).
-- ``compute_wlt``: 비교 대상 별 ``{name: {"win": w, "loss": l, "tie": t,
+- ``compute_wlt``: per comparison target ``{name: {"win": w, "loss": l, "tie": t,
   "missing": m, "net": n}}``. metric direction (mae=-1, auroc/auprc/spearman=+1)
-  반영.
+  reflected.
 
-리포트는 ``format_pivot_md`` 가 markdown 표로 출력.
+The report is rendered as a markdown table by ``format_pivot_md``.
 """
 
 from __future__ import annotations
@@ -39,16 +39,16 @@ VALID_COMPARISON_COLUMNS = ("mean", "ensemble_mean", "ensemble_median")
 
 
 def load_legacy_csv(path: Path) -> pd.DataFrame:
-    """옛 phase result CSV → 표준 7 컬럼 DataFrame.
+    """Old phase result CSV → standard 7-column DataFrame.
 
     Note:
-        ``ensemble_median`` 누락 (예: ``phase4_stack_v6_hybrid_a0.5.csv``) 은 NaN.
-        그 외 보조 컬럼 (best_w1, bases_used) 은 무시.
+        Missing ``ensemble_median`` (e.g. ``phase4_stack_v6_hybrid_a0.5.csv``) becomes NaN.
+        Other auxiliary columns (best_w1, bases_used) are ignored.
     """
     df = pd.read_csv(path)
     if "dataset" not in df.columns or "metric" not in df.columns or "mean" not in df.columns:
         raise ValueError(
-            f"옛 CSV 필수 컬럼 누락 ({path}): {[c for c in CANONICAL_COLUMNS if c not in df.columns]} "
+            f"Missing required columns in old CSV ({path}): {[c for c in CANONICAL_COLUMNS if c not in df.columns]} "
             f"— got {list(df.columns)}"
         )
     out = df.reindex(columns=CANONICAL_COLUMNS).copy()
@@ -59,15 +59,15 @@ def load_legacy_csv(path: Path) -> pd.DataFrame:
 
 
 def _validate_input(df: pd.DataFrame, *, label: str, column: str) -> pd.DataFrame:
-    """비교 입력 DataFrame 유효성 검증 + 필요한 두 컬럼만 반환."""
+    """Validate comparison input DataFrame + return only the two required columns."""
     if column not in VALID_COMPARISON_COLUMNS:
         raise ValueError(
-            f"column 은 {VALID_COMPARISON_COLUMNS} 중 하나여야 합니다: got {column!r}"
+            f"column must be one of {VALID_COMPARISON_COLUMNS}: got {column!r}"
         )
     missing = {"dataset", "metric", column} - set(df.columns)
     if missing:
         raise ValueError(
-            f"{label!r} DataFrame 필수 컬럼 누락: {sorted(missing)} — got {list(df.columns)}"
+            f"{label!r} DataFrame missing required columns: {sorted(missing)} — got {list(df.columns)}"
         )
     return df[["dataset", "metric", column]].copy()
 
@@ -77,23 +77,23 @@ def build_pivot(
     *,
     column: str = "ensemble_mean",
 ) -> pd.DataFrame:
-    """여러 결과 DataFrame 을 task 행 × series 컬럼 wide 표로 합친다.
+    """Merge multiple result DataFrames into a wide table of task rows × series columns.
 
     Args:
-        series: ``{label: DataFrame}``. 각 DataFrame 은 ``per_task_metric_df``
-            출력 또는 ``load_legacy_csv`` 출력 형태.
-        column: 비교에 사용할 metric 컬럼 이름.
+        series: ``{label: DataFrame}``. Each DataFrame is a ``per_task_metric_df``
+            output or ``load_legacy_csv`` output shape.
+        column: name of the metric column to use for comparison.
 
     Returns:
-        ``[dataset, metric, *labels]`` wide DataFrame. 한 series 가 특정 task
-        를 보유하지 않으면 NaN. metric 은 series 간 일치하지 않을 수 있음
-        (다른 series 가 특정 task 를 못 보면 NaN), 첫 번째 series 의 metric 을
-        우선시 → 없으면 다음 순서로 채움.
+        ``[dataset, metric, *labels]`` wide DataFrame. If a series
+        does not have a particular task, NaN. metric may not match across series
+        (NaN if another series does not have a particular task), the metric of the first series
+        takes priority → if absent, fill in subsequent order.
     """
     if not series:
-        raise ValueError("series 가 비어있습니다 — 비교할 입력을 하나 이상 주세요.")
+        raise ValueError("series is empty — please provide at least one input to compare.")
 
-    # task → metric (등장한 첫 series 우선)
+    # task → metric (first series it appears in takes priority)
     task_metric: dict[str, str] = {}
     long_rows: list[dict] = []
     for label, df in series.items():
@@ -118,7 +118,7 @@ def build_pivot(
         aggfunc="last",
     ).reset_index()
 
-    # series dict 의 입력 순서대로 컬럼 정렬.
+    # Sort columns in the input order of the series dict.
     ordered = ["dataset", "metric"] + [k for k in series if k in pivot.columns]
     extras = [c for c in pivot.columns if c not in ordered]
     pivot = pivot.reindex(columns=ordered + extras)
@@ -131,7 +131,7 @@ def build_pivot(
 
 @dataclass
 class TaskDelta:
-    """한 task / 한 비교 대상 결과."""
+    """Result for one task / one comparison target."""
 
     dataset: str
     metric: str
@@ -142,12 +142,12 @@ class TaskDelta:
 
 
 def _classify(target: float, other: float, *, direction: int, tie_eps: float) -> tuple[float, str]:
-    """target 이 other 대비 더 좋은지 판정.
+    """Determine whether target is better than other.
 
     Returns:
-        (signed_advantage, verdict). advantage > 0 = target 이 우세.
-        ``direction=+1`` (auroc 등) → advantage = target - other.
-        ``direction=-1`` (mae) → advantage = other - target (낮은 쪽이 좋음).
+        (signed_advantage, verdict). advantage > 0 = target is ahead.
+        ``direction=+1`` (auroc, etc.) → advantage = target - other.
+        ``direction=-1`` (mae) → advantage = other - target (lower is better).
     """
     if not (np.isfinite(target) and np.isfinite(other)):
         return float("nan"), "missing"
@@ -164,28 +164,28 @@ def compute_wlt(
     others: list[str] | None = None,
     tie_eps: float = 0.005,
 ) -> tuple[pd.DataFrame, dict[str, dict[str, int]]]:
-    """target 컬럼을 기준으로 다른 컬럼들과 task 별 비교.
+    """Compare other columns against the target column per task.
 
     Args:
-        pivot: ``build_pivot`` 결과.
-        target: 기준 컬럼 (보통 신규 artifact label).
-        others: 비교 대상 컬럼들. None 이면 pivot 의 target 외 모든 컬럼.
-        tie_eps: |advantage| <= tie_eps 면 tie.
+        pivot: result of ``build_pivot``.
+        target: reference column (usually the new artifact label).
+        others: columns to compare against. If None, all columns in pivot except target.
+        tie_eps: tie if |advantage| <= tie_eps.
 
     Returns:
         (long DataFrame ``[dataset, metric, target, other_label, delta, verdict]``,
          summary ``{other_label: {"win","loss","tie","missing","net"}}``).
     """
     if "dataset" not in pivot.columns or "metric" not in pivot.columns:
-        raise ValueError("pivot 은 build_pivot 결과여야 합니다 (dataset/metric 컬럼 필요).")
+        raise ValueError("pivot must be the result of build_pivot (dataset/metric columns required).")
     if target not in pivot.columns:
-        raise ValueError(f"pivot 에 target 컬럼 없음: {target!r} (가용: {list(pivot.columns)})")
+        raise ValueError(f"target column not found in pivot: {target!r} (available: {list(pivot.columns)})")
     if others is None:
         others = [c for c in pivot.columns if c not in {"dataset", "metric", target}]
     else:
         unknown = [c for c in others if c not in pivot.columns]
         if unknown:
-            raise ValueError(f"pivot 에 없는 비교 컬럼: {unknown}")
+            raise ValueError(f"comparison columns not found in pivot: {unknown}")
 
     rows: list[TaskDelta] = []
     summary: dict[str, dict[str, int]] = {}
@@ -202,7 +202,7 @@ def compute_wlt(
                 target=tval, other=oval, delta=delta, verdict=verdict,
             ))
             s[verdict] = s.get(verdict, 0) + 1
-            # 기록을 위해 다른 비교 대상 별 행도 한 줄씩 (long format).
+            # For record-keeping, one row per other comparison target as well (long format).
         s["net"] = s["win"] - s["loss"]
         summary[other] = s
 
@@ -238,7 +238,7 @@ def format_pivot_md(
     target: str | None = None,
     summary: dict[str, dict[str, int]] | None = None,
 ) -> str:
-    """pivot 표 + (선택) W/L/T 요약을 markdown 으로 렌더링."""
+    """Render the pivot table + (optional) W/L/T summary as markdown."""
     lines: list[str] = []
     lines.append(f"# Comparison ({column})")
     lines.append("")

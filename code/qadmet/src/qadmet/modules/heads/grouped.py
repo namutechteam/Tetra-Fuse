@@ -1,8 +1,8 @@
-"""GroupedHead — task affinity 기반 group trunk + per-task head.
+"""GroupedHead — group trunk based on task affinity + per-task head.
 
-옛 ``pipeline_mtl.py:GroupedHead`` (line ~835-867) 와 수치 동등성 보존.
+Preserves numerical equivalence with the old ``pipeline_mtl.py:GroupedHead`` (line ~835-867).
 
-구조:
+Structure:
     Z (B, input_dim)
         ↓ (group trunk)  Linear → ReLU → Dropout → Linear → ReLU
     h_g (B, trunk_hidden//2)  per group
@@ -25,16 +25,16 @@ class GroupedHead(nn.Module):
     """Z → group trunk → per-task head.
 
     Args:
-        input_dim: Z 차원.
-        ordered_tasks: 출력 컬럼 순서 (task name 리스트).
-        task_to_group: task name → group name 매핑.
-        groups: 등장하는 group name 리스트 (trunk 생성 순서 결정).
-        trunk_hidden: 첫 번째 trunk linear 의 hidden size. 두 번째는 //2.
-        dropout: 첫 번째 ReLU 뒤 dropout 확률.
+        input_dim: Z dimension.
+        ordered_tasks: output column order (list of task names).
+        task_to_group: mapping from task name to group name.
+        groups: list of group names that appear (determines trunk creation order).
+        trunk_hidden: hidden size of the first trunk linear. The second is //2.
+        dropout: dropout probability after the first ReLU.
 
     Why:
-        7-group routing 으로 negative transfer 완화. group 단위로 trunk 를
-        공유하므로 같은 group 안의 task 들이 representation 을 공유.
+        Mitigates negative transfer via 7-group routing. Trunk is shared at the group level, so
+        tasks within the same group share the representation.
     """
 
     def __init__(
@@ -54,11 +54,11 @@ class GroupedHead(nn.Module):
 
         missing = [t for t in self.ordered_tasks if t not in self.task_to_group]
         if missing:
-            raise ValueError(f"task_to_group 에 없는 task: {missing}")
+            raise ValueError(f"task not in task_to_group: {missing}")
         unknown_groups = [g for g in self.task_to_group.values() if g not in self.groups]
         if unknown_groups:
             raise ValueError(
-                f"task_to_group 의 값이 groups 에 없음: {sorted(set(unknown_groups))}"
+                f"task_to_group values not in groups: {sorted(set(unknown_groups))}"
             )
 
         self.trunks = nn.ModuleDict({
@@ -76,7 +76,7 @@ class GroupedHead(nn.Module):
         })
 
     def forward(self, Z: Tensor) -> Tensor:
-        # group trunk 한 번만 계산 (같은 Z 공유)
+        # compute group trunk only once (shared Z)
         group_outs = {g: self.trunks[g](Z) for g in self.groups}
         outs = [
             self.heads[t](group_outs[self.task_to_group[t]]).squeeze(-1)

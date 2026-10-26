@@ -1,9 +1,9 @@
-# 경험적 7-group grouping (PLAN_MTL_v2.md 기반).
-# outcome/liability/물성 축이 섞여 있어 negative transfer 가설이 강한 baseline grouping.
-# task 목록·순서는 코드(tdc_admet.py ALL_TASKS)가 단일 진실원 — 여기선 grouping 만 정의.
+# Empirical 7-group grouping (based on PLAN_MTL_v2.md).
+# baseline grouping where the outcome/liability/physicochemical-property axes are mixed, making the negative transfer hypothesis strong.
+# The task list/order has code (tdc_admet.py ALL_TASKS) as the single source of truth — here only the grouping is defined.
 name: tdc_admet_22
 tasks: tdc_admet_22
-notes: "TDC ADMET leaderboard 22-task (13 cls + 9 reg). 7-group grouping 포함."
+notes: "TDC ADMET leaderboard 22-task (13 cls + 9 reg). Includes 7-group grouping."
 groups:
   transporter:
     [HIA_Hou, Pgp_Broccatelli, BBB_Martins, Bioavailability_Ma]

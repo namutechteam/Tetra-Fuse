@@ -1,20 +1,20 @@
 """GFN2-xTB 4-dim QC descriptor builder.
 
-옛 ``scripts-old/compute_xtb_descriptors.py`` 의 SMILES → ETKDG 3D → MMFF/UFF →
-xTB single-point → JSON 파싱 파이프라인을 ``PrecomputeBase`` 위에 재구성.
+Old ``scripts-old/compute_xtb_descriptors.py`` 's SMILES → ETKDG 3D → MMFF/UFF →
+xTB single-point → JSON parsing pipeline reconstructed on top of ``PrecomputeBase``.
 
-출력 (모두 scalar):
-    - dipole          : 쌍극자 모멘트 크기 (Debye)
+Output (all scalar):
+    - dipole          : dipole moment magnitude (Debye)
     - homo_lumo_gap   : HOMO-LUMO gap (eV)
-    - electrons       : 총 전자 수
-    - total_energy    : 총 에너지 (Hartree)
+    - electrons       : total electron count
+    - total_energy    : total energy (Hartree)
 
-실패 시 (3D embed 실패, xTB SCF 발산, 타임아웃) 모든 채널 NaN.
-하류 missing_policy 가 mask/drop/impute 로 처리.
+On failure (3D embed failure, xTB SCF divergence, timeout), all channels are NaN.
+Handled downstream by missing_policy as mask/drop/impute.
 
 Note:
-    xtb 바이너리(conda-forge) + RDKit 가 conda env 에 있어야 한다. import 시점에는
-    rdkit 가 필요 없도록 worker 함수 안에서 lazy import.
+    xtb binary (conda-forge) + RDKit must be present in the conda env. At import time,
+    lazy import inside the worker function so rdkit is not required.
 """
 
 from __future__ import annotations
@@ -43,7 +43,7 @@ NAN_VEC = np.full(len(DESCRIPTOR_COLS), np.nan, dtype=np.float64)
 
 
 def _smiles_to_xyz(smiles: str, *, largest_fragment: bool) -> str | None:
-    """SMILES → ETKDGv3 embedding → MMFF/UFF optimize → XYZ block. 실패 시 None."""
+    """SMILES → ETKDGv3 embedding → MMFF/UFF optimize → XYZ block. Returns None on failure."""
     from rdkit import Chem  # type: ignore
     from rdkit.Chem import AllChem  # type: ignore
     from rdkit.Chem.MolStandardize import rdMolStandardize  # type: ignore
@@ -90,7 +90,7 @@ def _lookup(d: dict, aliases: list[str]):
 def _parse_xtb_json(data: dict) -> dict[str, float]:
     raw_dipole = _lookup(data, XTB_KEY_ALIASES["dipole"])
     if isinstance(raw_dipole, (list, tuple)) and len(raw_dipole) >= 3:
-        # xtb 6.5: [dx, dy, dz] (a.u.). 일부 버전: [dx, dy, dz, |d|].
+        # xtb 6.5: [dx, dy, dz] (a.u.). Some versions: [dx, dy, dz, |d|].
         vec = np.asarray(raw_dipole[:3], dtype=float)
         dipole = float(np.linalg.norm(vec))
     elif isinstance(raw_dipole, (int, float)):
@@ -107,7 +107,7 @@ def _parse_xtb_json(data: dict) -> dict[str, float]:
 
 
 def _run_xtb(xyz_str: str, timeout: int) -> dict[str, float]:
-    """XYZ → xtb single-point → descriptor dict. 실패는 NaN row."""
+    """XYZ → xtb single-point → descriptor dict. Failure returns a NaN row."""
     from pathlib import Path
 
     nan_row = {c: float("nan") for c in DESCRIPTOR_COLS}
@@ -154,10 +154,10 @@ def _process_one(args: tuple[str, int, bool]) -> tuple[str, np.ndarray]:
 
 @FEATURE_BUILDERS.register("xtb")
 class XtbBuilder(PrecomputeBase):
-    """ETKDG 3D + xTB single-point. ``ProcessPoolExecutor`` 로 병렬화."""
+    """ETKDG 3D + xTB single-point. Parallelized via ``ProcessPoolExecutor``."""
 
     name = "xtb"
-    column_prefix = ""  # 사용 안 함 — columns 직접 지정.
+    column_prefix = ""  # Not used — columns specified directly.
     output_dim = len(DESCRIPTOR_COLS)
     default_batch_size = 512
     default_checkpoint_every = 500
@@ -177,7 +177,7 @@ class XtbBuilder(PrecomputeBase):
         return list(DESCRIPTOR_COLS)
 
     def compute_batch(self, smiles: Sequence[str]) -> dict[str, np.ndarray]:
-        # 외부 멀티프로세싱 시 xTB 내부 OMP 스레드 제한 (경합 방지).
+        # Limit xTB internal OMP threads during external multiprocessing (avoid contention).
         os.environ.setdefault("OMP_NUM_THREADS", "1")
         os.environ.setdefault("MKL_NUM_THREADS", "1")
         out: dict[str, np.ndarray] = {}

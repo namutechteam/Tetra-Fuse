@@ -1,26 +1,26 @@
 name: stl_4modality_robust_nounimol2
 kind: train
 
-# MAP fusion (mtl_4modality_robust_causal6_nounimol2.yaml) 의 STL 대응물.
-# === joint-fusion STL ===: 결과값 late-fusion 이 아니라, frozen backbone + PEFT
-# (CheMeleon AdapterGNN / MoLFormer-LoRA / GraphMVP AdapterGNN) 3종을
-# robust_attention 으로 joint fuse 한 동일 아키텍처를 task 마다 독립 학습한다
-# (22 task × 5 seed = 110 모델, 각 모델이 3-modality fusion).
+# STL counterpart of MAP fusion (mtl_4modality_robust_causal6_nounimol2.yaml).
+# === joint-fusion STL ===: not late-fusion of results, but frozen backbone + PEFT
+# (CheMeleon AdapterGNN / MoLFormer-LoRA / GraphMVP AdapterGNN) 3 types
+# jointly fused via robust_attention; the same architecture is trained independently per task
+# (22 tasks × 5 seeds = 110 models, each model a 3-modality fusion).
 #
-# MTL 대비 바뀐 것은 MTL→STL 4가지 뿐 (그 외 backbone/extra_backbones/fusion/
-# trainer 는 부모 recipe 와 byte 단위 동일):
-#   1) dataset      : tdc_admet_22_causal6 → tdc_admet_22 (STL 은 group routing 불필요)
+# Only 4 things changed from MTL→STL compared to MTL (otherwise backbone/extra_backbones/fusion/
+# trainer are byte-identical to the parent recipe):
+#   1) dataset      : tdc_admet_22_causal6 → tdc_admet_22 (STL does not need group routing)
 #   2) model.type   : multitask → singletask
-#   3) head         : grouped(taskset_grouping) → bottleneck (per-task 단일 출력)
+#   3) head         : grouped(taskset_grouping) → bottleneck (single output per task)
 #   4) loss         : mixed_task_uncertainty(Kendall) → single_task
 #
-# 동작 경로: train_stl 의 backbone_type=chemeleon 분기가 prepare_fold_loaders 로
-# 전체 feature_spec (graph=chemeleon + embeddings=[molformer_tokens, graphmvp_data])
-# 를 task 별로 collate 하고, _build_stl_lit_module 가 extra_backbones + fusion_spec
-# 을 그대로 MultitaskLitModule(n_tasks=1) 에 전달 → 코드 변경 없이 joint fusion 학습.
-# (molformer_tokens=token parquet, graphmvp_data=synthetic PyG, unimol2 없음 → LMDB 불요)
+# Execution path: the backbone_type=chemeleon branch of train_stl passes via prepare_fold_loaders
+# the full feature_spec (graph=chemeleon + embeddings=[molformer_tokens, graphmvp_data])
+# collated per task, and _build_stl_lit_module passes extra_backbones + fusion_spec
+# as-is to MultitaskLitModule(n_tasks=1) → joint fusion training with no code changes.
+# (molformer_tokens=token parquet, graphmvp_data=synthetic PyG, no unimol2 → LMDB not needed)
 
-dataset: !include _base/dataset/tdc_admet_22.yaml      # ← causal6 아님 (STL)
+dataset: !include _base/dataset/tdc_admet_22.yaml      # ← not causal6 (STL)
 
 features:
   graph: chemeleon
@@ -96,10 +96,10 @@ trainer:
     gradient_clip_val: 1.0
 
 notes: |
-  MAP fusion 의 STL 대응물 — joint 3-modality fusion (CheMeleon + MoLFormer-LoRA +
-  GraphMVP) 을 per-task 로 학습. mtl_4modality_robust_causal6_nounimol2.yaml 와
-  MTL↔STL 외 동일 (dataset/type/head/loss 4가지만 변경, trainer·fusion 동일).
+  STL counterpart of MAP fusion — joint 3-modality fusion (CheMeleon + MoLFormer-LoRA +
+  GraphMVP) trained per-task. Compared to mtl_4modality_robust_causal6_nounimol2.yaml,
+  identical except MTL↔STL (only 4 things changed: dataset/type/head/loss; trainer·fusion identical).
 
-  실행: STL 은 DDP 미지원 → 단일 GPU 단일 프로세스 (110 모델 순차).
+  Execution: STL does not support DDP → single GPU single process (110 models sequentially).
     python -m qadmet.cli.main train --recipe recipes/train/stl_4modality_robust_nounimol2_seed01234.yaml
-  ⚠ 가중치: chemeleon_mp.pt, graphmvp_hybrid.pth, MoLFormer 84M base 모두 필요.
+  ⚠ Weights: chemeleon_mp.pt, graphmvp_hybrid.pth, MoLFormer 84M base all required.

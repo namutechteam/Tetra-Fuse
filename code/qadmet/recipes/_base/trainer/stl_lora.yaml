@@ -7,5 +7,5 @@ precision: 32-true
 early_stopping: true
 batch_size: 32
 lr: 0.001          # head / non-LoRA params
-lr_lora: 0.00005   # LoRA 가중치 — 옛 run_stl_*_lora.py 와 동일
+lr_lora: 0.00005   # LoRA weights — same as old run_stl_*_lora.py
 num_workers: 2

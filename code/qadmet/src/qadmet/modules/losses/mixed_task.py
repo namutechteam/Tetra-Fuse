@@ -1,21 +1,21 @@
-"""Mixed-task (regression + classification) Kendall uncertainty loss — 표준 식.
+"""Mixed-task (regression + classification) Kendall uncertainty loss — standard formula.
 
-수식 (Kendall 2018 표준, per-task 일반화):
+Formula (Kendall 2018 standard, per-task generalization):
 
     L_total = Σ_k 1[has_data_k] · (reg_var_k / σ²_k) · w_k · L̄_k
               + 0.5 · Σ_k 1[has_data_k] · log σ²_k
 
-    - L̄_k = task k 의 valid 샘플(+ sample_weight)에 대한 per-task **평균** loss.
-    - reg_var_k = "regression" 이면 0.5, "classification" 이면 1.0 (Kendall 2018).
-    - L_{i,k} = MSE (reg) 또는 BCE-with-logits (clf), reduction=none. PER_TASK_LOSSES
-      가 NaN target 셀을 0 으로 치환 후 계산하므로 mask 곱은 본 클래스에서 처리.
+    - L̄_k = per-task **mean** loss over task k's valid samples (+ sample_weight).
+    - reg_var_k = 0.5 for "regression", 1.0 for "classification" (Kendall 2018).
+    - L_{i,k} = MSE (reg) or BCE-with-logits (clf), reduction=none. PER_TASK_LOSSES
+      replaces NaN target cells with 0 before computing, so the mask multiplication is handled in this class.
 
-Why (옛 ``_grouped_loss`` / ``_mixed_loss`` 와의 차이):
+Why (difference from the old ``_grouped_loss`` / ``_mixed_loss``):
 
-    옛 코드는 (a) ``weighted.sum() / n_valid`` — 전체 valid 셀 수로 나눠 task 별
-    valid 샘플 수 차이가 dominate, (b) ``reg_term / n_active_tasks`` — Kendall 2018
-    식엔 없는 task 평균. 위 두 비표준 reduction 을 표준 (per-task mean + reg term
-    단순 합) 으로 정정한 식.
+    The old code (a) ``weighted.sum() / n_valid`` — divides by the total valid cell count, so per-task
+    valid sample count differences dominate, (b) ``reg_term / n_active_tasks`` — a task average not in the Kendall 2018
+    formula. This corrects the above two non-standard reductions to the standard (per-task mean + reg term
+    simple sum) formula.
 """
 
 from __future__ import annotations
@@ -29,25 +29,25 @@ from .registry import LOSSES
 
 @LOSSES.register("mixed_task_uncertainty")
 class MixedTaskUncertaintyLoss(nn.Module):
-    """혼합 task Kendall 가중 loss (표준 식).
+    """Mixed-task Kendall weighted loss (standard formula).
 
     Args:
-        n_tasks: task 수 (== len(task_types)).
-        task_types: 각 task 의 "regression" | "classification" 라벨.
-        task_weights: (n_tasks,) inverse-freq weight. None 이면 1.
-        classification: PER_TASK_LOSSES 의 clf functional 키.
-        regression: PER_TASK_LOSSES 의 reg functional 키.
+        n_tasks: number of tasks (== len(task_types)).
+        task_types: "regression" | "classification" label for each task.
+        task_weights: (n_tasks,) inverse-freq weight. 1 if None.
+        classification: clf functional key in PER_TASK_LOSSES.
+        regression: reg functional key in PER_TASK_LOSSES.
 
     Forward:
-        preds (B, n_tasks): reg 컬럼은 scaled, clf 컬럼은 logits.
-        targets (B, n_tasks): NaN 가능 (mask 자동 처리).
-        sample_weights (B,) or None: 샘플별 가중치 — task-별 평균 분자/분모에 함께 적용.
+        preds (B, n_tasks): reg columns are scaled, clf columns are logits.
+        targets (B, n_tasks): NaN allowed (mask handled automatically).
+        sample_weights (B,) or None: per-sample weight — applied together to the numerator/denominator of the per-task mean.
         Returns: scalar loss.
 
     Note:
-        ``log_vars`` 는 ``task_has_data`` 인덱싱으로 dead task (모든 row NaN) 의
-        gradient 가 자동 제외된다. ``task_denom = valid.sum(dim=0).clamp(min=1)`` 로
-        division 안전. ``log_var_min`` floor 로 σ→0 폭주 (precision 발산) 차단.
+        ``log_vars`` is indexed by ``task_has_data`` so that the dead task (all rows NaN)'s
+        gradient is automatically excluded. ``task_denom = valid.sum(dim=0).clamp(min=1)`` ensures
+        safe division. ``log_var_min`` floor prevents σ→0 blow-up (precision divergence).
     """
 
     def __init__(
@@ -72,8 +72,8 @@ class MixedTaskUncertaintyLoss(nn.Module):
 
         self.log_vars = nn.Parameter(torch.zeros(n_tasks))
         if self.freeze_log_vars:
-            # Kendall σ 학습 자유도 무력화 — σ=1 고정 (precision=1).
-            # 식이 inverse-freq weighted sum 으로 단순화.
+            # Disable Kendall σ learning freedom — fix σ=1 (precision=1).
+            # The formula simplifies to an inverse-freq weighted sum.
             self.log_vars.requires_grad_(False)
         reg_var = torch.tensor(
             [0.5 if t == "regression" else 1.0 for t in task_types],
@@ -91,7 +91,7 @@ class MixedTaskUncertaintyLoss(nn.Module):
             )
         self.register_buffer("task_weights_buf", tw.to(torch.float32))
 
-    # ---- public components (PCGrad / 진단 path 공용) ---------------------------------
+    # ---- public components (shared by PCGrad / diagnostic path) ---------------------------------
 
     def _compute_components(
         self,
@@ -99,14 +99,14 @@ class MixedTaskUncertaintyLoss(nn.Module):
         targets: Tensor,
         sample_weights: Tensor | None,
     ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
-        """forward 의 내부 단계 (PCGrad path 에서 재사용).
+        """Internal step of forward (reused in the PCGrad path).
 
         Returns:
-            task_loss: (K,) per-task **mean** loss (그래프 보존, 가중치 미적용).
-            weighted_task: (K,) Kendall 가중 후 per-task loss (그래프 보존).
+            task_loss: (K,) per-task **mean** loss (graph preserved, unweighted).
+            weighted_task: (K,) per-task loss after Kendall weighting (graph preserved).
                 = reg_var · (1/σ²) · task_weight · L̄_k.
-            log_var_reg: scalar 0.5 Σ log σ² (학습 가능한 ``log_vars`` 그래프 포함).
-            task_has_data: (K,) bool — 모든 row NaN 인 dead task 는 False.
+            log_var_reg: scalar 0.5 Σ log σ² (includes the learnable ``log_vars`` graph).
+            task_has_data: (K,) bool — False for dead tasks where all rows are NaN.
         """
         if preds.shape != targets.shape:
             raise ValueError(f"preds/targets shape mismatch: {preds.shape} vs {targets.shape}")
@@ -114,7 +114,7 @@ class MixedTaskUncertaintyLoss(nn.Module):
             raise ValueError(f"preds.size(1)={preds.size(1)} != n_tasks={self.n_tasks}")
 
         mask = targets.isfinite()                                    # (B, K)
-        per_task = per_task_loss_dispatch(                           # (B, K) — NaN→0 내부 처리
+        per_task = per_task_loss_dispatch(                           # (B, K) — NaN→0 handled internally
             preds, targets, self.task_types,
             classification_key=self.classification_key,
             regression_key=self.regression_key,
@@ -127,16 +127,16 @@ class MixedTaskUncertaintyLoss(nn.Module):
         task_has_data = mask.any(dim=0)                              # (K,)
         task_denom = valid.sum(dim=0).clamp(min=1)                   # (K,)
         task_loss = (per_task * valid).sum(dim=0) / task_denom       # (K,) per-task mean
-        self._last_task_loss = task_loss.detach()                    # 진단용 side-car
+        self._last_task_loss = task_loss.detach()                    # side-car for diagnostics
 
-        # log_var floor: σ→0 폭주 차단.
+        # log_var floor: prevents σ→0 blow-up.
         safe_log_vars = self.log_vars.clamp(min=self.log_var_min)
         precision = torch.exp(-safe_log_vars)                        # (K,) 1/σ²
         weighted_task = (
             self.reg_var_per_task * precision
             * self.task_weights_buf * task_loss
         )                                                            # (K,)
-        # dead task 의 weighted 항을 0 으로 — autograd.grad 호출 안전성 확보.
+        # Zero out the weighted term for dead tasks — ensures safety for autograd.grad calls.
         weighted_task = weighted_task * task_has_data.to(weighted_task.dtype)
         log_var_reg = 0.5 * (safe_log_vars * task_has_data.to(safe_log_vars.dtype)).sum()
         return task_loss, weighted_task, log_var_reg, task_has_data
@@ -147,19 +147,19 @@ class MixedTaskUncertaintyLoss(nn.Module):
         targets: Tensor,
         sample_weights: Tensor | None = None,
     ) -> tuple[Tensor, Tensor, Tensor]:
-        """PCGrad path 용: Kendall 가중 per-task loss 벡터 + log_var regularizer.
+        """For the PCGrad path: Kendall weighted per-task loss vector + log_var regularizer.
 
         Why:
-            PCGrad 는 task-별 그라디언트가 따로 필요하므로 ``forward`` 의
-            ``weighted[task_has_data].sum()`` 으로 즉시 reduce 하면 안 된다.
-            본 메서드는 (K,) 벡터 + (scalar) regularizer + dead-task mask 를 분리해
-            ``MultitaskLitModule._pcgrad_training_step`` 에서 K 번 ``autograd.grad``
-            호출에 사용한다.
+            PCGrad needs separate per-task gradients, so immediately reducing via ``forward``'s
+            ``weighted[task_has_data].sum()`` must not be done.
+            This method separates the (K,) vector + (scalar) regularizer + dead-task mask,
+            for use in ``MultitaskLitModule._pcgrad_training_step`` calling ``autograd.grad``
+            K times.
 
         Returns:
-            weighted_task: (K,) — dead task 는 0 으로 마스킹됨.
-            log_var_reg: 0.5 Σ log σ² (학습 가능한 ``log_vars`` 그래프 포함).
-            task_has_data: (K,) bool — autograd.grad 스킵 판단용.
+            weighted_task: (K,) — dead tasks are masked to 0.
+            log_var_reg: 0.5 Σ log σ² (includes the learnable ``log_vars`` graph).
+            task_has_data: (K,) bool — used to determine autograd.grad skipping.
         """
         _, weighted_task, log_var_reg, task_has_data = self._compute_components(
             preds, targets, sample_weights
@@ -182,29 +182,29 @@ class MixedTaskUncertaintyLoss(nn.Module):
 class MixedTaskUncertaintyPCGradLoss(MixedTaskUncertaintyLoss):
     """Kendall UW + PCGrad sentinel.
 
-    Loss-level 정의는 ``MixedTaskUncertaintyLoss`` 와 100% 동일하다.
-    본 subclass 는 ``LossSpec.type`` 으로 PCGrad 활성화 신호를 manifest 에 남기기
-    위한 marker — ``MultitaskLitModule`` 가 isinstance / type-name 검사로
-    PCGrad training_step 으로 분기한다.
+    Loss-level definition is 100% identical to ``MixedTaskUncertaintyLoss``.
+    This subclass exists to leave a PCGrad activation signal in the manifest via ``LossSpec.type``
+    marker — ``MultitaskLitModule`` branches via isinstance / type-name check
+    to the PCGrad training_step.
 
-    Why subclass (옵션 kwarg 대신):
-        - manifest 의 ``loss.type`` 만 보면 "PCGrad on/off" 가 즉시 드러난다.
-        - LossSpec 의 frozen 데이터모델을 그대로 유지 (kwargs 키 추가/검증 불필요).
-        - Kendall UW + GradNorm 처럼 두 algorithm 이 manual_optimization 분기를
-          가지는 패턴과 일관됨.
+    Why subclass (instead of an option kwarg):
+        - Just looking at ``loss.type`` in the manifest immediately reveals "PCGrad on/off".
+        - Keeps LossSpec's frozen data model as-is (no need to add/validate kwargs keys).
+        - Consistent with the pattern where two algorithms, like Kendall UW + GradNorm,
+          have a manual_optimization branch.
 
-    Kwargs (kwargs 로 LossSpec.kwargs 에서 흘러옴):
-        log_var_min: σ→0 floor (Kendall 과 동일, default -1.0).
-        freeze_log_vars: σ 학습 끄기 (Kendall 과 동일, default False).
+    Kwargs (flows in via kwargs from LossSpec.kwargs):
+        log_var_min: σ→0 floor (same as Kendall, default -1.0).
+        freeze_log_vars: turn off σ learning (same as Kendall, default False).
         pcgrad_scope: "trunk" (default) — backbone + fusion + extra_backbones
-            파라미터에만 PCGrad projection 적용. "all" — head 포함 전체.
-            LitModule 가 본 값을 읽어 shared-params 집합을 결정.
-        pcgrad_eps: 0 으로 나눔 방지 (default 1e-12).
-        uniform_weight: True 이면 Kendall UW 를 완전히 제거하고 **PCGrad 단독** 모드로
-            동작한다. reg_var(0.5 reg / 1.0 clf) 까지 모두 1.0 으로 평탄화하고 σ 를
-            1 로 고정(freeze_log_vars 강제)해 log_var regularizer=0 → weighted_L_k = L̄_k.
-            즉 모든 task 를 균등 가중한 per-task loss 에 gradient surgery 만 적용.
-            "Kendall UW + PCGrad" vs "PCGrad only" ablation 용 (default False).
+            apply PCGrad projection only to parameters. "all" — everything including the head.
+            LitModule reads this value to determine the shared-params set.
+        pcgrad_eps: prevents division by 0 (default 1e-12).
+        uniform_weight: if True, completely removes Kendall UW and switches to **PCGrad-only** mode,
+            operation. Flattens even reg_var (0.5 reg / 1.0 clf) all to 1.0, and fixes σ
+            to 1 (forcing freeze_log_vars), making log_var regularizer=0 → weighted_L_k = L̄_k.
+            i.e., applies gradient surgery only to the equally-weighted per-task loss across all tasks.
+            For "Kendall UW + PCGrad" vs "PCGrad only" ablation (default False).
     """
 
     def __init__(
@@ -221,7 +221,7 @@ class MixedTaskUncertaintyPCGradLoss(MixedTaskUncertaintyLoss):
         uniform_weight: bool = False,
     ) -> None:
         if uniform_weight:
-            # PCGrad 단독: σ=1 고정 (precision=1, log_var_reg=0). 학습 자유도 제거.
+            # PCGrad only: fix σ=1 (precision=1, log_var_reg=0). Remove learning freedom.
             freeze_log_vars = True
         super().__init__(
             n_tasks=n_tasks,
@@ -234,11 +234,11 @@ class MixedTaskUncertaintyPCGradLoss(MixedTaskUncertaintyLoss):
         )
         if pcgrad_scope not in ("trunk", "all"):
             raise ValueError(
-                f"pcgrad_scope 는 'trunk' | 'all' — 받음: {pcgrad_scope!r}"
+                f"pcgrad_scope must be 'trunk' | 'all' — got: {pcgrad_scope!r}"
             )
         self.pcgrad_scope = pcgrad_scope
         self.pcgrad_eps = float(pcgrad_eps)
         self.uniform_weight = bool(uniform_weight)
         if uniform_weight:
-            # reg_var(0.5/1.0) 평탄화 → 모든 task 균등 가중. buffer in-place 유지.
+            # Flatten reg_var(0.5/1.0) → equal weighting for all tasks. Keep buffer in-place.
             self.reg_var_per_task.fill_(1.0)

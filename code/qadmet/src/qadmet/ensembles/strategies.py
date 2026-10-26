@@ -1,15 +1,15 @@
-"""``MetaLearner`` ABC + 등록된 strategy 들.
+"""``MetaLearner`` ABC + registered strategies.
 
-옛 ``run_stacking_v{1..6}.py`` 의 다양한 함수 시그니처를 ``fit/predict`` 인터페이스로
-통합한다. ``runners.stack`` 은 strategy 와 무관하게 동일 호출 흐름을 사용.
+Unifies the diverse function signatures of the old ``run_stacking_v{1..6}.py`` into the ``fit/predict`` interface
+``runners.stack`` uses the same call flow regardless of strategy.
 
-현재 등록:
-    - ``"average"`` — ``AverageStrategy`` (옛 v1, ``stack_simple_average``).
-    - ``"inverse_variance"`` — ``InverseVarianceStrategy`` (옛 v2 단순화 버전).
-    - ``"per_task_grid"`` — ``PerTaskGridStrategy`` (옛 v3 honest-holdout 버전).
-    - ``"oof_xgboost"`` — ``OOFXGBoostStrategy`` (옛 v4 ``stack_one_task`` 동등).
-    - ``"smart_fallback"`` — ``SmartFallbackStrategy`` (옛 v5 honest-holdout 변형).
-    - ``"hybrid_blend"`` — ``HybridBlendStrategy`` (옛 v6 의 nested-strategy 일반화).
+Currently registered:
+    - ``"average"`` — ``AverageStrategy`` (old v1, ``stack_simple_average``).
+    - ``"inverse_variance"`` — ``InverseVarianceStrategy`` (simplified version of old v2).
+    - ``"per_task_grid"`` — ``PerTaskGridStrategy`` (honest-holdout version of old v3).
+    - ``"oof_xgboost"`` — ``OOFXGBoostStrategy`` (equivalent to old v4 ``stack_one_task``).
+    - ``"smart_fallback"`` — ``SmartFallbackStrategy`` (honest-holdout variant of old v5).
+    - ``"hybrid_blend"`` — ``HybridBlendStrategy`` (generalization of old v6's nested-strategy).
 """
 
 from __future__ import annotations
@@ -25,20 +25,20 @@ from qadmet.ensembles.registry import META_MODELS, STRATEGIES
 
 
 class MetaLearner(ABC):
-    """ensemble strategy 의 공통 인터페이스.
+    """Common interface for ensemble strategies.
 
     Why:
-        옛 v1~v6 가 각자 다른 함수 시그니처로 흩어져 있었다. 동일한 ``fit``/
-        ``predict`` 계약을 강제해 ``runners.stack`` 이 strategy 와 무관하게 호출.
+        Old v1~v6 were scattered with different function signatures each. The same ``fit``/
+        ``predict`` contract is enforced so that ``runners.stack`` can call regardless of strategy.
 
-    하위 클래스 책임:
-        - ``__init__`` 으로 하이퍼파라미터 받기.
-        - ``fit(meta_data)`` 로 학습 (학습 없는 strategy 는 no-op).
-        - ``predict(meta_data)`` 로 ensemble 예측 long DataFrame 반환.
+    Subclass responsibilities:
+        - Receive hyperparameters via ``__init__``.
+        - Train via ``fit(meta_data)`` (no-op for strategies without training).
+        - Return the ensemble prediction long DataFrame via ``predict(meta_data)``.
 
     Note:
-        같은 ``MetaLearner`` 인스턴스에 fit 후 predict 호출이 일반적이지만,
-        AverageStrategy 처럼 학습 없는 경우엔 fit 생략 가능.
+        Calling predict after fit on the same ``MetaLearner`` instance is typical, but
+        for cases without training, like AverageStrategy, fit may be omitted.
     """
 
     @abstractmethod
@@ -47,23 +47,23 @@ class MetaLearner(ABC):
 
     @abstractmethod
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
-        """ensemble 예측 long DataFrame ``[seed, task, smiles, y_true, y_pred]``."""
+        """Ensemble prediction long DataFrame ``[seed, task, smiles, y_true, y_pred]``."""
         ...
 
 
 @STRATEGIES.register("average")
 class AverageStrategy(MetaLearner):
-    """가중 평균 strategy (옛 v1 의 ``stack_simple_average`` 동등).
+    """Weighted average strategy (equivalent to old v1's ``stack_simple_average``).
 
     Args:
-        weights: base 별 가중치. None 이면 균등(1/K). 길이가 base 수와 다르면
-            ``predict`` 시점에 ValueError. 음수도 허용 (드물지만 boost-style).
-        normalize_weights: True 면 ``weights`` 합이 1 이 되도록 재정규화.
-            기본 False — 옛 v1 의 ``(0.7, 0.3)`` 같은 raw 가중을 그대로 쓴다.
+        weights: per-base weight. If None, uniform (1/K). If the length differs from the number of bases,
+            raises ValueError at ``predict`` time. Negative values are also allowed (rare, but boost-style).
+        normalize_weights: If True, renormalizes so that ``weights`` sum to 1.
+            Default False — uses raw weights like old v1's ``(0.7, 0.3)`` as-is.
 
     Note:
-        분류 task 의 logit→prob 변환은 base 모델 책임 (이 strategy 는 raw 평균만).
-        옛 v1 도 동일한 동작.
+        Classification task's logit→prob conversion is the base model's responsibility (this strategy does raw averaging only).
+        The old v1 behaves the same way.
     """
 
     def __init__(
@@ -75,26 +75,26 @@ class AverageStrategy(MetaLearner):
         self.weights = None if weights is None else tuple(float(w) for w in weights)
         self.normalize_weights = bool(normalize_weights)
 
-    # 학습 단계 없음.
+    # No training step.
     def fit(self, meta_data: MetaDataset) -> "AverageStrategy":  # noqa: ARG002
         return self
 
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         if self.weights is None:
             w = np.full(K, 1.0 / K, dtype=np.float64)
         else:
             if len(self.weights) != K:
                 raise ValueError(
-                    f"weights 길이 {len(self.weights)} ≠ base 수 {K} (bases={meta_data.bases})"
+                    f"weights length {len(self.weights)} ≠ number of bases {K} (bases={meta_data.bases})"
                 )
             w = np.asarray(self.weights, dtype=np.float64)
             if self.normalize_weights:
                 s = w.sum()
                 if not np.isfinite(s) or s == 0:
-                    raise ValueError(f"weights 합이 0 또는 비정상: {w}")
+                    raise ValueError(f"weights sum is 0 or abnormal: {w}")
                 w = w / s
 
         preds = meta_data.predictions_matrix()  # (N, K)
@@ -102,46 +102,46 @@ class AverageStrategy(MetaLearner):
 
         out = meta_data.df[["seed", "task", "smiles", "y_true"]].copy()
         out["y_pred"] = y_pred
-        # 기존 컬럼 순서 통일.
+        # Unify existing column order.
         return out[["seed", "task", "smiles", "y_true", "y_pred"]].reset_index(drop=True)
 
 
 @STRATEGIES.register("inverse_variance")
 class InverseVarianceStrategy(MetaLearner):
-    """잔차 분산의 역수로 가중치를 결정하는 strategy (옛 v2 단순화 버전).
+    """Strategy that determines weights by inverse of residual variance (simplified version of old v2).
 
-    파이프라인:
-        1. ``fit(meta_val)`` — ``meta_val.split == "val"`` 가정. base 별 (task 별)
-           ``MSE = mean((y_true - y_pred)^2)`` 를 계산해 ``weights = 1/MSE`` 정규화
-           후 dict ``{task: (w_b1, w_b2, ...)}`` 로 보관한다.
-        2. ``predict(meta_test)`` — ``meta_test.split == "test"`` 가 일반적. 학습된
-           per-task 가중치를 곱해 weighted average 출력.
+    Pipeline:
+        1. ``fit(meta_val)`` — assumes ``meta_val.split == "val"``. per base (per task)
+           computes ``MSE = mean((y_true - y_pred)^2)`` and normalizes ``weights = 1/MSE``
+           then stores it as dict ``{task: (w_b1, w_b2, ...)}``.
+        2. ``predict(meta_test)`` — ``meta_test.split == "test"`` is typical. the trained
+           per-task weights are multiplied to output the weighted average.
 
-    옛 v2 (``run_stacking_v2_xgb.stack_inverse_var``) 와 차이:
-        - 옛 v2 는 ``group.evaluate({task: preds})`` 로 leaderboard metric 자체를
-          weight 로 썼다 (auroc → score, mae → 1/score). TDC 라이브러리 + 평가 셋
-          호출이 필요해 무거웠다.
-        - 신규는 잔차 분산 기반 — base 의 자체 val 예측만으로 self-contained 하게
-          동작한다 (분류는 sigmoid 확률 기준 잔차, base 의 ``y_pred`` 가 prob 인지
-          logit 인지는 base 책임으로 두되, ``MultitaskLitModule`` + ``runners.train``
-          은 분류를 prob 으로 통일했다).
+    Differences from old v2 (``run_stacking_v2_xgb.stack_inverse_var``):
+        - old v2 used ``group.evaluate({task: preds})`` to take the leaderboard metric itself
+          as the weight (auroc → score, mae → 1/score). It required the TDC library + evaluation set
+          calls, which was heavy.
+        - the new version is based on residual variance — self-contained using only the base's own val predictions
+          it operates (for classification, residual is based on sigmoid probability; whether base's ``y_pred`` is prob
+          or logit is left to the base's responsibility, but ``MultitaskLitModule`` + ``runners.train``
+          unified classification to prob).
 
     Args:
-        eps: ``MSE = 0`` 인 task (예: 분류 일치율 100%) 의 가중치 폭주 방지.
-        global_fit: True 면 task 와 무관하게 전체 잔차 한 덩어리로 가중치를 산출한다
-            (옛 v1 simple average 의 자동 가중치 버전). False (기본) 가 옛 v2 와 일관.
-        normalize_weights: True 면 가중치 합이 1 이 되도록 재정규화. 기본 True
-            (1/MSE 분자가 작으면 모든 base 가 거의 0 이 되는 케이스 방지).
-        unfit_strategy: ``predict`` 가 ``fit`` 보다 먼저 호출되거나 fit 단계에서
-            처음 보지 못한 task 가 test 에 등장할 때 동작.
-            - ``"uniform"``: 균등 평균으로 fallback (안전).
+        eps: prevents weight blow-up for tasks where ``MSE = 0`` (e.g. classification agreement rate 100%).
+        global_fit: if True, computes weights from all residuals combined regardless of task
+            (an automatic-weight version of old v1 simple average). False (default) is consistent with old v2.
+        normalize_weights: Renormalize so weights sum to 1 if True. Default True
+            (Prevents case where all base weights become nearly 0 when the 1/MSE numerator is small).
+        unfit_strategy: Behavior when ``predict`` is called before ``fit``, or at the fit stage
+            when a task unseen during fit appears in test.
+            - ``"uniform"``: fallback to uniform average (safe).
             - ``"raise"``: ValueError.
-            기본 ``"uniform"`` — runners.stack 이 task 부분집합으로 fit 하기 어려운
-            경우를 대비.
+            Default ``"uniform"`` — since runners.stack may find it difficult to fit on a subset of tasks
+            as a precaution for such cases.
 
     Raises:
-        ValueError: ``fit`` 시 split 이 "val" 이 아니거나 잔차 계산이 불가능한 base
-            task 조합 (모든 행이 NaN 등) 발견 시.
+        ValueError: Raised if, during ``fit``, split is not "val" or residual computation is impossible for the base
+            task combination (e.g., all rows NaN).
     """
 
     def __init__(
@@ -154,13 +154,13 @@ class InverseVarianceStrategy(MetaLearner):
     ) -> None:
         if unfit_strategy not in {"uniform", "raise"}:
             raise ValueError(
-                f"unfit_strategy 는 'uniform' | 'raise' 중 하나: {unfit_strategy!r}"
+                f"unfit_strategy must be one of 'uniform' | 'raise': {unfit_strategy!r}"
             )
         self.eps = float(eps)
         self.global_fit = bool(global_fit)
         self.normalize_weights = bool(normalize_weights)
         self.unfit_strategy = unfit_strategy
-        # fit 산출물.
+        # fit artifacts.
         self._task_weights: dict[str, np.ndarray] = {}
         self._global_weights: np.ndarray | None = None
         self._bases: tuple[str, ...] = ()
@@ -169,20 +169,20 @@ class InverseVarianceStrategy(MetaLearner):
     def fit(self, meta_data: MetaDataset) -> "InverseVarianceStrategy":
         if meta_data.split != "val":
             raise ValueError(
-                f"InverseVarianceStrategy.fit 은 split='val' 필요 "
-                f"(받음: {meta_data.split!r}). val 예측 base 가 필요합니다."
+                f"InverseVarianceStrategy.fit requires split='val' "
+                f"(got: {meta_data.split!r}). val prediction base is required."
             )
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         self._bases = meta_data.bases
 
-        # 전체(global) 가중치 — 모든 task 합쳐서 1/MSE.
+        # Global weight — 1/MSE combined across all tasks.
         preds_all = meta_data.predictions_matrix()  # (N, K)
         y_all = meta_data.y_true()  # (N,)
         finite = np.isfinite(y_all) & np.all(np.isfinite(preds_all), axis=1)
         if finite.sum() == 0:
-            raise ValueError("val 데이터에 finite y_true 행이 없습니다.")
+            raise ValueError("No finite y_true rows in val data.")
         residuals_all = preds_all[finite] - y_all[finite, None]  # (M, K)
         mse_all = np.mean(residuals_all**2, axis=0)  # (K,)
         self._global_weights = self._mse_to_weights(mse_all)
@@ -193,7 +193,7 @@ class InverseVarianceStrategy(MetaLearner):
                 y = meta_data.y_true(task_df)  # (Nt,)
                 fin = np.isfinite(y) & np.all(np.isfinite(preds), axis=1)
                 if fin.sum() == 0:
-                    # task 전체가 NaN — 이 task 는 fit 에서 제외 (predict 시 fallback).
+                    # task entirely NaN — exclude this task from fit (fallback at predict time).
                     continue
                 resid = preds[fin] - y[fin, None]
                 mse = np.mean(resid**2, axis=0)
@@ -201,7 +201,7 @@ class InverseVarianceStrategy(MetaLearner):
         return self
 
     def _mse_to_weights(self, mse: np.ndarray) -> np.ndarray:
-        """``1 / (mse + eps)`` 후 (옵션) 합=1 정규화."""
+        """``1 / (mse + eps)`` then (optionally) normalize to sum=1."""
         inv = 1.0 / (mse + self.eps)
         if self.normalize_weights:
             s = inv.sum()
@@ -214,14 +214,14 @@ class InverseVarianceStrategy(MetaLearner):
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         if not self._bases:
             raise ValueError(
-                "InverseVarianceStrategy: fit 을 먼저 호출하세요 (val 예측 필요)."
+                "InverseVarianceStrategy: call fit first (val prediction required)."
             )
         if meta_data.bases != self._bases:
             raise ValueError(
-                f"predict 시 bases 가 fit 과 다릅니다: fit={self._bases} "
+                f"bases differ from fit at predict time: fit={self._bases} "
                 f"predict={meta_data.bases}"
             )
 
@@ -239,7 +239,7 @@ class InverseVarianceStrategy(MetaLearner):
                     w = self._task_weights[task]
                 elif self.unfit_strategy == "raise":
                     raise ValueError(
-                        f"InverseVarianceStrategy: task {task!r} 는 fit 에서 본 적 없음."
+                        f"InverseVarianceStrategy: task {task!r} was never seen in fit."
                     )
                 else:  # uniform
                     w = uniform
@@ -252,7 +252,7 @@ class InverseVarianceStrategy(MetaLearner):
     # ------------------------------------------------------------------ accessors
     @property
     def task_weights(self) -> dict[str, tuple[float, ...]]:
-        """``{task: (w_b1, w_b2, ...)}`` 디버그/로깅용 (튜플 사본)."""
+        """``{task: (w_b1, w_b2, ...)}`` for debug/logging purposes (tuple copy)."""
         return {t: tuple(float(x) for x in w) for t, w in self._task_weights.items()}
 
     @property
@@ -264,39 +264,39 @@ class InverseVarianceStrategy(MetaLearner):
 
 @STRATEGIES.register("per_task_grid")
 class PerTaskGridStrategy(MetaLearner):
-    """Per-task 1D grid search 로 가중치를 결정하는 strategy (옛 v3 honest 변형).
+    """Strategy that determines weights via per-task 1D grid search (honest variant of old v3).
 
-    K=2 base 전제. 각 task 마다 ``w ∈ [0, 1]`` 후보를 ``grid_step`` 단위로 sweep
-    하면서 ``(w * pred_a + (1-w) * pred_b)`` 의 잔차 MSE 가 최소가 되는 w 를 고른다.
-    선택된 ``(w, 1-w)`` 를 task 별로 보관 → predict 단계에서 그대로 적용.
+    Assumes K=2 bases. For each task, sweep ``w ∈ [0, 1]`` candidates in ``grid_step`` increments
+    and pick the w that minimizes the residual MSE of ``(w * pred_a + (1-w) * pred_b)``.
+    Store the chosen ``(w, 1-w)`` per task → apply as-is at the predict stage.
 
-    옛 v3 (``run_stacking_v3_pertask.find_optimal_weight``) 와 차이:
-        - 옛 v3 는 *test set 위에서* TDC ``group.evaluate`` 의 metric (auroc/mae)
-          으로 sweep → optimistic bias (test 위에서 hyperparameter tuning).
-        - 신규는 *val set 위에서* 잔차 MSE 로 sweep → honest holdout. ``InverseVariance``
-          와 동일한 self-contained 패턴 (TDC 평가 함수 호출 없음, base 의 자체 val
-          예측만으로 동작).
+    Differences from old v3 (``run_stacking_v3_pertask.find_optimal_weight``):
+        - Old v3 swept *on the test set* using TDC ``group.evaluate``'s metric (auroc/mae)
+          → optimistic bias (hyperparameter tuning on the test set).
+        - The new version sweeps *on the val set* via residual MSE → honest holdout. ``InverseVariance``
+          has the same self-contained pattern (no TDC evaluation function calls, operates only on base's own val
+          predictions).
 
-    K=2 제약:
-        옛 v3 도 (P1.1, STL) 두 base 만 다뤘다. K≥3 은 simplex grid (계산량 폭주)
-        가 필요해 별도 strategy 로 분리할 예정. 현재 ``fit`` 에서 K!=2 는 명시 reject.
+    K=2 constraint:
+        Old v3 also only handled two bases (P1.1, STL). K≥3 requires a simplex grid (computational blowup)
+        so it will be split into a separate strategy. Currently ``fit`` explicitly rejects K!=2.
 
     Args:
-        grid_step: w sweep 의 격자 간격 (0 < grid_step ≤ 1). 기본 ``0.1`` → 11 후보.
-            ``0.05`` 면 21 후보 등.
-        global_fit: True 면 task 와 무관하게 전체 잔차 한 덩어리로 단일 w 산출
-            (옛 v1 simple average + auto-tuning 효과). 기본 False (옛 v3 와 일관).
-        unfit_strategy: ``"uniform"`` (기본) — fit 에 없던 task 등장 시 균등 평균,
-            ``"raise"`` — ValueError. ``InverseVariance`` 와 동일 의미.
-        tie_breaker: 동률 (같은 best MSE) 일 때 선택 규칙.
-            - ``"smaller_w"``: 작은 w 우선 (기본, 첫 base 비중 보수적).
-            - ``"larger_w"``: 큰 w 우선.
-            - ``"closer_to_half"``: 0.5 에 가까운 w 우선.
-            거의 항상 동률은 grid 가 거칠 때만 발생.
+        grid_step: grid spacing for w sweep (0 < grid_step ≤ 1). Default ``0.1`` → 11 candidates.
+            ``0.05`` gives 21 candidates, etc.
+        global_fit: If True, compute a single w from all residuals combined, regardless of task
+            (old v1 simple average + auto-tuning effect). Default False (consistent with old v3).
+        unfit_strategy: ``"uniform"`` (default) — equal averaging when a task not seen in fit appears,
+            ``"raise"`` — ValueError. Same meaning as ``InverseVariance``.
+        tie_breaker: selection rule for ties (same best MSE).
+            - ``"smaller_w"``: prefer smaller w (default, conservative on first base's weight).
+            - ``"larger_w"``: prefer larger w.
+            - ``"closer_to_half"``: prefer w closer to 0.5.
+            Ties almost always occur only when the grid is coarse.
 
     Raises:
-        ValueError: ``__init__`` 인자 비정상 또는 ``fit`` 시 K!=2 / split!='val' /
-            잔차 계산 불가.
+        ValueError: ``__init__`` arguments invalid, or K!=2 / split!='val' / during ``fit``
+            residual computation not possible.
     """
 
     K_REQUIRED = 2
@@ -311,25 +311,25 @@ class PerTaskGridStrategy(MetaLearner):
     ) -> None:
         if not (0.0 < float(grid_step) <= 1.0):
             raise ValueError(
-                f"grid_step 은 (0, 1] 범위여야 합니다: {grid_step!r}"
+                f"grid_step must be in range (0, 1]: {grid_step!r}"
             )
         if unfit_strategy not in {"uniform", "raise"}:
             raise ValueError(
-                f"unfit_strategy 는 'uniform' | 'raise' 중 하나: {unfit_strategy!r}"
+                f"unfit_strategy must be one of 'uniform' | 'raise': {unfit_strategy!r}"
             )
         if tie_breaker not in {"smaller_w", "larger_w", "closer_to_half"}:
             raise ValueError(
-                f"tie_breaker 는 'smaller_w' | 'larger_w' | 'closer_to_half' 중 하나: "
+                f"tie_breaker must be one of 'smaller_w' | 'larger_w' | 'closer_to_half': "
                 f"{tie_breaker!r}"
             )
         self.grid_step = float(grid_step)
         self.global_fit = bool(global_fit)
         self.unfit_strategy = unfit_strategy
         self.tie_breaker = tie_breaker
-        # 격자 — 0/1 끝점 포함, 중복 없이 단조증가.
+        # Grid — includes 0/1 endpoints, monotonically increasing without duplicates.
         n_points = int(round(1.0 / self.grid_step)) + 1
         self._grid: np.ndarray = np.linspace(0.0, 1.0, n_points)
-        # fit 산출물.
+        # fit artifacts.
         self._task_weights: dict[str, np.ndarray] = {}
         self._global_weights: np.ndarray | None = None
         self._bases: tuple[str, ...] = ()
@@ -338,23 +338,23 @@ class PerTaskGridStrategy(MetaLearner):
     def fit(self, meta_data: MetaDataset) -> "PerTaskGridStrategy":
         if meta_data.split != "val":
             raise ValueError(
-                f"PerTaskGridStrategy.fit 은 split='val' 필요 "
-                f"(받음: {meta_data.split!r}). val 예측 base 가 필요합니다."
+                f"PerTaskGridStrategy.fit requires split='val' "
+                f"(got: {meta_data.split!r}). val prediction base is required."
             )
         K = len(meta_data.bases)
         if K != self.K_REQUIRED:
             raise ValueError(
-                f"PerTaskGridStrategy 는 K=2 base 전제. 받음: K={K} "
-                f"(bases={meta_data.bases}). K≥3 은 별도 simplex strategy 로 분리 예정."
+                f"PerTaskGridStrategy assumes K=2 bases. Got: K={K} "
+                f"(bases={meta_data.bases}). K≥3 will be split into a separate simplex strategy."
             )
         self._bases = meta_data.bases
 
-        # global fit: 모든 task 합쳐서 single w.
+        # global fit: single w combining all tasks.
         preds_all = meta_data.predictions_matrix()  # (N, 2)
         y_all = meta_data.y_true()
         finite = np.isfinite(y_all) & np.all(np.isfinite(preds_all), axis=1)
         if finite.sum() == 0:
-            raise ValueError("val 데이터에 finite y_true 행이 없습니다.")
+            raise ValueError("No finite y_true rows in val data.")
         w_global = self._best_w(preds_all[finite], y_all[finite])
         self._global_weights = np.array([w_global, 1.0 - w_global], dtype=np.float64)
 
@@ -364,32 +364,32 @@ class PerTaskGridStrategy(MetaLearner):
                 y = meta_data.y_true(task_df)
                 fin = np.isfinite(y) & np.all(np.isfinite(preds), axis=1)
                 if fin.sum() == 0:
-                    # task 전체가 NaN → fit 에서 제외. predict 시 fallback.
+                    # task entirely NaN → exclude from fit. Fallback at predict time.
                     continue
                 w = self._best_w(preds[fin], y[fin])
                 self._task_weights[task] = np.array([w, 1.0 - w], dtype=np.float64)
         return self
 
     def _best_w(self, preds: np.ndarray, y: np.ndarray) -> float:
-        """잔차 MSE 가 최소가 되는 w 격자값 반환.
+        """Return the grid value of w that minimizes residual MSE.
 
         Args:
-            preds: (M, 2) — finite 행만.
+            preds: (M, 2) — finite rows only.
             y: (M,) — finite y_true.
 
         Returns:
-            best w (float, 격자 후보 중 하나).
+            best w (float, one of the grid candidates).
         """
-        # mse(w) = mean((w*pred_a + (1-w)*pred_b - y)^2). 격자 후보 일괄 계산 (M, G).
+        # mse(w) = mean((w*pred_a + (1-w)*pred_b - y)^2). Batch compute over grid candidates (M, G).
         mse = np.empty(self._grid.shape[0], dtype=np.float64)
         for gi, w in enumerate(self._grid):
             combined = w * preds[:, 0] + (1.0 - w) * preds[:, 1]
             mse[gi] = float(np.mean((combined - y) ** 2))
         best_score = mse.min()
-        # 동률 처리.
+        # Tie handling.
         ties = np.where(mse <= best_score + 1e-12)[0]
         if self.tie_breaker == "smaller_w":
-            idx = ties[0]  # _grid 가 단조증가 → 가장 작은 w.
+            idx = ties[0]  # _grid is monotonically increasing → smallest w.
         elif self.tie_breaker == "larger_w":
             idx = ties[-1]
         else:  # closer_to_half
@@ -401,14 +401,14 @@ class PerTaskGridStrategy(MetaLearner):
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         if not self._bases:
             raise ValueError(
-                "PerTaskGridStrategy: fit 을 먼저 호출하세요 (val 예측 필요)."
+                "PerTaskGridStrategy: call fit first (val prediction required)."
             )
         if meta_data.bases != self._bases:
             raise ValueError(
-                f"predict 시 bases 가 fit 과 다릅니다: fit={self._bases} "
+                f"bases differ from fit at predict time: fit={self._bases} "
                 f"predict={meta_data.bases}"
             )
 
@@ -426,7 +426,7 @@ class PerTaskGridStrategy(MetaLearner):
                     w = self._task_weights[task]
                 elif self.unfit_strategy == "raise":
                     raise ValueError(
-                        f"PerTaskGridStrategy: task {task!r} 는 fit 에서 본 적 없음."
+                        f"PerTaskGridStrategy: task {task!r} was never seen in fit."
                     )
                 else:  # uniform
                     w = uniform
@@ -439,12 +439,12 @@ class PerTaskGridStrategy(MetaLearner):
     # ------------------------------------------------------------------ accessors
     @property
     def grid(self) -> tuple[float, ...]:
-        """sweep 격자 후보 (튜플 사본)."""
+        """Sweep grid candidates (tuple copy)."""
         return tuple(float(x) for x in self._grid)
 
     @property
     def task_weights(self) -> dict[str, tuple[float, ...]]:
-        """``{task: (w, 1-w)}`` — fit 에서 채워진 task 만 포함."""
+        """``{task: (w, 1-w)}`` — only includes tasks populated during fit."""
         return {t: tuple(float(x) for x in w) for t, w in self._task_weights.items()}
 
     @property
@@ -456,7 +456,7 @@ class PerTaskGridStrategy(MetaLearner):
 
 # ---------------------------------------------------------------------------- v4: OOF + meta-model
 
-# meta-model family → (회귀 키, 분류 키). META_MODELS 에 등록된 키여야 한다.
+# meta-model family → (regression key, classification key). Must be a key registered in META_MODELS.
 _META_MODEL_FAMILIES: dict[str, tuple[str, str]] = {
     "xgboost": ("xgboost_regressor", "xgboost_classifier"),
     "linear": ("ridge", "logistic_regression"),
@@ -465,47 +465,47 @@ _META_MODEL_FAMILIES: dict[str, tuple[str, str]] = {
 
 @STRATEGIES.register("oof_xgboost")
 class OOFXGBoostStrategy(MetaLearner):
-    """Out-of-fold + meta-model stacking (옛 v4 ``stack_one_task`` 동등).
+    """Out-of-fold + meta-model stacking (equivalent to legacy v4 ``stack_one_task``).
 
-    파이프라인:
-        1. ``fit(meta_val)`` — ``split == "val"`` 강제. task 별로
-           ``X = base 예측 (N_val, K)``, ``y = y_val``. seed 는 pool (옛 v4 와 동일).
-           task type 에 따라 ``META_MODELS`` 에서 회귀/분류 추정기를 빌드해 fit.
-           학습된 모델을 ``_task_models[task]`` 에 보관.
-        2. ``predict(meta_test)`` — task 별 ``X_test`` 를 학습된 meta 에 통과시켜
-           예측을 만든다. 분류는 ``predict_proba(X)[:, 1]`` (META_MODELS 의 분류기는
-           ``predict`` 가 P(y=1) 을 반환하도록 통일되어 있음).
+    Pipeline:
+        1. ``fit(meta_val)`` — enforces ``split == "val"``. Per task,
+           ``X = base predictions (N_val, K)``, ``y = y_val``. seed is pooled (same as legacy v4).
+           builds and fits a regression/classification estimator from ``META_MODELS`` depending on task type.
+           Stores the trained model in ``_task_models[task]``.
+        2. ``predict(meta_test)`` — passes per-task ``X_test`` through the trained meta model to
+           produce predictions. Classification uses ``predict_proba(X)[:, 1]`` (classifiers in META_MODELS are
+           unified so that ``predict`` returns P(y=1)).
 
-    옛 v4 (``run_stacking_v4_oof_xgb.stack_one_task``) 와 차이:
-        - 옛 v4 는 ``meta_type ∈ {"xgb", "linear"}`` 인자로 두 추정기 페어를 직접
-          호출. 신규는 ``meta_model_family`` (``"xgboost"`` | ``"linear"``) 로
-          ``META_MODELS`` registry 를 lookup → 새 family 추가가 다른 strategy
-          (HybridBlend 등) 와 공유 가능.
-        - 옛 v4 는 task 위 모든 seed 의 val 을 concat 해서 학습 (seed-pooled).
-          신규도 동일 — ``MetaDataset.from_predictionsets`` 결과가 자동으로
-          모든 seed 를 포함하므로 task 별 한 번의 fit 으로 충분.
+    Differences from legacy v4 (``run_stacking_v4_oof_xgb.stack_one_task``):
+        - legacy v4 directly called one of two estimator pairs via a ``meta_type ∈ {"xgb", "linear"}`` argument to
+          invoke them. The new version uses ``meta_model_family`` (``"xgboost"`` | ``"linear"``) to
+          lookup the ``META_MODELS`` registry → adding a new family can be shared with other strategies
+          (such as HybridBlend).
+        - legacy v4 trained by concatenating val across all seeds per task (seed-pooled).
+          The new version is the same — the result of ``MetaDataset.from_predictionsets`` automatically
+          includes all seeds, so a single fit per task is sufficient.
 
     Args:
-        meta_model_family: ``"xgboost"`` | ``"linear"`` (또는 명시 family 키).
-            ``EnsembleSpec.meta_model`` 이 이 값으로 매핑된다 (runner 가 전달).
-            기본 ``"xgboost"``.
-        meta_model_kwargs: 추정기 생성자에 전달할 추가 인자
-            (예: ``{"n_estimators": 200, "max_depth": 6}``). 회귀/분류 모두 동일
-            kwargs 를 그대로 사용 (옛 v4 동작과 동일). 기본 ``None``.
-        task_types: ``{task_name: "regression" | "classification"}`` 매핑. None 이면
-            ``task_type_default`` 사용. recipe 가 명시 dict 또는 ``task_set`` 키
-            (runner 가 ``TASK_SETS`` 에서 도출) 둘 다 지원.
-        task_type_default: ``task_types`` 에 없는 task 의 기본 type. None 이면
-            그런 task 등장 시 ``fit`` 에서 ValueError. 기본 None — 의도하지 않은
-            silent regression/classification 분류를 막는다.
-        unfit_strategy: predict 에서 fit 단계에 못 본 task 를 만났을 때 동작.
-            - ``"uniform"``: K 개 base 의 균등 평균 fallback (안전).
+        meta_model_family: ``"xgboost"`` | ``"linear"`` (or an explicit family key).
+            ``EnsembleSpec.meta_model`` is mapped to this value (passed by the runner).
+            Default ``"xgboost"``.
+        meta_model_kwargs: additional arguments passed to the estimator constructor
+            (e.g., ``{"n_estimators": 200, "max_depth": 6}``). Same for both regression/classification —
+            kwargs used as-is (same behavior as legacy v4). Default ``None``.
+        task_types: ``{task_name: "regression" | "classification"}`` mapping. If None,
+            uses ``task_type_default``. Supports both an explicit dict from the recipe or a ``task_set`` key
+            (derived by the runner from ``TASK_SETS``).
+        task_type_default: default type for tasks not in ``task_types``. If None,
+            raises ValueError in ``fit`` when such a task appears. Default None — prevents unintended
+            silent regression/classification misclassification.
+        unfit_strategy: behavior when predict encounters a task not seen during fit.
+            - ``"uniform"``: fallback to uniform average of K bases (safe).
             - ``"raise"``: ValueError.
-            기본 ``"uniform"``.
+            Default ``"uniform"``.
 
     Raises:
-        ValueError: ``__init__`` 인자 비정상 (family 미지원, unfit_strategy 오타),
-            ``fit`` 시 split 검증 실패 / task type 결정 실패 / 빈 base.
+        ValueError: invalid ``__init__`` argument (unsupported family, typo in unfit_strategy),
+            split validation failure / task type determination failure / empty base during ``fit``.
     """
 
     def __init__(
@@ -519,26 +519,26 @@ class OOFXGBoostStrategy(MetaLearner):
     ) -> None:
         if meta_model_family not in _META_MODEL_FAMILIES:
             raise ValueError(
-                f"meta_model_family 는 {sorted(_META_MODEL_FAMILIES)} 중 하나: "
+                f"meta_model_family must be one of {sorted(_META_MODEL_FAMILIES)}: "
                 f"{meta_model_family!r}"
             )
         if unfit_strategy not in {"uniform", "raise"}:
             raise ValueError(
-                f"unfit_strategy 는 'uniform' | 'raise' 중 하나: {unfit_strategy!r}"
+                f"unfit_strategy must be one of 'uniform' | 'raise': {unfit_strategy!r}"
             )
         if task_type_default is not None and task_type_default not in (
             "regression",
             "classification",
         ):
             raise ValueError(
-                f"task_type_default 는 'regression' | 'classification' | None: "
+                f"task_type_default must be 'regression' | 'classification' | None: "
                 f"{task_type_default!r}"
             )
         if task_types is not None:
             for t, tt in task_types.items():
                 if tt not in ("regression", "classification"):
                     raise ValueError(
-                        f"task_types[{t!r}] 는 'regression' | 'classification': {tt!r}"
+                        f"task_types[{t!r}] must be 'regression' | 'classification': {tt!r}"
                     )
         self.meta_model_family = meta_model_family
         self.meta_model_kwargs: dict[str, Any] = (
@@ -549,7 +549,7 @@ class OOFXGBoostStrategy(MetaLearner):
         )
         self.task_type_default = task_type_default
         self.unfit_strategy = unfit_strategy
-        # fit 산출물.
+        # fit artifacts.
         self._task_models: dict[str, Any] = {}
         self._task_type_used: dict[str, str] = {}
         self._bases: tuple[str, ...] = ()
@@ -561,8 +561,8 @@ class OOFXGBoostStrategy(MetaLearner):
         if self.task_type_default is not None:
             return self.task_type_default
         raise ValueError(
-            f"OOFXGBoostStrategy: task {task!r} 의 type 을 결정할 수 없습니다 — "
-            f"task_types 매핑에 추가하거나 task_type_default 를 지정하세요."
+            f"OOFXGBoostStrategy: cannot determine type for task {task!r} — "
+            f"add it to the task_types mapping or specify task_type_default."
         )
 
     def _build_meta(self, task_type: str) -> Any:
@@ -574,12 +574,12 @@ class OOFXGBoostStrategy(MetaLearner):
     def fit(self, meta_data: MetaDataset) -> "OOFXGBoostStrategy":
         if meta_data.split != "val":
             raise ValueError(
-                f"OOFXGBoostStrategy.fit 은 split='val' 필요 "
-                f"(받음: {meta_data.split!r}). val 예측 base 가 필요합니다."
+                f"OOFXGBoostStrategy.fit requires split='val' "
+                f"(received: {meta_data.split!r}). val prediction bases are required."
             )
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         self._bases = meta_data.bases
         self._task_models = {}
         self._task_type_used = {}
@@ -589,18 +589,18 @@ class OOFXGBoostStrategy(MetaLearner):
             y = meta_data.y_true(task_df)  # (Nt,)
             fin = np.isfinite(y) & np.all(np.isfinite(X), axis=1)
             if fin.sum() == 0:
-                # task 전체가 NaN — fit 에서 제외, predict 시 fallback.
+                # entire task is NaN — excluded from fit, fallback at predict time.
                 continue
             task_type = self._resolve_task_type(task)
             X_fin = X[fin]
             y_fin = y[fin]
             if task_type == "classification":
-                # 옛 v4 와 동일하게 정수 캐스트 후 0/1 강제 (META_MODELS 분류기가
-                # 다시 검증하지만, 미리 명시적으로 거른다).
+                # same as legacy v4: cast to int then enforce 0/1 (META_MODELS classifier
+                # re-validates it, but we filter explicitly beforehand).
                 y_int = y_fin.astype(int)
                 if not set(np.unique(y_int)).issubset({0, 1}):
                     raise ValueError(
-                        f"task {task!r} 는 classification 인데 y 가 0/1 이 아닙니다: "
+                        f"task {task!r} is classification but y is not 0/1: "
                         f"{np.unique(y_int)}"
                     )
                 meta = self._build_meta(task_type)
@@ -616,14 +616,14 @@ class OOFXGBoostStrategy(MetaLearner):
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         if not self._bases:
             raise ValueError(
-                "OOFXGBoostStrategy: fit 을 먼저 호출하세요 (val 예측 필요)."
+                "OOFXGBoostStrategy: call fit first (val predictions required)."
             )
         if meta_data.bases != self._bases:
             raise ValueError(
-                f"predict 시 bases 가 fit 과 다릅니다: fit={self._bases} "
+                f"bases differ from fit during predict: fit={self._bases} "
                 f"predict={meta_data.bases}"
             )
 
@@ -636,11 +636,11 @@ class OOFXGBoostStrategy(MetaLearner):
             X_task = preds[mask]
             if task in self._task_models:
                 meta = self._task_models[task]
-                # META_MODELS.predict 는 회귀=값, 분류=P(y=1) 를 반환 (계약).
+                # META_MODELS.predict returns regression=value, classification=P(y=1) (contract).
                 y_pred[mask] = np.asarray(meta.predict(X_task), dtype=np.float64)
             elif self.unfit_strategy == "raise":
                 raise ValueError(
-                    f"OOFXGBoostStrategy: task {task!r} 는 fit 에서 본 적 없음."
+                    f"OOFXGBoostStrategy: task {task!r} was never seen in fit."
                 )
             else:  # uniform
                 y_pred[mask] = X_task @ uniform_w
@@ -652,12 +652,12 @@ class OOFXGBoostStrategy(MetaLearner):
     # ------------------------------------------------------------------ accessors
     @property
     def fit_tasks(self) -> tuple[str, ...]:
-        """fit 단계에서 학습된 task 이름들 (정렬)."""
+        """Task names trained during fit (sorted)."""
         return tuple(sorted(self._task_models))
 
     @property
     def task_type_used(self) -> dict[str, str]:
-        """실제 fit 에 사용된 task type (디버깅용 사본)."""
+        """Task type actually used in fit (copy for debugging)."""
         return dict(self._task_type_used)
 
 
@@ -666,47 +666,47 @@ class OOFXGBoostStrategy(MetaLearner):
 
 @STRATEGIES.register("smart_fallback")
 class SmartFallbackStrategy(MetaLearner):
-    """task 별 winner-takes-all 또는 fallback (옛 v5 의 honest-holdout 변형).
+    """Per-task winner-takes-all or fallback (variant of legacy v5's honest-holdout).
 
-    파이프라인:
-        1. ``fit(meta_val)`` — ``split == "val"`` 강제. task 별로 base 의 잔차 MSE
-           ``mse_k = mean((y_pred_k - y_true)^2)`` 계산.
+    Pipeline:
+        1. ``fit(meta_val)`` — ``split == "val"`` enforced. Compute per-task residual MSE of base
+           Compute ``mse_k = mean((y_pred_k - y_true)^2)``.
            - dominance = ``(best_mse + eps) / (second_best_mse + eps)``.
-           - ``dominance < winner_threshold`` 이면 winner-takes-all
-             (가장 낮은 MSE base 의 weight 만 1.0, 나머지 0.0).
-           - 그 외엔 ``fallback`` 옵션에 따라 가중치 결정 — ``"average"`` 균등 평균
-             또는 ``"inverse_variance"`` 1/MSE 정규화.
-           산출: ``_task_weights[task] = ndarray(K,)``,
+           - If ``dominance < winner_threshold``, winner-takes-all
+             (only the base with the lowest MSE gets weight 1.0, rest 0.0).
+           - Otherwise, determine weights according to the ``fallback`` option — ``"average"`` uniform average
+             or ``"inverse_variance"`` 1/MSE normalization.
+           Output: ``_task_weights[task] = ndarray(K,)``,
                  ``_task_decisions[task] ∈ {"winner", "fallback"}``.
-        2. ``predict(meta_test)`` — task 별 가중치를 곱해 예측 결합.
+        2. ``predict(meta_test)`` — combine predictions weighted per task.
 
-    옛 v5 (``run_stacking_v5_smart``) 와 차이:
-        - 옛 v5 의 "smart" 는 base 가용성 기반 (val/test size 불일치 시 base drop)
-          후 Linear OOF 학습이었다. 이는 신규 ``MetaDataset.from_predictionsets``
-          의 ``(seed, task, smiles)`` inner-join 으로 자동 처리되므로 동일 의미가
-          이미 내재.
-        - 신규 의도는 메모 #4.5 — *task 별 base 강점/약점* 평가 후 winner-takes-all
-          또는 fallback. honest holdout (val 잔차 MSE) 기준 self-contained 동작.
+    Differences from old v5 (``run_stacking_v5_smart``):
+        - The "smart" in old v5 was based on base availability (dropping bases on val/test size mismatch)
+          followed by Linear OOF training. This is handled automatically by the new ``MetaDataset.from_predictionsets``
+          via its ``(seed, task, smiles)`` inner-join, so the same meaning is
+          already inherent.
+        - New intent is memo #4.5 — *per-task base strength/weakness* evaluation, then winner-takes-all
+          or fallback. Self-contained operation based on honest holdout (val residual MSE).
 
-    K=1 처리:
-        ``runner-up`` 이 없으면 dominance 정의 불가 → ``weight = [1.0]`` 로 short-circuit.
-        ``decisions[task] = "winner"`` 로 기록.
+    K=1 handling:
+        If there is no ``runner-up``, dominance cannot be defined → short-circuit with ``weight = [1.0]``.
+        Recorded as ``decisions[task] = "winner"``.
 
     Args:
-        winner_threshold: dominance ratio 임계값. ``best_mse / second_best_mse``
-            가 이 값보다 작으면 winner-takes-all. 0 < threshold ≤ 1. 기본 ``0.5``
-            — winner 의 MSE 가 runner-up 의 절반 이하일 때만 단독 채택 (보수적).
-        fallback: dominance ≥ threshold 일 때 사용할 가중 전략.
-            - ``"average"`` — K base 균등 평균 (기본).
-            - ``"inverse_variance"`` — ``1/(mse + eps)`` 정규화.
-        eps: 분모 0 보호 + dominance 비율 안정화. 기본 ``1e-12``.
-        global_fit: True 면 task 무관하게 전체 잔차로 단일 가중치. 기본 False.
-        unfit_strategy: predict 에서 fit 단계에 못 본 task 만났을 때.
-            - ``"uniform"``: 균등 평균 fallback (기본).
+        winner_threshold: dominance ratio threshold. ``best_mse / second_best_mse``
+            if this is smaller than this value, winner-takes-all. 0 < threshold ≤ 1. Default ``0.5``
+            — adopted alone only when the winner's MSE is at most half of the runner-up's (conservative).
+        fallback: weighting strategy used when dominance ≥ threshold.
+            - ``"average"`` — uniform average of K bases (default).
+            - ``"inverse_variance"`` — ``1/(mse + eps)`` normalization.
+        eps: protects against zero denominator + stabilizes dominance ratio. Default ``1e-12``.
+        global_fit: if True, a single weight from overall residuals regardless of task. Default False.
+        unfit_strategy: when predict encounters a task not seen during fit.
+            - ``"uniform"``: uniform average fallback (default).
             - ``"raise"``: ValueError.
 
     Raises:
-        ValueError: ``__init__`` 인자 비정상 또는 ``fit`` 시 split/잔차 검증 실패.
+        ValueError: ``__init__`` arguments invalid or split/residual validation failure during ``fit``.
     """
 
     def __init__(
@@ -720,24 +720,24 @@ class SmartFallbackStrategy(MetaLearner):
     ) -> None:
         if not (0.0 < float(winner_threshold) <= 1.0):
             raise ValueError(
-                f"winner_threshold 는 (0, 1] 범위여야 합니다: {winner_threshold!r}"
+                f"winner_threshold must be in the range (0, 1]: {winner_threshold!r}"
             )
         if fallback not in {"average", "inverse_variance"}:
             raise ValueError(
-                f"fallback 은 'average' | 'inverse_variance' 중 하나: {fallback!r}"
+                f"fallback must be one of 'average' | 'inverse_variance': {fallback!r}"
             )
         if unfit_strategy not in {"uniform", "raise"}:
             raise ValueError(
-                f"unfit_strategy 는 'uniform' | 'raise' 중 하나: {unfit_strategy!r}"
+                f"unfit_strategy must be one of 'uniform' | 'raise': {unfit_strategy!r}"
             )
         if float(eps) < 0.0:
-            raise ValueError(f"eps 는 음수일 수 없습니다: {eps!r}")
+            raise ValueError(f"eps cannot be negative: {eps!r}")
         self.winner_threshold = float(winner_threshold)
         self.fallback = fallback
         self.eps = float(eps)
         self.global_fit = bool(global_fit)
         self.unfit_strategy = unfit_strategy
-        # fit 산출물.
+        # fit outputs.
         self._task_weights: dict[str, np.ndarray] = {}
         self._task_decisions: dict[str, str] = {}
         self._global_weights: np.ndarray | None = None
@@ -746,10 +746,10 @@ class SmartFallbackStrategy(MetaLearner):
 
     # ------------------------------------------------------------------ helpers
     def _decide_weights(self, mse: np.ndarray) -> tuple[np.ndarray, str]:
-        """base MSE 벡터 → (가중치, 결정 라벨).
+        """Base MSE vector → (weight, decision label).
 
         Args:
-            mse: shape (K,), 모든 값 ≥ 0. 비-finite 값 발생 시 fallback 으로 강제.
+            mse: shape (K,), all values ≥ 0. Forced to fallback if non-finite values occur.
 
         Returns:
             (weights ndarray (K,), label ∈ {"winner", "fallback"}).
@@ -760,10 +760,10 @@ class SmartFallbackStrategy(MetaLearner):
 
         finite = np.isfinite(mse)
         if not finite.all():
-            # 비정상 MSE — winner 결정 위험 → fallback 강제.
+            # Abnormal MSE — risky to decide winner → force fallback.
             return self._fallback_weights(np.where(finite, mse, np.inf)), "fallback"
 
-        order = np.argsort(mse, kind="stable")  # 가장 낮은 MSE 가 첫번째.
+        order = np.argsort(mse, kind="stable")  # lowest MSE first.
         best_idx = int(order[0])
         best = float(mse[order[0]])
         second_best = float(mse[order[1]])
@@ -776,17 +776,17 @@ class SmartFallbackStrategy(MetaLearner):
         return self._fallback_weights(mse), "fallback"
 
     def _fallback_weights(self, mse: np.ndarray) -> np.ndarray:
-        """fallback 모드의 가중치 산출.
+        """Weight computation for fallback mode.
 
-        ``"average"``: ``1/K`` 균등.
-        ``"inverse_variance"``: ``1/(mse + eps)`` 정규화. inf MSE 항목은 0 가중.
+        ``"average"``: ``1/K`` uniform.
+        ``"inverse_variance"``: ``1/(mse + eps)`` normalization. inf MSE entries get 0 weight.
         """
         K = len(mse)
         if self.fallback == "average":
             return np.full(K, 1.0 / K, dtype=np.float64)
         # inverse_variance.
         inv = 1.0 / (mse + self.eps)
-        # inf MSE → inv = 0 자동 (1 / inf = 0).
+        # inf MSE → inv = 0 automatically (1 / inf = 0).
         s = inv.sum()
         if not np.isfinite(s) or s <= 0.0:
             return np.full(K, 1.0 / K, dtype=np.float64)
@@ -796,22 +796,22 @@ class SmartFallbackStrategy(MetaLearner):
     def fit(self, meta_data: MetaDataset) -> "SmartFallbackStrategy":
         if meta_data.split != "val":
             raise ValueError(
-                f"SmartFallbackStrategy.fit 은 split='val' 필요 "
-                f"(받음: {meta_data.split!r}). val 예측 base 가 필요합니다."
+                f"SmartFallbackStrategy.fit requires split='val' "
+                f"(received: {meta_data.split!r}). val prediction base is required."
             )
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         self._bases = meta_data.bases
         self._task_weights = {}
         self._task_decisions = {}
 
-        # global fit: 모든 task 합쳐서 단일 결정.
+        # global fit: single decision combining all tasks.
         preds_all = meta_data.predictions_matrix()  # (N, K)
         y_all = meta_data.y_true()
         finite = np.isfinite(y_all) & np.all(np.isfinite(preds_all), axis=1)
         if finite.sum() == 0:
-            raise ValueError("val 데이터에 finite y_true 행이 없습니다.")
+            raise ValueError("No finite y_true rows in val data.")
         residuals_all = preds_all[finite] - y_all[finite, None]  # (M, K)
         mse_all = np.mean(residuals_all**2, axis=0)
         gw, gdec = self._decide_weights(mse_all)
@@ -824,7 +824,7 @@ class SmartFallbackStrategy(MetaLearner):
                 y = meta_data.y_true(task_df)
                 fin = np.isfinite(y) & np.all(np.isfinite(preds), axis=1)
                 if fin.sum() == 0:
-                    # task 전체 NaN — fit 에서 제외, predict 시 fallback.
+                    # task entirely NaN — excluded from fit, fallback at predict.
                     continue
                 resid = preds[fin] - y[fin, None]
                 mse = np.mean(resid**2, axis=0)
@@ -837,14 +837,14 @@ class SmartFallbackStrategy(MetaLearner):
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         K = len(meta_data.bases)
         if K == 0:
-            raise ValueError("MetaDataset 에 base 가 없습니다.")
+            raise ValueError("MetaDataset has no base.")
         if not self._bases:
             raise ValueError(
-                "SmartFallbackStrategy: fit 을 먼저 호출하세요 (val 예측 필요)."
+                "SmartFallbackStrategy: call fit first (val prediction required)."
             )
         if meta_data.bases != self._bases:
             raise ValueError(
-                f"predict 시 bases 가 fit 과 다릅니다: fit={self._bases} "
+                f"bases differ from fit during predict: fit={self._bases} "
                 f"predict={meta_data.bases}"
             )
 
@@ -862,7 +862,7 @@ class SmartFallbackStrategy(MetaLearner):
                     w = self._task_weights[task]
                 elif self.unfit_strategy == "raise":
                     raise ValueError(
-                        f"SmartFallbackStrategy: task {task!r} 는 fit 에서 본 적 없음."
+                        f"SmartFallbackStrategy: task {task!r} was never seen during fit."
                     )
                 else:  # uniform
                     w = uniform
@@ -875,12 +875,12 @@ class SmartFallbackStrategy(MetaLearner):
     # ------------------------------------------------------------------ accessors
     @property
     def task_weights(self) -> dict[str, tuple[float, ...]]:
-        """``{task: (w_b1, w_b2, ...)}`` 디버그/로깅용 (튜플 사본)."""
+        """``{task: (w_b1, w_b2, ...)}`` for debug/logging (tuple copy)."""
         return {t: tuple(float(x) for x in w) for t, w in self._task_weights.items()}
 
     @property
     def task_decisions(self) -> dict[str, str]:
-        """``{task: "winner" | "fallback"}`` — 어떤 결정 경로였는지."""
+        """``{task: "winner" | "fallback"}`` — which decision path was taken."""
         return dict(self._task_decisions)
 
     @property
@@ -896,46 +896,46 @@ class SmartFallbackStrategy(MetaLearner):
 
 @STRATEGIES.register("hybrid_blend")
 class HybridBlendStrategy(MetaLearner):
-    """두 sub-strategy 의 예측을 ``alpha`` 로 블렌드 (옛 v6 의 일반화).
+    """Blend predictions of two sub-strategies with ``alpha`` (generalization of old v6).
 
-    옛 v6 (``run_stacking_v6_hybrid``) 는 ``alpha * v5_smart + (1 - alpha) * v1_avg(0.7, 0.3)``
-    하드코딩이었다. 신규는 두 sub-strategy 를 registry 키로 받아 자유롭게 조합 가능
-    하도록 일반화 — recipe 에서 ``primary``/``secondary`` 와 각각의 kwargs 를 명시.
+    Old v6 (``run_stacking_v6_hybrid``) was ``alpha * v5_smart + (1 - alpha) * v1_avg(0.7, 0.3)``
+    hardcoded. The new version takes two sub-strategies as registry keys allowing free combination
+    generalized — specify ``primary``/``secondary`` and their respective kwargs in the recipe.
 
-    파이프라인:
-        1. ``__init__`` — primary/secondary sub-strategy 를 registry lookup + 빌드.
-        2. ``fit(meta)`` — 두 sub-strategy 모두 ``fit(meta)`` 호출.
-            - ``AverageStrategy`` 처럼 fit no-op 인 경우도 안전 (default 구현).
-            - ``InverseVariance`` / ``SmartFallback`` 등 ``split == "val"`` 강제하는
-              sub-strategy 는 본 hybrid 의 fit 도 자동으로 val MetaDataset 을 요구.
-        3. ``predict(meta)`` — 두 sub.predict(meta) 결과를 (seed, task, smiles, y_true)
-            행 정렬 검증 후 ``alpha * primary + (1 - alpha) * secondary`` 출력.
+    Pipeline:
+        1. ``__init__`` — registry lookup + build the primary/secondary sub-strategy.
+        2. ``fit(meta)`` — calls ``fit(meta)`` on both sub-strategies.
+            - Safe even when fit is a no-op, as with ``AverageStrategy`` (default implementation).
+            - For sub-strategies like ``InverseVariance`` / ``SmartFallback`` that force ``split == "val"``,
+              this hybrid's fit also automatically requires a val MetaDataset.
+        3. ``predict(meta)`` — validates row alignment of both sub.predict(meta) results by (seed, task, smiles, y_true)
+            then outputs ``alpha * primary + (1 - alpha) * secondary``.
 
-    옛 v6 와 차이:
-        - 사이즈 mismatch (옛 v6 가 ``len(v5p) != len(sp)`` 시 sp 만 사용했던 케이스):
-          신규는 같은 MetaDataset 을 두 sub-strategy 에 넘기므로 row 수가 동일함을
-          보장. 따라서 mismatch 처리 불필요. 입력 PredictionSet 자체에서 base 별
-          val/test 누락이 있으면 ``MetaDataset.from_predictionsets`` 의 inner-join
-          이 미리 처리.
-        - sub-strategy 가 ``smart_fallback`` 외에도 자유롭게 (예: ``oof_xgboost`` +
-          ``inverse_variance``) 결합 가능.
+    Differences from old v6:
+        - Size mismatch (the case where old v6 used only sp when ``len(v5p) != len(sp)``):
+          the new version passes the same MetaDataset to both sub-strategies, guaranteeing
+          an identical row count. Therefore mismatch handling is unnecessary. If the input PredictionSet itself is missing
+          val/test per base, the inner-join of ``MetaDataset.from_predictionsets``
+          already handles it beforehand.
+        - sub-strategies can also be combined freely beyond ``smart_fallback`` (e.g. ``oof_xgboost`` +
+          ``inverse_variance``).
 
     Args:
-        alpha: primary 가중치 (1 - alpha 는 secondary). ``[0, 1]`` 범위.
-        primary: STRATEGIES registry 키 (기본 ``"smart_fallback"`` — 옛 v6 와 일관).
-        secondary: STRATEGIES registry 키 (기본 ``"average"`` — 옛 v6 의 stack 70/30).
-        primary_kwargs: primary 생성자 kwargs. 빈 dict 면 sub-strategy default.
-        secondary_kwargs: secondary 생성자 kwargs.
+        alpha: primary weight (1 - alpha is secondary). Range ``[0, 1]``.
+        primary: STRATEGIES registry key (default ``"smart_fallback"`` — consistent with old v6).
+        secondary: STRATEGIES registry key (default ``"average"`` — old v6's stack 70/30).
+        primary_kwargs: constructor kwargs for primary. If an empty dict, uses the sub-strategy default.
+        secondary_kwargs: constructor kwargs for secondary.
 
     Raises:
-        ValueError: alpha 범위 / primary == secondary 키 동일 / sub-strategy 빌드
-            실패 / 예측 결과 row mismatch.
+        ValueError: alpha out of range / primary == secondary same key / sub-strategy build
+            failure / prediction result row mismatch.
 
     Note:
-        - sub-strategy 가 ``hybrid_blend`` 자체를 가리켜 재귀 lookup 도 등록 자체는
-          가능하나, 무한 루프 방지는 사용자 책임 (기본 사용 사례엔 등장 안 함).
-        - ``runners.stack`` 의 ``fit_split=val`` 옵션이 본 strategy 에도 그대로 적용
-          — fit 단계는 val MetaDataset, predict 단계는 test MetaDataset 으로 자연
+        - Even registering a sub-strategy that points to ``hybrid_blend`` itself for recursive lookup is
+          possible, but preventing infinite loops is the user's responsibility (does not occur in default use cases).
+        - The ``fit_split=val`` option of ``runners.stack`` also applies as-is to this strategy
+          — naturally resulting in the fit stage using the val MetaDataset and the predict stage using the test MetaDataset
           dispatch.
     """
 
@@ -949,15 +949,15 @@ class HybridBlendStrategy(MetaLearner):
         secondary_kwargs: Mapping[str, Any] | None = None,
     ) -> None:
         if not (0.0 <= float(alpha) <= 1.0):
-            raise ValueError(f"alpha 는 [0, 1] 범위여야 합니다: {alpha!r}")
+            raise ValueError(f"alpha must be in range [0, 1]: {alpha!r}")
         if primary == secondary and (
             (primary_kwargs or {}) == (secondary_kwargs or {})
         ):
             raise ValueError(
-                f"primary 와 secondary 가 동일 strategy + 동일 kwargs 입니다 "
-                f"({primary!r}). hybrid 효과가 없습니다."
+                f"primary and secondary are the same strategy + same kwargs "
+                f"({primary!r}). There is no hybrid effect."
             )
-        # sub-strategy 빌드는 build_with_kwargs 에서 수행.
+        # sub-strategy build is performed in build_with_kwargs.
         primary_kw = dict(primary_kwargs) if primary_kwargs else {}
         secondary_kw = dict(secondary_kwargs) if secondary_kwargs else {}
         try:
@@ -966,7 +966,7 @@ class HybridBlendStrategy(MetaLearner):
             )
         except Exception as exc:
             raise ValueError(
-                f"hybrid_blend: primary={primary!r} 빌드 실패: {exc}"
+                f"hybrid_blend: primary={primary!r} build failed: {exc}"
             ) from exc
         try:
             self._secondary: MetaLearner = STRATEGIES.build_with_kwargs(
@@ -974,7 +974,7 @@ class HybridBlendStrategy(MetaLearner):
             )
         except Exception as exc:
             raise ValueError(
-                f"hybrid_blend: secondary={secondary!r} 빌드 실패: {exc}"
+                f"hybrid_blend: secondary={secondary!r} build failed: {exc}"
             ) from exc
 
         self.alpha = float(alpha)
@@ -994,29 +994,29 @@ class HybridBlendStrategy(MetaLearner):
     # ------------------------------------------------------------------ predict
     def predict(self, meta_data: MetaDataset) -> pd.DataFrame:
         if not self._fitted:
-            # average 등 무학습 sub-strategy 만 묶였다면 fit 호출이 noop 이라 위험 없음.
-            # 하지만 일관성 위해 명시 안내 (val 강제 sub 가 섞이면 fit 필요).
+            # If only untrained sub-strategies like average are combined, fit calls are a noop, so there is no risk.
+            # But for consistency, an explicit notice is given (fit is required if a val-forcing sub is mixed in).
             raise RuntimeError(
-                "HybridBlendStrategy: fit 을 먼저 호출하세요. "
-                "(sub-strategy 중 일부는 fit 단계에서 val 잔차로 가중치를 학습합니다.)"
+                "HybridBlendStrategy: call fit first. "
+                "(Some sub-strategies learn weights from val residuals during the fit stage.)"
             )
         primary_df = self._primary.predict(meta_data)
         secondary_df = self._secondary.predict(meta_data)
         if len(primary_df) != len(secondary_df):
             raise ValueError(
-                f"hybrid_blend: primary/secondary predict 행 수 불일치 "
+                f"hybrid_blend: primary/secondary predict row count mismatch "
                 f"(primary={len(primary_df)} secondary={len(secondary_df)})."
             )
-        # row alignment 검증 — (seed, task, smiles) 가 동일 순서여야 안전 블렌드.
+        # row alignment validation — (seed, task, smiles) must be in the same order for a safe blend.
         keys = ["seed", "task", "smiles"]
-        # MetaDataset.df 의 키 순서 그대로 두 sub 가 따랐다면 직접 인덱스 비교 가능.
-        # AverageStrategy 등 reset_index(drop=True) 로 동일 순서 보장.
+        # If both subs followed the key order of MetaDataset.df exactly, direct index comparison is possible.
+        # AverageStrategy and others guarantee the same order via reset_index(drop=True).
         if not primary_df[keys].reset_index(drop=True).equals(
             secondary_df[keys].reset_index(drop=True)
         ):
             raise ValueError(
-                "hybrid_blend: primary/secondary predict 의 (seed, task, smiles) "
-                "순서가 다릅니다. sub-strategy 출력 정렬을 점검하세요."
+                "hybrid_blend: (seed, task, smiles) of primary/secondary predict "
+                "order differs. Check the sub-strategy output ordering."
             )
         a = self.alpha
         y_pred = (
@@ -1030,7 +1030,7 @@ class HybridBlendStrategy(MetaLearner):
     # ------------------------------------------------------------------ accessors
     @property
     def primary(self) -> MetaLearner:
-        """디버그용 — 학습된 primary sub-strategy 인스턴스."""
+        """For debugging — the trained primary sub-strategy instance."""
         return self._primary
 
     @property

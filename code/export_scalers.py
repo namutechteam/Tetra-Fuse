@@ -69,7 +69,7 @@ def main() -> int:
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--out", default="weights", help="output root (same as export_weights.py)")
     ap.add_argument("--members", nargs="*", default=list(MEMBERS))
-    ap.add_argument("--repo-root", default="/nas/tk_ahn/ADMET-MTL/qadmet",
+    ap.add_argument("--repo-root", default="./qadmet",
                     help="qadmet repo root (holds the cached TDC data/ directory)")
     args = ap.parse_args()
 

@@ -1,13 +1,13 @@
-"""multitask Lightning 모듈.
+"""multitask Lightning module.
 
-Spec(``BackboneSpec + FusionSpec + HeadSpec + LossSpec``) → ``LightningModule`` 조립.
-``lightning`` 은 import 시 비교적 무겁기 때문에 본 sub-package 는 ``qadmet.modules``
-의 ``__init__`` 에서는 import 하지 않는다 — 등록할 registry 가 없어 import-time
-부작용도 없다. 사용 측에서 명시적으로::
+Spec(``BackboneSpec + FusionSpec + HeadSpec + LossSpec``) → ``LightningModule`` assembly.
+``lightning`` is relatively heavy on import, so this sub-package's ``qadmet.modules``
+``__init__`` does not import it — since there's no registry to register, import-time
+side effect is also absent. Explicitly on the usage side::
 
     from qadmet.modules.multitask import MultitaskLitModule
 
-으로 가져온다.
+import it as.
 """
 
 from __future__ import annotations

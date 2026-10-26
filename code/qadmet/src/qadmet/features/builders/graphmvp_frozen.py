@@ -1,25 +1,25 @@
 """GraphMVP frozen pooled embedding builder (300-dim, pre-projection).
 
-frozen-backbone ablation 용 — LoRA/adapter 를 전혀 학습하지 않고 fusion+head 만
-학습할 때 매 epoch GIN 재계산을 피하기 위해 frozen graph embedding 을 미리 parquet 로
-저장한다.
+frozen-backbone ablation — trains only fusion+head, without training LoRA/adapter at all
+To avoid recomputing GIN every epoch during training, precompute frozen graph embeddings as parquet
+and save them.
 
-frozen-only forward (adapter 없음):
-    atom_encoder(x) 뒤로 각 layer i:
+frozen-only forward (no adapter):
+    After atom_encoder(x), for each layer i:
         edge_emb = gnn.bond_encoder(edge_attr)
         mp_out   = (1 + gnn.eps) * x_l + gnn.propagate(edge_index, x=x_l, edge_attr=edge_emb)
         h_l      = batch_norms[i](gnn.mlp(mp_out))
         x_{l+1}  = relu(h_l)  (i < num_layer-1)  /  h_l  (last layer)
     graph_h = backbone._pool(h, batch.batch)   # (B, 300)
 
-이 흐름은 GraphMVPBackbone.forward 의 ``adapter_kind=="paper"`` 분기에서 adapter
-기여(a1/a2)를 0 으로 둔 것과 동일하며, frozen GIN (GraphMVPGIN.forward) 의
-``drop_ratio=0`` 결과와도 일치한다.
+This flow is, in the ``adapter_kind=="paper"`` branch of GraphMVPBackbone.forward, equivalent to setting the adapter
+contribution (a1/a2) to 0, and also matches frozen GIN (GraphMVPGIN.forward)'s
+result with ``drop_ratio=0``.
 
 Note:
-    - SMILES → PyG Batch 는 학습 경로와 동일하게 ``smiles_batch_to_pyg`` 사용.
-    - present_mask=False (RDKit parse 실패 / atom 0) 분자는 출력 dict 에서 제외한다.
-    - 무거운 의존성(ogb / torch_geometric)은 method 안에서만 import.
+    - SMILES → PyG Batch uses ``smiles_batch_to_pyg``, same as the training path.
+    - Molecules with present_mask=False (RDKit parse failure / 0 atoms) are excluded from the output dict.
+    - Heavy dependencies (ogb / torch_geometric) are imported only within the method.
 """
 
 from __future__ import annotations
@@ -67,8 +67,8 @@ class GraphMVPFrozenBuilder(PrecomputeBase):
         from qadmet.modules.backbones.graphmvp import GraphMVPBackbone
 
         logger.info("building GraphMVP frozen backbone from %s", self.checkpoint_path)
-        # adapter_kind="lora_gin" 은 최소 비용 — adapter 는 생성되지만 frozen GIN
-        # submodule 만 직접 호출하므로 사용되지 않는다.
+        # adapter_kind="lora_gin" is minimal cost — the adapter is created but frozen GIN
+        # is not used since only the submodule is called directly.
         backbone = GraphMVPBackbone(
             checkpoint_path=self.checkpoint_path,
             num_layer=5,
@@ -119,6 +119,6 @@ class GraphMVPFrozenBuilder(PrecomputeBase):
             present = present_mask.cpu().numpy()
             for j, s in enumerate(chunk):
                 if not present[j]:
-                    continue  # invalid SMILES — 출력 dict 에서 제외.
+                    continue  # invalid SMILES — excluded from output dict.
                 out[s] = arr[j]
         return out

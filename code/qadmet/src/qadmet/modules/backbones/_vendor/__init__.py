@@ -1,5 +1,5 @@
-"""vendored 외부 코드 (수정 금지).
+"""vendored external code (do not modify).
 
-- ``unimol_v2``: scripts-old/qw/backbones/unimol_v2.py 와 byte-identical.
+- ``unimol_v2``: byte-identical with scripts-old/qw/backbones/unimol_v2.py.
   upstream: deepmodeling/Uni-Mol unimol_tools v2.
 """

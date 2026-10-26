@@ -1,8 +1,8 @@
-"""task → metric 함수 매핑.
+"""task → metric function mapping.
 
-TDC ``group.evaluate_many()`` 가 metric 문자열을 직접 받지만, OOF 스택킹·로컬
-sanity check 시 동일 메트릭을 자체 계산할 수 있어야 한다. 본 모듈은 단순한
-sklearn 기반 구현체 매핑만 제공한다.
+TDC ``group.evaluate_many()`` directly accepts metric strings, but for OOF stacking/local
+sanity checks the same metric must be computable independently. This module only provides
+a simple sklearn-based implementation mapping.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from typing import Callable
 
 import numpy as np
 
-# 지연 import — sklearn metrics 모듈 자체 import 비용을 한 번만.
+# Lazy import — pay the sklearn metrics module import cost only once.
 _metric_fns: dict[str, Callable[[np.ndarray, np.ndarray], float]] = {}
 
 
@@ -50,15 +50,15 @@ def _lazy_init() -> None:
 
 
 def metric_fn(name: str) -> Callable[[np.ndarray, np.ndarray], float]:
-    """metric 이름 → callable. 미지원 키는 KeyError."""
+    """metric name → callable. Unsupported key raises KeyError."""
     _lazy_init()
     if name not in _metric_fns:
-        raise KeyError(f"미지원 metric: {name!r}. 지원: {sorted(_metric_fns)}")
+        raise KeyError(f"Unsupported metric: {name!r}. Supported: {sorted(_metric_fns)}")
     return _metric_fns[name]
 
 
 def compute_metric(name: str, y_true: np.ndarray, y_pred: np.ndarray) -> float:
-    """NaN 마스킹 후 메트릭 계산. 유효 샘플 0 개면 NaN 반환."""
+    """Compute metric after NaN masking. Returns NaN if there are 0 valid samples."""
     y_true = np.asarray(y_true).reshape(-1)
     y_pred = np.asarray(y_pred).reshape(-1)
     mask = ~np.isnan(y_true)

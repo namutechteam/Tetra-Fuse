@@ -1,15 +1,15 @@
 """MoLFormerLoRABackbone — IBM MoLFormer-XL + PEFT LoRA fine-tune.
 
-옛 ``run_stl_molformer_lora.MolFormerSTL`` 과 ``GroupedTaskUncertaintyMPNN``
-(molformer_lora_enabled 분기, pipeline_mtl line 933-948) 에서 동일하게 사용된 LoRA
-설정을 단일 backbone 으로 분리한다.
+Old ``run_stl_molformer_lora.MolFormerSTL`` and ``GroupedTaskUncertaintyMPNN``
+(molformer_lora_enabled branch, pipeline_mtl line 933-948) LoRA used identically in
+configuration separated into a single backbone.
 
 Why LoRA target_modules=["query", "value"]:
-    legacy 옛 코드와 동일. attention 의 q/v projection 만 학습하고 base 는 frozen.
+    legacy, same as old code. Only attention's q/v projection is trained; base is frozen.
 
 Lazy import:
-    transformers / peft 는 import 시 큰 의존성 로딩이 일어나므로 ``__init__`` 안에서만
-    import 한다. 등록 데코레이터 동작 시점에는 import 되지 않는다.
+    transformers / peft trigger heavy dependency loading on import, so only inside ``__init__``
+    is the import performed. It is not imported when the registration decorator executes.
 """
 
 from __future__ import annotations
@@ -20,8 +20,8 @@ from .registry import BACKBONES
 
 
 MOLFORMER_MODEL_ID_DEFAULT = "ibm/MoLFormer-XL-both-10pct"
-# HF hub 최신 커밋의 modeling_molformer.py 가 transformers>=신버전 전용
-# create_bidirectional_mask 를 import → 4.57.x 와 비호환. 검증된 커밋으로 pin.
+# HF hub modeling_molformer.py at the latest commit is exclusive to transformers>=new version
+# imports create_bidirectional_mask → incompatible with 4.57.x. Pin to a verified commit.
 MOLFORMER_REVISION = "7b12d946c181a37f6012b9dc3b002275de070314"
 MOLFORMER_DIM = 768
 
@@ -31,16 +31,16 @@ class MoLFormerLoRABackbone(nn.Module):
     """MoLFormer-XL pretrained + LoRA wrapper. forward → (B, 768) pooler.
 
     Args:
-        model_id: HuggingFace Hub id 또는 로컬 경로. 기본 ``ibm/MoLFormer-XL-both-10pct``.
-        lora_rank: LoRA rank r (기본 16).
-        lora_alpha: LoRA alpha (기본 32).
-        lora_dropout: LoRA dropout (기본 0.1).
-        target_modules: LoRA 적용 모듈 이름 (기본 ``("query", "value")``).
-        deterministic_eval: HF 모델 deterministic mode (기본 True).
+        model_id: HuggingFace Hub id or local path. Default ``ibm/MoLFormer-XL-both-10pct``.
+        lora_rank: LoRA rank r (default 16).
+        lora_alpha: LoRA alpha (default 32).
+        lora_dropout: LoRA dropout (default 0.1).
+        target_modules: Names of modules to apply LoRA to (default ``("query", "value")``).
+        deterministic_eval: HF model deterministic mode (default True).
 
     Note:
-        token_ids/attention_mask shape 은 (B, L). MoLFormer 옛 토큰 길이는 202
-        (``MOLFORMER_TOKEN_LEN``). 본 backbone 은 길이에 의존하지 않는다.
+        token_ids/attention_mask shape is (B, L). MoLFormer's old token length is 202
+        (``MOLFORMER_TOKEN_LEN``). This backbone does not depend on length.
     """
 
     output_dim: int = MOLFORMER_DIM

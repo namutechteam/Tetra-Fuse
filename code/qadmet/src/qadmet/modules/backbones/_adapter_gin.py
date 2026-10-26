@@ -1,22 +1,22 @@
 """AdapterGINBlock — LoRA-style bottleneck mini-GIN adapter on node embeddings.
 
-설계 (AdapterGNN; Li et al., AAAI'24 + LoRA 초기화 컨벤션):
+Design (AdapterGNN; Li et al., AAAI'24 + LoRA initialization convention):
     h_in (N, d)
       → LayerNorm
       → Linear down (d → r)
       → GINConv (r-dim message passing, optional edge_attr)
-      → Linear up (r → d)  [zero-init: 초기 residual = identity]
+      → Linear up (r → d)  [zero-init: initial residual = identity]
       → Dropout
       → + h_in (residual)
 
-GraphMVP / CheMeleon backbone 의 frozen layer 사이(또는 위)에 삽입되는
-trainable PEFT 모듈. ``up`` 가중치는 0 으로 초기화되어 학습 시작 시점에
-frozen backbone 의 출력 분포가 그대로 보존된다 (LoRA convention).
+Inserted between (or above) the frozen layers of the GraphMVP / CheMeleon backbone,
+trainable PEFT module. The ``up`` weights are initialized to 0, so that at the start of training
+the output distribution of the frozen backbone is preserved as-is (LoRA convention).
 
 Lazy import:
-    ``torch_geometric`` / ``ogb`` 는 ``__init__`` 안에서만 import (PyG inspector 가
-    message() 시그니처를 보고 propagate kwargs 를 결정하므로 conv 클래스를
-    edge_attr 사용/미사용 두 종류로 분리).
+    ``torch_geometric`` / ``ogb`` are imported only inside ``__init__`` (the PyG inspector
+    determines propagate kwargs by looking at the message() signature, so the conv class is
+    split into two kinds, with/without edge_attr use).
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ from torch import Tensor, nn
 def _make_atom_only_conv(r: int) -> nn.Module:
     """Vanilla GIN conv at bottleneck dim r (no edge_attr).
 
-    PyG ``MessagePassing.propagate`` 는 ``message`` 시그니처 기반으로 kwargs 를
-    인스펙트하므로, edge_attr 사용/미사용 클래스를 분리해야 한다.
+    PyG ``MessagePassing.propagate`` inspects kwargs based on the ``message`` signature,
+    so classes with/without edge_attr usage must be separated.
     """
     from torch_geometric.nn import MessagePassing
 
@@ -88,9 +88,9 @@ class AdapterGINBlock(nn.Module):
 
     Args:
         d: input/output node embedding dim (frozen backbone hidden dim).
-        r: bottleneck dim (보통 d 보다 훨씬 작음).
-        with_edge_attr: GraphMVP path 처럼 edge_attr 가 있으면 True (BondEncoder 사용).
-        dropout: residual branch 의 dropout 확률.
+        r: bottleneck dim (usually much smaller than d).
+        with_edge_attr: True if edge_attr exists, like the GraphMVP path (uses BondEncoder).
+        dropout: dropout probability of the residual branch.
 
     Attributes:
         d, r, with_edge_attr.
@@ -128,7 +128,7 @@ class AdapterGINBlock(nn.Module):
         if self.with_edge_attr:
             if edge_attr is None:
                 raise ValueError(
-                    "AdapterGINBlock(with_edge_attr=True) 는 edge_attr 인자가 필요."
+                    "AdapterGINBlock(with_edge_attr=True) requires an edge_attr argument."
                 )
             z = self.gin(z, edge_index, edge_attr)
         else:

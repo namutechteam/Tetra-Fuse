@@ -1,29 +1,29 @@
 """evaluate runner: ExperimentSpec(kind="evaluate") → metric + comparison artifact.
 
-흐름:
-    1. ``spec.evaluation.kwargs`` 에서 runner 메타 옵션 추출 (target / split /
-       task_set / column / tie_eps / legacy_csvs / leaderboard / 등).
-    2. target artifact 로드 → ``evaluate_artifact`` 로 7-컬럼 metric DataFrame.
-    3. ``compare_to`` 의 다른 신규 artifact 들 + ``legacy_csvs`` 의 옛 phase CSV
-       들을 같은 column 으로 wide pivot 합친 뒤 W/L/T 계산.
-    4. 산출물:
-       - ``metrics.csv``: target 자체 7-컬럼 metric 표.
+Flow:
+    1. Extract runner meta options from ``spec.evaluation.kwargs`` (target / split /
+       task_set / column / tie_eps / legacy_csvs / leaderboard / etc.).
+    2. Load target artifact → 7-column metric DataFrame via ``evaluate_artifact``.
+    3. Other new artifacts from ``compare_to`` + old phase CSVs from ``legacy_csvs``
+       are merged via wide pivot on the same column, then W/L/T is computed.
+    4. Outputs:
+       - ``metrics.csv``: target's own 7-column metric table.
        - ``comparison.csv``: long ``[dataset, metric, target, other_label, other,
-         delta, verdict]``. ``compute_wlt`` 결과를 행별로 평탄화.
-       - ``comparison.md``: ``format_pivot_md`` 가 만든 markdown 표.
-       - (선택) ``leaderboard.csv``: ``compare_to_leaderboard`` 결과.
-    5. manifest.inputs 에 target + 모든 비교 artifact 의 (kind/name/run_id) 등록.
-       manifest.metrics 에 wlt summary + target 메타.
+         delta, verdict]``. Flattens ``compute_wlt`` results row by row.
+       - ``comparison.md``: markdown table produced by ``format_pivot_md``.
+       - (optional) ``leaderboard.csv``: result of ``compare_to_leaderboard``.
+    5. Register (kind/name/run_id) of target + all comparison artifacts in manifest.inputs.
+       wlt summary + target meta in manifest.metrics.
 
-옛 ``compare_experiments.py`` / ``compare_all_experiments.py`` / ``eval_stl_ensemble.py``
-의 책임을 단일 recipe-driven 진입점으로 통합한다.
+Unifies the responsibility of the old ``compare_experiments.py`` / ``compare_all_experiments.py`` / ``eval_stl_ensemble.py``
+into a single recipe-driven entry point.
 
 Why:
-    base prediction artifact, stack artifact, evaluate artifact 를 하나의
-    lineage 그래프 위에서 추적할 수 있다. ``qadmet lineage show evaluate
-    leaderboard_diff`` 가 옛 phase CSV 까지 메타로 잇는다 (legacy CSV 는
-    artifact 가 아니므로 inputs 에는 미등록 — manifest.metrics.legacy_csvs 로만
-    기록).
+    base prediction artifact, stack artifact, and evaluate artifact can be traced on a single
+    lineage graph. ``qadmet lineage show evaluate
+    leaderboard_diff`` links even old phase CSVs as metadata (legacy CSV is
+    not an artifact, so it is not registered in inputs — only via manifest.metrics.legacy_csvs
+    recorded).
 """
 
 from __future__ import annotations
@@ -58,35 +58,35 @@ def _resolve_artifact(
     store: ArtifactStore,
     run_id: str | None,
 ) -> Artifact:
-    """latest 또는 run_id 핀으로 artifact 한 건 로드 (FileNotFoundError on miss)."""
+    """Load one artifact by latest or run_id pin (FileNotFoundError on miss)."""
     if run_id is not None:
         return store.load(kind, name, run_id)
     art = store.latest(kind, name)
     if art is None:
-        raise FileNotFoundError(f"artifact 없음: {kind}/{name}")
+        raise FileNotFoundError(f"artifact not found: {kind}/{name}")
     return art
 
 
 @RUNNER_REGISTRY.register("evaluate")
 def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path) -> Artifact:
-    """evaluate recipe 한 건을 실행하고 artifact 를 반환한다.
+    """Executes one evaluate recipe and returns the artifact.
 
     Args:
-        spec: ExperimentSpec(kind="evaluate") — evaluation 필수.
+        spec: ExperimentSpec(kind="evaluate") — evaluation is required.
         store: ArtifactStore.
-        repo_root: git/환경 메타 추출 + legacy_csvs 의 상대경로 해석 기준.
+        repo_root: basis for extracting git/env meta + resolving relative paths of legacy_csvs.
 
     Returns:
-        생성된 evaluate Artifact (data/ 에 metrics.csv, comparison.csv,
-        comparison.md, (선택) leaderboard.csv 포함).
+        Generated evaluate Artifact (data/ contains metrics.csv, comparison.csv,
+        comparison.md, (optional) leaderboard.csv).
 
     Raises:
-        ValueError: target 결정 불가, column 미지원, kwargs 형식 오류.
-        FileNotFoundError: target/compare_to artifact 또는 legacy CSV 미존재.
+        ValueError: target cannot be determined, column unsupported, kwargs format error.
+        FileNotFoundError: target/compare_to artifact or legacy CSV does not exist.
     """
     spec.validate()
     if spec.evaluation is None:
-        raise ValueError("evaluate recipe 에 evaluation 섹션이 필요합니다.")
+        raise ValueError("evaluate recipe requires an evaluation section.")
 
     eval_spec = spec.evaluation
     kwargs: dict[str, Any] = dict(eval_spec.kwargs)
@@ -101,29 +101,29 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
     column: str = str(kwargs.pop("column", "ensemble_mean"))
     if column not in VALID_COMPARISON_COLUMNS:
         raise ValueError(
-            f"evaluation.kwargs.column 은 {VALID_COMPARISON_COLUMNS} 중 하나: got {column!r}"
+            f"evaluation.kwargs.column must be one of {VALID_COMPARISON_COLUMNS}: got {column!r}"
         )
     tie_eps: float = float(kwargs.pop("tie_eps", 0.005))
 
-    # compare_to artifact 의 kind 매핑 (이름 → kind, 기본 "train").
+    # kind mapping for compare_to artifacts (name → kind, default "train").
     compare_kinds_raw = kwargs.pop("compare_kinds", {}) or {}
     if not isinstance(compare_kinds_raw, dict):
         raise TypeError(
-            f"evaluation.kwargs.compare_kinds 는 dict 여야 합니다: {type(compare_kinds_raw)}"
+            f"evaluation.kwargs.compare_kinds must be a dict: {type(compare_kinds_raw)}"
         )
     compare_kinds: dict[str, str] = {str(k): str(v) for k, v in compare_kinds_raw.items()}
 
     base_run_ids_raw = kwargs.pop("base_run_ids", {}) or {}
     if not isinstance(base_run_ids_raw, dict):
         raise TypeError(
-            f"evaluation.kwargs.base_run_ids 는 dict 여야 합니다: {type(base_run_ids_raw)}"
+            f"evaluation.kwargs.base_run_ids must be a dict: {type(base_run_ids_raw)}"
         )
     base_run_ids: dict[str, str] = {str(k): str(v) for k, v in base_run_ids_raw.items()}
 
     legacy_csvs_raw = kwargs.pop("legacy_csvs", {}) or {}
     if not isinstance(legacy_csvs_raw, dict):
         raise TypeError(
-            f"evaluation.kwargs.legacy_csvs 는 dict 여야 합니다: {type(legacy_csvs_raw)}"
+            f"evaluation.kwargs.legacy_csvs must be a dict: {type(legacy_csvs_raw)}"
         )
     legacy_paths: dict[str, Path] = {}
     for label, p in legacy_csvs_raw.items():
@@ -135,14 +135,14 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
     leaderboard_opts = kwargs.pop("leaderboard", None)
     if leaderboard_opts is not None and not isinstance(leaderboard_opts, dict):
         raise TypeError(
-            f"evaluation.kwargs.leaderboard 는 dict (또는 미지정) 여야 합니다: {type(leaderboard_opts)}"
+            f"evaluation.kwargs.leaderboard must be a dict (or unspecified): {type(leaderboard_opts)}"
         )
 
     if kwargs:
-        # 알 수 없는 키는 명시적으로 거부 (디버깅 친화).
+        # Explicitly reject unknown keys (debugging-friendly).
         raise ValueError(
-            f"evaluation.kwargs 에 알 수 없는 키: {sorted(kwargs)}. "
-            f"지원: target, target_kind, target_run_id, split, task_set, column, tie_eps, "
+            f"Unknown key in evaluation.kwargs: {sorted(kwargs)}. "
+            f"supported: target, target_kind, target_run_id, split, task_set, column, tie_eps, "
             f"compare_kinds, base_run_ids, legacy_csvs, leaderboard."
         )
 
@@ -150,13 +150,13 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
     if target is None:
         if not bases:
             raise ValueError(
-                "evaluate recipe 에 target 또는 compare_to 가 필요합니다 — "
-                "evaluation.kwargs.target (권장) 또는 evaluation.compare_to[0] 으로 지정하세요."
+                "evaluate recipe requires target or compare_to — "
+                "specify via evaluation.kwargs.target (recommended) or evaluation.compare_to[0]."
             )
         target = bases[0]
     target = str(target)
 
-    # ----- artifact 로드 -----
+    # ----- load artifact -----
     target_artifact = _resolve_artifact(
         target, kind=target_kind, store=store, run_id=target_run_id
     )
@@ -188,13 +188,13 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
     legacy_dfs: dict[str, pd.DataFrame] = {}
     for label, path in legacy_paths.items():
         if not path.exists():
-            raise FileNotFoundError(f"legacy CSV 없음: {label}={path}")
+            raise FileNotFoundError(f"legacy CSV not found: {label}={path}")
         legacy_dfs[label] = load_legacy_csv(path)
 
-    # ----- artifact 생성 -----
+    # ----- create artifact -----
     artifact = store.create(spec, repo_root=repo_root, inputs=inputs)
 
-    # 1) target metric 자체 표.
+    # 1) target metric's own table.
     metrics_csv = artifact.data_dir / "metrics.csv"
     target_df.to_csv(metrics_csv, index=False)
     store.register_output(artifact, "metrics.csv")
@@ -213,7 +213,7 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
     md_path.write_text(format_pivot_md(pivot, column=column, target=target, summary=summary))
     store.register_output(artifact, "comparison.md")
 
-    # 3) leaderboard (선택).
+    # 3) leaderboard (optional).
     leaderboard_meta: dict[str, Any] | None = None
     if leaderboard_opts is not None:
         from qadmet.evaluation.leaderboard import compare_to_leaderboard
@@ -235,8 +235,8 @@ def run_evaluate(*, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path)
                 "n_tasks": int(len(lb_df)),
                 "n_with_rank": int(lb_df["rank"].notna().sum()) if "rank" in lb_df.columns else 0,
             }
-        except Exception as e:  # noqa: BLE001  — 네트워크 실패는 leaderboard 만 스킵.
-            logger.warning(f"leaderboard 호출 실패: {e}")
+        except Exception as e:  # noqa: BLE001  — network failure only skips leaderboard.
+            logger.warning(f"leaderboard call failed: {e}")
             leaderboard_meta = {"error": repr(e), "methods": methods}
 
     # ----- manifest.metrics -----

@@ -1,4 +1,4 @@
-control,homog_norm,ensemble_matched,mean_delta,median_delta,wtl,W,p_raw,p_holm_familyB
+control,same_encoder_norm,ensemble_matched,mean_delta,median_delta,wtl,W,p_raw,p_holm_familyB
 CheMeleon·STL,0.73,0.854,0.124,0.1,14/4/3,131.0,0.004910090932730971,0.004910090932730971
 D-MPNN·MTL,0.685,0.854,0.169,0.143,12/6/3,114.0,0.0010699702452121717,0.003209910735636515
 MoLFormer·MTL,0.644,0.854,0.21,0.158,16/1/4,183.5,0.001687294722160493,0.003374589444320986

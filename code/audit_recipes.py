@@ -74,7 +74,7 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--baselines",
-                    default="/nas/tk_ahn/ADMET-MTL/qadmet_public/artifacts/baselines",
+                    default="./artifacts/baselines",
                     help="directory of per-model baseline manifests")
     ap.add_argument("--recipes", default=str(here / "qadmet" / "recipes" / "train"))
     ap.add_argument("--verbose", action="store_true",

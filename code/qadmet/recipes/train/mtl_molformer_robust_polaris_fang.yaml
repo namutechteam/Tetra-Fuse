@@ -1,7 +1,7 @@
 name: mtl_molformer_robust_polaris_fang
 kind: train
 # MoLFormer-LoRA MTL — Polaris ADME-Fang 6-task.
-# ★ molformer_tokens parquet 선행 필요: precompute_polaris_fang_molformer_tokens 실행 후 symlink.
+# ★ molformer_tokens parquet prerequisite required: run precompute_polaris_fang_molformer_tokens then symlink.
 
 dataset: !include _base/dataset/polaris_fang_6_molformer.yaml
 
@@ -57,4 +57,4 @@ trainer:
 
 notes: |
   MoLFormer-LoRA MTL, Polaris ADME-Fang 6-task.
-  ⚠ molformer_tokens parquet 필요 (precompute 선행). MoLFormer-XL 84M base ckpt 필요.
+  ⚠ molformer_tokens parquet required (precompute first). MoLFormer-XL 84M base ckpt required.

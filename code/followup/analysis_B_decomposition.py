@@ -316,71 +316,71 @@ pm = PT["primary"]
 best_counts = pm.b.str.split(";").explode().value_counts().to_dict()
 lines = []
 L = lines.append
-L("# 분석 B — 앙상블 오차 분해 결과 (사전 등록 프로토콜 v1 + 부록 v1.1)\n")
-L("## 사전 등록 판정\n")
-L(f"- **판정: {verdict}** (specialization 우세).")
-L(f"- 근거: Tetra-Fuse, matched-seed, G = stl_map(MAP·STL)에서 과제 평균 (S − O) = {E('primary','task_mean_S_minus_O')} "
-  "(21개 과제 bootstrap, B = 2,000, seed 20261002, 95% percentile CI). 사전 등록 기준은 CI 하한 > 0.")
-L("- 프로토콜에 따라 B는 설명용이며 저널 판정 규칙에는 들어가지 않는다.")
-L("- **주의: G = stl_map은 Tetra-Fuse 멤버 자신이다.** 따라서 과제마다 L_b(t) ≤ L_G이고 S ≥ 0이 구성상 보장된다. "
-  "S는 'G가 아닌 다른 멤버가 그 과제에서 더 좋을 때의 차이'를 잰다.\n")
-L("## 정의와 수치 검증\n")
-L("- 손실: 회귀 = MSE / var(y_test) (모분산, ddof = 0), 분류 = y_pred(이미 [0,1] 확률; 범위 assert 통과)에 대한 Brier score.")
-L("- T = L_G − L_E, S = L_G − L_b(t), O = L_b(t) − L_E = A − (L̄ − L_b(t)), A = 멤버별 (f_i − f_E)² 평균 (Krogh–Vedelsby: L_E = L̄ − A).")
-L("- matched-seed: seed마다 5개 멤버(같은 seed)로 분해한 뒤 과제별로 seed 평균. b(t)는 seed마다 test 손실 최소 멤버(기술용 oracle).")
-L("- 모든 과제·seed·부분집합(Tetra-Fuse 4개 설정 + k=5 252개 × 2 트랙)에서 L_E = L̄ − A, O = A − (L̄ − L_b), T = S + O를 허용오차 1e-9로 assert했고 모두 통과했다.\n")
-L("## 1차 결과 (Tetra-Fuse, matched-seed, G = stl_map)\n")
-L("| 추정량 (과제 평균) | 추정값 [95% CI] |\n|---|---|")
-for est, lab in [("S_minus_O", "S − O (판정 대상)"), ("S", "S (specialization)"), ("O", "O (best member 초과)"),
-                 ("T", "T (G 대비 총 이득)"), ("A", "Ambiguity A"), ("D", "L̄ − L_b (멤버 평균 − 최고 멤버)"),
-                 ("rho", "멤버 간 평균 pairwise 잔차 상관 (맥락용)")]:
+L("# Analysis B — Ensemble Error Decomposition Results (Pre-registered Protocol v1 + Appendix v1.1)\n")
+L("## Pre-registered Verdict\n")
+L(f"- **Verdict: {verdict}** (specialization dominant).")
+L(f"- Basis: In Tetra-Fuse, matched-seed, G = stl_map(MAP·STL), task-average (S − O) = {E('primary','task_mean_S_minus_O')} "
+  "(21-task bootstrap, B = 2,000, seed 20261002, 95% percentile CI). Pre-registration criterion is CI lower bound > 0.")
+L("- Per protocol, B is for explanatory purposes and is not part of the journal verdict rule.")
+L("- **Note: G = stl_map is itself a Tetra-Fuse member.** Therefore, for every task L_b(t) ≤ L_G, and S ≥ 0 is guaranteed by construction. "
+  "S measures 'the difference when a member other than G performs better on that task.'\n")
+L("## Definitions and Numerical Verification\n")
+L("- Loss: regression = MSE / var(y_test) (population variance, ddof = 0), classification = Brier score on y_pred (already [0,1] probability; range assert passed).")
+L("- T = L_G − L_E, S = L_G − L_b(t), O = L_b(t) − L_E = A − (L̄ − L_b(t)), A = mean of per-member (f_i − f_E)² (Krogh–Vedelsby: L_E = L̄ − A).")
+L("- matched-seed: decompose using the 5 members (same seed) per seed, then take the seed average per task. b(t) is the member with minimum test loss per seed (descriptive oracle).")
+L("- For all tasks, seeds, and subsets (Tetra-Fuse's 4 configurations + k=5's 252 × 2 tracks), L_E = L̄ − A, O = A − (L̄ − L_b), T = S + O were asserted with tolerance 1e-9, and all passed.\n")
+L("## Primary Results (Tetra-Fuse, matched-seed, G = stl_map)\n")
+L("| Estimator (task average) | Estimate [95% CI] |\n|---|---|")
+for est, lab in [("S_minus_O", "S − O (verdict target)"), ("S", "S (specialization)"), ("O", "O (best member excess)"),
+                 ("T", "T (total gain relative to G)"), ("A", "Ambiguity A"), ("D", "L̄ − L_b (member average − best member)"),
+                 ("rho", "mean pairwise residual correlation among members (for context)")]:
     L(f"| {lab} | {E('primary', 'task_mean_' + est)} |")
 L("")
-L(f"- S > O인 과제: {NT('primary')}/21. 회귀 9개 평균 S = {E('primary','regression_mean_S')}, O = {E('primary','regression_mean_O')}; "
-  f"분류 12개 평균 S = {E('primary','classification_mean_S')}, O = {E('primary','classification_mean_O')}.")
-L(f"- Ambiguity(과제 평균 {E('primary','task_mean_A')})는 크지만 멤버 평균과 최고 멤버의 격차 L̄ − L_b({E('primary','task_mean_D')})와 "
-  "거의 상쇄되어 O의 CI가 0을 포함한다. 즉 Tetra-Fuse가 G를 이기는 부분은 대체로 '과제마다 다른 멤버가 가장 좋다'는 데서 오고, "
-  "과제별 최고 멤버를 넘어서는 순수 다양성 이득은 평균적으로 0과 구별되지 않는다.")
-L(f"- 잔차 상관(과제 평균 {E('primary','task_mean_rho')})이 높아 Ambiguity가 멤버 손실 대비 작은 편이라는 점과 일관된다.")
-L(f"- seed별 b(t) 빈도(21과제 × 5 seed = 105): " + ", ".join(f"{k} {v}" for k, v in sorted(best_counts.items(), key=lambda kv: -kv[1])) + ".")
-L("- 과제별 값: Half_Life_Obach (S − O = %.4f), Caco2_Wang (%.4f), VDss_Lombardo (%.4f)가 가장 크다. 회귀 과제는 원척도 MSE를 분산으로 나눈 값이라 heavy-tail 과제(Half-life, VDss, Clearance)의 영향이 크다."
+L(f"- Tasks where S > O: {NT('primary')}/21. Regression (9 tasks) average S = {E('primary','regression_mean_S')}, O = {E('primary','regression_mean_O')}; "
+  f"classification (12 tasks) average S = {E('primary','classification_mean_S')}, O = {E('primary','classification_mean_O')}.")
+L(f"- Ambiguity (task average {E('primary','task_mean_A')}) is large but is nearly offset by the gap between the member average and the best member, L̄ − L_b({E('primary','task_mean_D')}), "
+  "so O's CI includes 0. That is, the extent to which Tetra-Fuse beats G mostly comes from 'a different member being best on each task,' and "
+  "the pure diversity gain beyond the per-task best member is, on average, indistinguishable from 0.")
+L(f"- This is consistent with the high residual correlation (task average {E('primary','task_mean_rho')}), which makes Ambiguity small relative to member loss.")
+L(f"- b(t) frequency per seed (21 tasks × 5 seeds = 105): " + ", ".join(f"{k} {v}" for k, v in sorted(best_counts.items(), key=lambda kv: -kv[1])) + ".")
+L("- Per-task values: Half_Life_Obach (S − O = %.4f), Caco2_Wang (%.4f), VDss_Lombardo (%.4f) are the largest. Since regression tasks use raw-scale MSE divided by variance, heavy-tail tasks (Half-life, VDss, Clearance) have a large influence."
   % tuple(pm.set_index("task").loc[t, "S_minus_O"] for t in ["Half_Life_Obach", "Caco2_Wang", "VDss_Lombardo"]))
 L("")
-L("## 2차·민감도 결과\n")
-L("| 설정 | S − O | S | O | T | S > O 과제 수 |\n|---|---|---|---|---|---|")
-for an, lab in [("primary", "1차: matched-seed, G = stl_map"), ("sec_ref_chemeleon", "matched-seed, G = stl_chemeleon (부록 v1.1)"),
+L("## Secondary / Sensitivity Results\n")
+L("| Configuration | S − O | S | O | T | Number of tasks with S > O |\n|---|---|---|---|---|---|")
+for an, lab in [("primary", "Primary: matched-seed, G = stl_map"), ("sec_ref_chemeleon", "matched-seed, G = stl_chemeleon (Appendix v1.1)"),
                 ("sec_seedavg", "seed-averaged, G = stl_map"), ("sec_seedavg_ref_chemeleon", "seed-averaged, G = stl_chemeleon")]:
     L(f"| {lab} | {E(an,'task_mean_S_minus_O')} | {E(an,'task_mean_S')} | {E(an,'task_mean_O')} | {E(an,'task_mean_T')} | {NT(an)}/21 |")
 L("")
-L(f"- **b(t) 고정 민감도 (사전 등록 외, 해석 보조)**: matched-seed에서 b(t)를 seed마다 고르면 test oracle 선택이 5번 일어나 S가 위로 편향된다. "
-  f"b(t)를 seed 평균 손실 최소 멤버 하나로 고정하면 S − O = {E('primary','task_mean_S_minus_O_fixb')}, S = {E('primary','task_mean_S_fixb')}, "
-  f"O = {E('primary','task_mean_O_fixb')}, S > O 과제 {NT('primary','S_minus_O_fixb')}/21. 방향은 같지만 크기가 줄고 CI 하한이 0에 가깝다. "
-  f"G = stl_chemeleon에서 같은 고정-b 값은 {E('sec_ref_chemeleon','task_mean_S_minus_O_fixb')}로 CI가 0을 포함한다.")
-L(f"- seed-averaged 트랙에서는 G 자체가 5-seed 평균이라 T가 {E('sec_seedavg','task_mean_T')}로 줄고, O는 {E('sec_seedavg','task_mean_O')}로 음수(최고 seed-평균 멤버가 앙상블보다 낫다)다.")
+L(f"- **Fixed-b(t) sensitivity (outside pre-registration, for interpretive aid)**: In matched-seed, choosing b(t) per seed means the test-oracle selection occurs 5 times, biasing S upward. "
+  f"If b(t) is fixed to the single member with the minimum seed-averaged loss, S − O = {E('primary','task_mean_S_minus_O_fixb')}, S = {E('primary','task_mean_S_fixb')}, "
+  f"O = {E('primary','task_mean_O_fixb')}, tasks with S > O: {NT('primary','S_minus_O_fixb')}/21. The direction is the same but the magnitude shrinks and the CI lower bound approaches 0. "
+  f"For G = stl_chemeleon, the same fixed-b value is {E('sec_ref_chemeleon','task_mean_S_minus_O_fixb')}, whose CI includes 0.")
+L(f"- In the seed-averaged track, since G itself is a 5-seed average, T shrinks to {E('sec_seedavg','task_mean_T')}, and O becomes negative at {E('sec_seedavg','task_mean_O')} (the best seed-averaged member outperforms the ensemble).")
 L("")
-L("## k = 5 부분집합 252개 (10개 모델, G = stl_map 고정)\n")
-L("| 트랙 | 과제 평균 S 중앙값 [최소, 최대] | 과제 평균 O 중앙값 [최소, 최대] | O > 0 비율 | S − O > 0 비율 | Ambiguity 중앙값 [최소, 최대] | Tetra-Fuse의 S − O 백분위 |\n|---|---|---|---|---|---|---|")
+L("## k = 5 Subsets, 252 (10 models, G = stl_map fixed)\n")
+L("| Track | Task-average S median [min, max] | Task-average O median [min, max] | Fraction O > 0 | Fraction S − O > 0 | Ambiguity median [min, max] | Tetra-Fuse's S − O percentile |\n|---|---|---|---|---|---|---|")
 for tr, an in [("matched", "k5_matched"), ("cross", "k5_cross")]:
     L(f"| {tr} | {E(an,'median_task_mean_S')} | {E(an,'median_task_mean_O')} | {DS(tr,'O').frac_gt0:.3f} | {DS(tr,'S_minus_O').frac_gt0:.3f} | "
       f"{E(an,'median_task_mean_A')} | {E(an,'TF_percentile_of_task_mean_S_minus_O',3)} |")
 L("")
-L("(G가 포함되지 않은 부분집합에서는 S가 음수일 수 있다. 위 표의 대괄호는 CI가 아니라 252개 부분집합의 최소–최대다.)\n")
-L("k = 5 고정 표준화 회귀 (계수만, p값 없음; k는 설계로 통제):\n")
-L("| 트랙 | 모형 | β_S | β_A | β_L̄ | R² | n |\n|---|---|---|---|---|---|---|")
+L("(In subsets that do not include G, S can be negative. The brackets in the table above are not CIs but the min–max across the 252 subsets.)\n")
+L("k = 5 fixed standardized regression (coefficients only, no p-values; k is controlled by design):\n")
+L("| Track | Model | β_S | β_A | β_L̄ | R² | n |\n|---|---|---|---|---|---|---|")
 for tr in ["matched", "cross"]:
     for lab in ["T ~ S + A (subset-level", "T ~ S + A (subset x task", "dnorm ~ S + A", "dnorm ~ Lbar + A"]:
         r = RG(tr, lab)
         f = lambda v: "—" if pd.isna(v) else f"{v:.3f}"
         L(f"| {tr} | {r.quantity} | {f(r.get('beta_S'))} | {f(r.get('beta_A'))} | {f(r.get('beta_Lbar'))} | {r.R2:.3f} | {int(r.n_obs)} |")
 L("")
-L("- 사전 등록 회귀(T ~ S + A, 부분집합 수준)에서 S의 표준화 계수가 Ambiguity 계수보다 크다 (두 트랙 모두).")
-L("- dnorm = 부분집합의 test norm_score(all1023.csv의 test_within/test_cross) − stl_map의 norm_score. 공식 지표 공간과의 연결은 탐색적이며 사전 등록 추정량이 아니다. "
-  "S와 함께 넣으면 Ambiguity 계수는 음수이고(다양성이 큰 부분집합은 멤버 평균이 약한 경향), 멤버 평균 손실 L̄를 통제하면 Ambiguity의 추가 설명력은 작다.")
+L("- In the pre-registered regression (T ~ S + A, at the subset level), the standardized coefficient of S is larger than that of Ambiguity (both tracks).")
+L("- dnorm = the subset's test norm_score (test_within/test_cross in all1023.csv) − stl_map's norm_score. The link to the official metric space is exploratory and not a pre-registered estimator. "
+  "When included alongside S, the Ambiguity coefficient is negative (subsets with high diversity tend to have weaker member averages), and once member-average loss L̄ is controlled for, Ambiguity's additional explanatory power is small.")
 L("")
-L("## 한계\n")
-L("- 분해 공간(MSE/var(y), Brier)은 공식 지표(MAE, AUROC, AUPRC, Spearman)와 다르다. Brier·MSE 이득이 순위 기반 지표 이득과 1:1로 대응하지 않는다.")
-L("- b(t)는 test 손실로 고른 oracle이므로 S는 낙관적 상한, O는 비관적 하한 쪽으로 기운다 (matched-seed에서 seed별 선택 시 더 그렇다; 위 고정-b 민감도 참조).")
-L("- G = stl_map이 Tetra-Fuse 멤버이므로 1차 분석에서 S ≥ 0은 구성상 보장된다.")
-L("- 회귀 손실은 원척도 기준이라 heavy-tail 과제(Half-life, VDss, Clearance)가 과제 평균에 큰 가중을 준다.")
-L("- 패널 c와 과제 평균은 분류(Brier)와 회귀(MSE/var y) 단위를 섞어 평균한 값이다.")
+L("## Limitations\n")
+L("- The decomposition space (MSE/var(y), Brier) differs from the official metrics (MAE, AUROC, AUPRC, Spearman). Brier/MSE gains do not correspond 1:1 to rank-based metric gains.")
+L("- Since b(t) is an oracle chosen by test loss, S leans toward an optimistic upper bound and O toward a pessimistic lower bound (more so when chosen per seed in matched-seed; see the fixed-b sensitivity above).")
+L("- Since G = stl_map is a Tetra-Fuse member, S ≥ 0 is guaranteed by construction in the primary analysis.")
+L("- Since regression loss is on the raw scale, heavy-tail tasks (Half-life, VDss, Clearance) carry a large weight in the task average.")
+L("- Panel c and the task average are values obtained by averaging classification (Brier) and regression (MSE/var y) units together.")
 open(os.path.join(OUT, "B_results.md"), "w").write("\n".join(lines) + "\n")

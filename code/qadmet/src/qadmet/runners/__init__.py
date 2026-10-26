@@ -1,9 +1,9 @@
-"""runner 모듈들. import 시 ``RUNNER_REGISTRY`` 에 자동 등록된다."""
+"""Runner modules. Automatically registered to ``RUNNER_REGISTRY`` upon import."""
 
 from qadmet.runners import evaluate as _evaluate  # noqa: F401
 from qadmet.runners import precompute as _precompute  # noqa: F401
 from qadmet.runners import stack as _stack  # noqa: F401
 from qadmet.runners import train as _train  # noqa: F401
-# train_stl 은 train.py 가 dispatch 시점에 import 한다 (등록은 train.py 단일 키 "train").
+# train_stl is imported by train.py at dispatch time (registration uses the single key "train" in train.py).
 
 __all__ = ["_evaluate", "_precompute", "_stack", "_train"]

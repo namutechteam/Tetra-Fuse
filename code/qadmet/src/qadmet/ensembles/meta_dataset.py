@@ -1,18 +1,18 @@
-"""``MetaDataset`` — 여러 ``PredictionSet`` 을 (seed, task, smiles) 키로 결합한 wide table.
+"""``MetaDataset`` — wide table combining multiple ``PredictionSet`` by (seed, task, smiles) key.
 
-``MetaLearner`` 가 받는 표준 입력 형태. 옛 ``run_stacking_v*.py`` 가 base 별 dict 를
-직접 zip 해서 사용하던 패턴을, 명시적인 wide DataFrame + (seed, task) 그룹핑으로 통합.
+``MetaLearner`` 's standard input format. The old ``run_stacking_v*.py`` pattern of zipping per-base dicts
+directly is unified into an explicit wide DataFrame + (seed, task) grouping.
 
-스키마 (wide):
+Schema (wide):
     [seed, task, smiles, y_true, y_pred__<base1>, y_pred__<base2>, ...]
 
-    - join key: (seed, task, smiles, __row_in_group). 같은 SMILES 가 같은
-      (seed, task, split) 안에 여러 번 등장하는 TDC 데이터셋 (PPBR_AZ 같이 같은
-      분자의 여러 측정값) 을 row 순서 보존으로 매칭하기 위해 ``cumcount`` 기반
-      sub-key 를 inner-join 에 포함한다. base 들의 row 순서가 일치한다는
-      가정 (같은 fold loader → 같은 입력 순서) 위에서 동작.
-    - y_true 는 첫 base 의 값을 사용. 다른 base 와 불일치 시 ValueError (분류 0/1
-      값이 base 마다 같아야 정상).
+    - join key: (seed, task, smiles, __row_in_group). Same SMILES appearing multiple times in the same
+      (seed, task, split) within TDC datasets (e.g. PPBR_AZ, where the same
+      molecule has multiple measurements) is matched by preserving row order, via a ``cumcount``-based
+      sub-key included in the inner-join. This operates on the assumption that bases' row order matches
+      (same fold loader → same input order).
+    - y_true uses the value from the first base. Raises ValueError on mismatch with other bases (classification 0/1
+      values should be identical across bases under normal conditions).
 """
 
 from __future__ import annotations
@@ -33,12 +33,12 @@ def _y_pred_col(base_name: str) -> str:
 
 @dataclass
 class MetaDataset:
-    """다중 base 의 wide-join 결과.
+    """Result of a wide-join across multiple bases.
 
     Attributes:
-        bases: 컬럼 순서를 결정하는 base 이름 튜플 (입력 순서 보존).
-        df: wide DataFrame (위 스키마).
-        split: "test" | "val" — 어떤 split 으로 결합했는지 기록.
+        bases: tuple of base names determining column order (preserves input order).
+        df: wide DataFrame (schema above).
+        split: "test" | "val" — records which split was used for combining.
     """
 
     bases: tuple[str, ...]
@@ -54,34 +54,34 @@ class MetaDataset:
         split: str = "test",
         check_y_true: bool = True,
     ) -> "MetaDataset":
-        """K base 의 PredictionSet 을 inner-join 으로 결합한다.
+        """Combines the PredictionSet of K bases via inner-join.
 
         Args:
-            predictionsets: 결합할 base 들. 이름이 모두 unique 해야 한다.
-            split: 사용할 split ("test" 또는 "val").
-            check_y_true: True 면 base 간 y_true 일치 여부를 검증 (분류 0/1 등).
+            predictionsets: bases to combine. All names must be unique.
+            split: split to use ("test" or "val").
+            check_y_true: if True, validates y_true consistency across bases (e.g. classification 0/1).
 
         Returns:
             MetaDataset.
 
         Raises:
-            ValueError: base 이름 중복 / 빈 입력 / y_true 불일치 / 모든 base 가 비어
-                있어 join 결과가 0 행.
+            ValueError: duplicate base names / empty input / y_true mismatch / all bases empty
+                resulting in a join with 0 rows.
         """
         if not predictionsets:
-            raise ValueError("predictionsets 가 비어있습니다.")
+            raise ValueError("predictionsets is empty.")
         names: list[str] = []
         per_base: list[pd.DataFrame] = []
         for ps in predictionsets:
             if ps.name in names:
-                raise ValueError(f"base 이름 중복: {ps.name}")
+                raise ValueError(f"Duplicate base name: {ps.name}")
             names.append(ps.name)
             sub = ps.select(split=split)
             if sub.empty:
                 raise ValueError(
-                    f"PredictionSet {ps.name!r} 에 split={split!r} 데이터가 없습니다."
+                    f"PredictionSet {ps.name!r} has no data for split={split!r}."
                 )
-            # 같은 SMILES 의 multiplicity (PPBR_AZ 등) 를 row 순서로 매칭하기 위한 sub-key.
+            # Sub-key for matching multiplicity of the same SMILES (e.g. PPBR_AZ) by row order.
             sub = sub.assign(
                 __row_in_group=sub.groupby(["seed", "task", "smiles"]).cumcount()
             )
@@ -91,7 +91,7 @@ class MetaDataset:
                 ]
             )
 
-        # 첫 base 를 기준으로 차례차례 inner-join.
+        # Inner-join sequentially, starting from the first base as the reference.
         keys = ["seed", "task", "smiles", "__row_in_group"]
         first = per_base[0]
         merged = first.copy()
@@ -100,7 +100,7 @@ class MetaDataset:
             merged = merged.merge(other_renamed, on=keys, how="inner")
             if check_y_true:
                 col = f"y_true__{other_name}"
-                # NaN 케이스도 일치로 본다 (regression 에서 missing target 이 정상).
+                # NaN cases are also treated as matching (missing targets are normal in regression).
                 eq = (
                     merged["y_true"].eq(merged[col])
                     | (merged["y_true"].isna() & merged[col].isna())
@@ -108,16 +108,16 @@ class MetaDataset:
                 if not eq.all():
                     bad = (~eq).sum()
                     raise ValueError(
-                        f"base {other_name!r} 의 y_true 가 기준과 {bad} 행 불일치."
+                        f"y_true of base {other_name!r} mismatches the reference in {bad} rows."
                     )
                 merged = merged.drop(columns=[col])
 
         if merged.empty:
             raise ValueError(
-                "모든 base 의 (seed, task, smiles) inner-join 결과가 비어있습니다."
+                "Inner-join result of (seed, task, smiles) across all bases is empty."
             )
 
-        # 컬럼 순서 정규화.
+        # Normalize column order.
         cols = ["seed", "task", "smiles", "y_true", *[_y_pred_col(n) for n in names]]
         merged = merged[cols].reset_index(drop=True)
         return cls(bases=tuple(names), df=merged, split=split)
@@ -128,10 +128,10 @@ class MetaDataset:
         return [_y_pred_col(b) for b in self.bases]
 
     def predictions_matrix(self, sub_df: pd.DataFrame | None = None) -> np.ndarray:
-        """선택된 행의 base 예측 행렬 ``(N, K)`` 을 반환.
+        """Returns the base prediction matrix ``(N, K)`` for the selected rows.
 
         Args:
-            sub_df: 부분집합. None 이면 전체 ``self.df``.
+            sub_df: subset. If None, uses the entire ``self.df``.
         """
         df = self.df if sub_df is None else sub_df
         return df[self.y_pred_columns].to_numpy(dtype=np.float64)
@@ -141,7 +141,7 @@ class MetaDataset:
         return df["y_true"].to_numpy(dtype=np.float64)
 
     def iter_tasks(self) -> Iterator[tuple[str, pd.DataFrame]]:
-        """``(task, task_df)`` 단위로 그룹 yield (task 정렬 순)."""
+        """Yields groups in units of ``(task, task_df)`` (sorted by task)."""
         for task in sorted(self.df["task"].unique()):
             yield task, self.df[self.df["task"] == task].reset_index(drop=True)
 

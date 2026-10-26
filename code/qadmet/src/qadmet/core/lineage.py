@@ -1,8 +1,8 @@
-"""artifact 의존성 그래프 추적.
+"""Tracks artifact dependency graph.
 
-각 artifact 의 manifest 에는 ``inputs: [{kind, name, run_id}, ...]`` 가 있다.
-``trace_dependencies`` 는 그 그래프를 BFS 로 펼쳐 모든 조상 artifact 를 반환한다.
-``to_dot`` 은 graphviz dot 문자열을 생성해 사람이 시각화할 수 있게 한다.
+Each artifact's manifest has ``inputs: [{kind, name, run_id}, ...]``.
+``trace_dependencies`` expands that graph via BFS and returns all ancestor artifacts.
+``to_dot`` generates a graphviz dot string so humans can visualize it.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ def trace_dependencies(
     *,
     max_depth: int = 32,
 ) -> list[Artifact]:
-    """artifact 의 모든 조상(자기 자신 포함, BFS 순서)을 반환한다."""
+    """Returns all ancestors of the artifact (including itself, in BFS order)."""
     seen: set[tuple[str, str, str]] = set()
     order: list[Artifact] = []
     queue: deque[tuple[Artifact, int]] = deque([(artifact, 0)])
@@ -42,7 +42,7 @@ def trace_dependencies(
 
 
 def to_dot(nodes: Iterable[Artifact]) -> str:
-    """artifact 목록을 graphviz dot 그래프로 출력."""
+    """Outputs a list of artifacts as a graphviz dot graph."""
     nodes = list(nodes)
     lines = ["digraph qadmet_lineage {", "  rankdir=LR;", "  node [shape=box, style=rounded];"]
     seen: set[str] = set()

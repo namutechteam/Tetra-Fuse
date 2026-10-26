@@ -1,4 +1,4 @@
-"""BACKBONES registry — BackboneSpec.type 으로 lookup."""
+"""BACKBONES registry — lookup by BackboneSpec.type."""
 
 from __future__ import annotations
 

@@ -1,14 +1,14 @@
-"""Uni-Mol2 LMDB feature dict builder (LoRA 학습용).
+"""Uni-Mol2 LMDB feature dict builder (for LoRA training).
 
-옛 ``scripts-old/precompute_unimol2_features.py`` 를 신규 builder 시스템으로 재구성.
-frozen CLS embedding parquet (``unimol2.py``) 과 달리 이 builder 는
-``mol2unimolv2()`` 가 반환하는 feature dict (atom_feat, edge_feat, coords, attn_bias 등)
-를 LMDB 에 저장한다 — LoRA fine-tuning 시 매 forward 에서 ETKDG 재실행을 피하기 위함.
+Refactored from the old ``scripts-old/precompute_unimol2_features.py`` into the new builder system.
+Unlike the frozen CLS embedding parquet (``unimol2.py``), this builder
+stores the feature dict (atom_feat, edge_feat, coords, attn_bias, etc.) returned by ``mol2unimolv2()``
+into LMDB — to avoid re-running ETKDG on every forward pass during LoRA fine-tuning.
 
-출력:
+Output:
     - ``.lmdb``:  key = smiles.encode('utf-8'), value = pickle.dumps(feature_dict)
     - ``<stem>_status.parquet``: smiles, parse_ok, etkdg_ok, featurize_ok
-      (분석/디버깅 전용 — 모델 입력 아님)
+      (for analysis/debugging only — not a model input)
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from qadmet.features.registry import FEATURE_BUILDERS
 logger = logging.getLogger(__name__)
 
 _LMDB_MAP_SIZE_GB = 20
-_KEY_MAX_BYTES = 480  # LMDB 실제 limit ~511 — 여유분 확보
+_KEY_MAX_BYTES = 480  # actual LMDB limit ~511 — leaving margin
 _DEFAULT_BATCH_SIZE = 512
 _DEFAULT_CHECKPOINT_EVERY = 1000
 
@@ -79,10 +79,10 @@ def _init_worker() -> None:
 
 @FEATURE_BUILDERS.register("unimol2_lmdb")
 class UniMol2LmdbBuilder:
-    """Uni-Mol2 LMDB feature dict builder (LoRA 학습용).
+    """Uni-Mol2 LMDB feature dict builder (for LoRA training).
 
-    ``PrecomputeBase`` 를 상속하지 않는다 — 출력이 parquet 이 아니라 LMDB 이므로.
-    ``run(smiles, output_path, *, resume=True)`` 인터페이스는 runner 와 호환.
+    ``PrecomputeBase`` is not inherited — because the output is LMDB, not parquet.
+    The ``run(smiles, output_path, *, resume=True)`` interface is compatible with the runner.
     """
 
     name = "unimol2_lmdb"
@@ -108,7 +108,7 @@ class UniMol2LmdbBuilder:
         *,
         resume: bool = True,
     ) -> Path:
-        """SMILES 전체 → LMDB + status sidecar 저장.
+        """Save all SMILES → LMDB + status sidecar.
 
         Returns:
             Path to the .lmdb file.
@@ -131,7 +131,7 @@ class UniMol2LmdbBuilder:
             logger.info("nothing to compute — exit.")
             return out_path
 
-        # LMDB key 크기 초과 SMILES 사전 필터
+        # Pre-filter SMILES exceeding LMDB key size limit
         ok_smiles: list[str] = []
         skipped: list[str] = []
         for s in smiles_list:
@@ -199,7 +199,7 @@ class UniMol2LmdbBuilder:
 
     @staticmethod
     def _existing_smiles(lmdb_path: Path) -> set[str]:
-        """기존 LMDB 에서 이미 저장된 SMILES 키를 읽어 resume 에 사용."""
+        """Read SMILES keys already stored in existing LMDB, for use in resume."""
         env = lmdb.open(str(lmdb_path), readonly=True, lock=False, subdir=False)
         try:
             with env.begin() as txn:
@@ -213,7 +213,7 @@ class UniMol2LmdbBuilder:
         rows: list[dict],
         skipped: list[str],
     ) -> None:
-        """status sidecar parquet 기록 (기존 있으면 append + dedupe)."""
+        """Write status sidecar parquet (append + dedupe if existing)."""
         for s in skipped:
             rows.append(
                 {"smiles": s, "parse_ok": False, "etkdg_ok": False, "featurize_ok": False}

@@ -1,9 +1,9 @@
 name: mtl_dmpnn_robust_polaris_fang
 kind: train
 
-# Polaris ADME-Fang 6-task 외부 벤치마크 MTL — D-MPNN(from-scratch, graph-only) baseline.
-# TDC-22와 분리된 독립 블록. 6 endpoint 모두 regression(Pearson).
-# 우선 실행 가능한 최소 구성: D-MPNN은 synthetic featurize라 feature precompute 불필요.
+# Polaris ADME-Fang 6-task external benchmark MTL — D-MPNN(from-scratch, graph-only) baseline.
+# Independent block, separated from TDC-22. All 6 endpoints are regression (Pearson).
+# Minimal runnable configuration first: D-MPNN uses synthetic featurization, so feature precompute is unnecessary.
 
 dataset: !include _base/dataset/polaris_fang_6.yaml
 
@@ -20,13 +20,13 @@ model:
   fusion: null
   head:
     type: grouped
-    routing: taskset_grouping        # 6 endpoint 단일 group(adme_fang) — polaris_fang.py 참조
+    routing: taskset_grouping        # Single group of 6 endpoints (adme_fang) — see polaris_fang.py
     kwargs:
       trunk_hidden: 128
       dropout: 0.4
 
 loss:
-  type: mixed_task_uncertainty        # Kendall UW (전부 regression이므로 회귀 항만 활성)
+  type: mixed_task_uncertainty        # Kendall UW (all tasks are regression, so only the regression term is active)
   classification: bce_with_logits
   regression: masked_mae
   task_weighting: null
@@ -35,7 +35,7 @@ loss:
 
 trainer:
   seeds: [0, 1, 2, 3, 4]
-  max_epochs: 100                     # scratch 예외 (pretrain warm start 없음)
+  max_epochs: 100                     # scratch exception (no pretrain warm start)
   patience: 15
   precision: bf16-mixed
   early_stopping: true
@@ -51,8 +51,8 @@ trainer:
     gradient_clip_val: 1.0
 
 notes: |
-  Polaris ADME-Fang 6-task MTL, D-MPNN(scratch, graph-only). tdcpxr25 D-MPNN recipe와
-  동일 옵션, dataset만 polaris_fang_6로 교체. 6 endpoint 단일 head-group.
-  작은 두 task(Fang_HPPB n=110, Fang_RPPB n=97)는 STL fallback(polaris_fang_6_pertask)과
-  비교 권장. MoLFormer/CheMeleon/GraphMVP/MAP backbone은 Polaris SMILES feature
-  precompute 후 parquet_paths 추가하여 동일 recipe 패턴으로 확장.
+  Polaris ADME-Fang 6-task MTL, D-MPNN(scratch, graph-only). Identical options to the tdcpxr25 D-MPNN recipe,
+  only the dataset is replaced with polaris_fang_6. Single head-group for 6 endpoints.
+  For the two small tasks (Fang_HPPB n=110, Fang_RPPB n=97), comparison with the STL fallback (polaris_fang_6_pertask)
+  is recommended. For the MoLFormer/CheMeleon/GraphMVP/MAP backbone, after precomputing Polaris SMILES features,
+  add parquet_paths to extend using the same recipe pattern.

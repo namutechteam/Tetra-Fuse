@@ -1,7 +1,7 @@
 name: polaris_fang_6_pertask
 split: random_5seed
 seeds: [0, 1, 2, 3, 4]
-# STL(per-task) 변형 — graph-only backbone (CheMeleon / GraphMVP) 용, parquet 불필요.
+# STL(per-task) variant — graph-only backbone (CheMeleon / GraphMVP) use, parquet not required.
 kwargs:
   parquet_root: data/embeddings
   parquet_paths: {}

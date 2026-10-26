@@ -1,29 +1,29 @@
-"""``META_MODELS`` registry — meta-learner 의 회귀/분류 추정기 래퍼.
+"""``META_MODELS`` registry — regression/classification estimator wrapper for meta-learner.
 
-옛 ``run_stacking_v4_oof_xgb.stack_one_task`` 가 ``xgb.XGBRegressor`` /
-``xgb.XGBClassifier`` / ``Ridge`` / ``LogisticRegression`` 을 task type 분기로
-직접 인스턴스화하던 부분을, 본 모듈의 데코레이터 등록 + ``EnsembleSpec.meta_model``
-문자열로 lookup 가능한 형태로 일반화한다.
+Legacy ``run_stacking_v4_oof_xgb.stack_one_task`` directly instantiated ``xgb.XGBRegressor`` /
+``xgb.XGBClassifier`` / ``Ridge`` / ``LogisticRegression`` via task-type branching —
+this part is generalized via this module's decorator registration + ``EnsembleSpec.meta_model``
+string lookup.
 
-현재 등록 (Step 4.3 골격):
+Currently registered (Step 4.3 skeleton):
     - ``"xgboost_regressor"`` — ``XGBoostRegressor``
     - ``"xgboost_classifier"`` — ``XGBoostClassifier``
     - ``"ridge"`` — ``RidgeMeta``
     - ``"logistic_regression"`` — ``LogRegMeta``
 
-heavy 의존 (``xgboost``, ``sklearn``) 은 모두 ``__init__`` 또는 ``fit`` 안에서
-지연 import 한다. ``import qadmet.ensembles`` 만으로는 sys.modules 에 들어오지 않는
-것이 invariants — 테스트로 강제한다.
+Heavy dependencies (``xgboost``, ``sklearn``) are all lazily imported inside ``__init__`` or ``fit``
+— they are lazily imported. The invariant that they do not enter sys.modules merely from ``import qadmet.ensembles``
+is enforced by tests.
 
-사용 패턴 (예정 — Step 4.4 OOFXGBoost 에서 호출):
+Usage pattern (planned — called from Step 4.4 OOFXGBoost):
 
 >>> meta = META_MODELS.build_with_kwargs("xgboost_regressor", n_estimators=200)
 >>> meta.fit(X_val, y_val)
 >>> y_test_pred = meta.predict(X_test)
 
-분류는 ``predict`` 가 P(y=1) 확률을 반환하는 계약 (``sklearn`` 의
-``predict_proba(X)[:, 1]`` 과 동등). meta-learner 가 sigmoid/softmax 변환을
-다시 적용할 필요 없음.
+Classification follows the contract that ``predict`` returns the P(y=1) probability (equivalent to ``sklearn``'s
+``predict_proba(X)[:, 1]``). The meta-learner does not need to reapply a
+sigmoid/softmax transform.
 """
 
 from __future__ import annotations
@@ -37,16 +37,16 @@ from qadmet.ensembles.registry import META_MODELS
 
 
 class MetaModel(ABC):
-    """meta-learner 의 추정기 계약.
+    """Estimator contract for meta-learner.
 
-    sklearn-like ``fit`` / ``predict`` 인터페이스. 분류기는 ``predict`` 가
-    확률 (P(y=1)) 을 반환하도록 강제 — base 의 prob 와 같은 스케일.
+    sklearn-like ``fit`` / ``predict`` interface. Classifiers are required to have ``predict``
+    return a probability (P(y=1)) — on the same scale as the base's prob.
 
     Note:
-        Step 4.3 시점에서는 골격만 등록하고 ``fit`` / ``predict`` 까지 동작 가능
-        하도록 구현한다. 단위 테스트는 lazy import 검증 + 회귀/분류 dispatch
-        + 기본 인자 sanity 까지만 다룬다. 실제 ensemble 통합은 Step 4.4
-        ``OOFXGBoostStrategy`` 에서.
+        At Step 4.3, only the skeleton is registered, implemented so that ``fit`` / ``predict``
+        are also functional. Unit tests only cover lazy import verification + regression/classification dispatch
+        + default argument sanity checks. Actual ensemble integration is at Step 4.4
+        ``OOFXGBoostStrategy``.
     """
 
     is_classifier: bool = False
@@ -64,14 +64,14 @@ class MetaModel(ABC):
 
 
 class _XGBoostBase(MetaModel):
-    """공통 xgboost 인자 컨테이너 — 회귀/분류가 공유하는 기본값.
+    """Common xgboost argument container — default values shared by regression/classification.
 
-    옛 v4 hyperparameter 와 일치 (``n_estimators=100, max_depth=4,
-    learning_rate=0.1, tree_method='hist'``). recipe ``meta_kwargs`` 로 override
-    가능.
+    Matches the legacy v4 hyperparameters (``n_estimators=100, max_depth=4,
+    learning_rate=0.1, tree_method='hist'``). Overriding via recipe ``meta_kwargs`` is
+    possible.
 
-    추가 인자는 ``**extra`` 로 받아 그대로 xgb 생성자에 펼친다 — sklearn 류 API
-    호환성 유지.
+    Additional arguments are accepted as ``**extra`` and spread directly into the xgb constructor — sklearn-style API
+    compatibility is maintained.
     """
 
     def __init__(
@@ -84,11 +84,11 @@ class _XGBoostBase(MetaModel):
         **extra: Any,
     ) -> None:
         if int(n_estimators) <= 0:
-            raise ValueError(f"n_estimators 는 양수: {n_estimators}")
+            raise ValueError(f"n_estimators must be positive: {n_estimators}")
         if int(max_depth) <= 0:
-            raise ValueError(f"max_depth 는 양수: {max_depth}")
+            raise ValueError(f"max_depth must be positive: {max_depth}")
         if float(learning_rate) <= 0:
-            raise ValueError(f"learning_rate 는 양수: {learning_rate}")
+            raise ValueError(f"learning_rate must be positive: {learning_rate}")
         self.n_estimators = int(n_estimators)
         self.max_depth = int(max_depth)
         self.learning_rate = float(learning_rate)
@@ -108,12 +108,12 @@ class _XGBoostBase(MetaModel):
 
 @META_MODELS.register("xgboost_regressor")
 class XGBoostRegressor(_XGBoostBase):
-    """XGBoost 회귀 meta-learner (옛 v4 ``xgb.XGBRegressor`` 등동).
+    """XGBoost regression meta-learner (equivalent to legacy v4 ``xgb.XGBRegressor``).
 
     Why:
-        boosted tree 는 base 예측 간 비선형 상호작용 (예: base A 가 강한 영역에서
-        base B 의 잔차) 을 잡아내는 데 효과적이다. v4 OOF 에서 회귀 task 의
-        meta-learner 로 채택됨.
+        Boosted trees are effective at capturing nonlinear interactions between base predictions (e.g., in regions where base A is strong,
+        the residual of base B). Adopted as the meta-learner for regression tasks
+        in v4 OOF.
     """
 
     is_classifier = False
@@ -127,7 +127,7 @@ class XGBoostRegressor(_XGBoostBase):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self._impl is None:
-            raise RuntimeError("XGBoostRegressor: fit 을 먼저 호출하세요.")
+            raise RuntimeError("XGBoostRegressor: call fit first.")
         return np.asarray(
             self._impl.predict(np.asarray(X, dtype=np.float64)), dtype=np.float64
         )
@@ -135,10 +135,10 @@ class XGBoostRegressor(_XGBoostBase):
 
 @META_MODELS.register("xgboost_classifier")
 class XGBoostClassifier(_XGBoostBase):
-    """XGBoost 분류 meta-learner — ``predict`` 는 ``P(y=1)`` 반환.
+    """XGBoost classification meta-learner — ``predict`` returns ``P(y=1)``.
 
-    옛 v4 ``XGBClassifier(use_label_encoder=False, eval_metric='logloss')`` 인자를
-    기본값으로 채택. ``predict_proba(X)[:, 1]`` 동작.
+    Adopts the legacy v4 ``XGBClassifier(use_label_encoder=False, eval_metric='logloss')`` arguments
+    as defaults. Behaves as ``predict_proba(X)[:, 1]``.
     """
 
     is_classifier = True
@@ -163,7 +163,7 @@ class XGBoostClassifier(_XGBoostBase):
         y_arr = np.asarray(y).astype(int)
         if not set(np.unique(y_arr)).issubset({0, 1}):
             raise ValueError(
-                f"XGBoostClassifier: y 는 0/1 이진: {np.unique(y_arr)}"
+                f"XGBoostClassifier: y must be binary 0/1: {np.unique(y_arr)}"
             )
         self._impl = xgb.XGBClassifier(**self._build_kwargs())
         self._impl.fit(np.asarray(X, dtype=np.float64), y_arr)
@@ -171,9 +171,9 @@ class XGBoostClassifier(_XGBoostBase):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self._impl is None:
-            raise RuntimeError("XGBoostClassifier: fit 을 먼저 호출하세요.")
+            raise RuntimeError("XGBoostClassifier: call fit first.")
         proba = self._impl.predict_proba(np.asarray(X, dtype=np.float64))
-        # binary classifier → (N, 2). 양성 클래스 prob.
+        # binary classifier → (N, 2). Positive class prob.
         return np.asarray(proba[:, 1], dtype=np.float64)
 
 
@@ -182,16 +182,16 @@ class XGBoostClassifier(_XGBoostBase):
 
 @META_MODELS.register("ridge")
 class RidgeMeta(MetaModel):
-    """선형 회귀 (L2 reg) meta-learner — 옛 v4 ``Ridge(alpha=1.0)`` 등동.
+    """Linear regression (L2 reg) meta-learner — equivalent to legacy v4 ``Ridge(alpha=1.0)``.
 
-    추가 인자는 ``**extra`` 로 받아 ``sklearn.linear_model.Ridge`` 에 그대로 전달.
+    Additional arguments are accepted as ``**extra`` and passed directly to ``sklearn.linear_model.Ridge``.
     """
 
     is_classifier = False
 
     def __init__(self, *, alpha: float = 1.0, **extra: Any) -> None:
         if float(alpha) < 0:
-            raise ValueError(f"alpha 는 음수가 아니어야 합니다: {alpha}")
+            raise ValueError(f"alpha must be non-negative: {alpha}")
         self.alpha = float(alpha)
         self.extra = dict(extra)
         self._impl: Any = None
@@ -205,7 +205,7 @@ class RidgeMeta(MetaModel):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self._impl is None:
-            raise RuntimeError("RidgeMeta: fit 을 먼저 호출하세요.")
+            raise RuntimeError("RidgeMeta: call fit first.")
         return np.asarray(
             self._impl.predict(np.asarray(X, dtype=np.float64)), dtype=np.float64
         )
@@ -213,10 +213,10 @@ class RidgeMeta(MetaModel):
 
 @META_MODELS.register("logistic_regression")
 class LogRegMeta(MetaModel):
-    """로지스틱 회귀 분류 meta-learner — ``predict`` 는 ``P(y=1)``.
+    """Logistic regression classification meta-learner — ``predict`` is ``P(y=1)``.
 
-    옛 v4 ``LogisticRegression(max_iter=1000)`` 등동. linear meta-learner 가
-    필요한 가벼운 경우 (XGBoost 가 과적합) 의 fallback.
+    Equivalent to legacy v4 ``LogisticRegression(max_iter=1000)``. For lightweight cases where a linear meta-learner
+    is needed (XGBoost overfits), used as a fallback.
     """
 
     is_classifier = True
@@ -229,9 +229,9 @@ class LogRegMeta(MetaModel):
         **extra: Any,
     ) -> None:
         if float(C) <= 0:
-            raise ValueError(f"C 는 양수: {C}")
+            raise ValueError(f"C must be positive: {C}")
         if int(max_iter) <= 0:
-            raise ValueError(f"max_iter 는 양수: {max_iter}")
+            raise ValueError(f"max_iter must be positive: {max_iter}")
         self.C = float(C)
         self.max_iter = int(max_iter)
         self.extra = dict(extra)
@@ -243,7 +243,7 @@ class LogRegMeta(MetaModel):
         y_arr = np.asarray(y).astype(int)
         if not set(np.unique(y_arr)).issubset({0, 1}):
             raise ValueError(
-                f"LogRegMeta: y 는 0/1 이진: {np.unique(y_arr)}"
+                f"LogRegMeta: y must be binary 0/1: {np.unique(y_arr)}"
             )
         self._impl = LogisticRegression(
             C=self.C, max_iter=self.max_iter, **self.extra
@@ -253,7 +253,7 @@ class LogRegMeta(MetaModel):
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         if self._impl is None:
-            raise RuntimeError("LogRegMeta: fit 을 먼저 호출하세요.")
+            raise RuntimeError("LogRegMeta: call fit first.")
         proba = self._impl.predict_proba(np.asarray(X, dtype=np.float64))
         return np.asarray(proba[:, 1], dtype=np.float64)
 

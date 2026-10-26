@@ -1,7 +1,7 @@
-"""구조화 로깅.
+"""Structured logging.
 
-콘솔(human) + jsonl(machine) 두 stream 동시 출력. 학습/평가 metric, 단계 진행 상황을
-일관된 형식으로 남겨 lineage 분석 시 읽기 쉽게 한다.
+Simultaneously outputs console (human) + jsonl (machine) streams. Training/evaluation metrics, step progress
+are recorded in a consistent format for easy reading during lineage analysis.
 """
 
 from __future__ import annotations
@@ -24,7 +24,7 @@ class _JsonLineFormatter(logging.Formatter):
         }
         if record.exc_info:
             payload["exc"] = self.formatException(record.exc_info)
-        # logger.info(..., extra={"payload": {...}}) 로 전달된 임의 dict 를 평탄화.
+        # Flattens arbitrary dict passed via logger.info(..., extra={"payload": {...}}).
         extra = getattr(record, "payload", None)
         if isinstance(extra, dict):
             payload.update(extra)
@@ -32,7 +32,7 @@ class _JsonLineFormatter(logging.Formatter):
 
 
 def get_logger(name: str = "qadmet", *, jsonl_path: Path | None = None) -> logging.Logger:
-    """이름이 같으면 기존 logger 를 재사용한다. handler 중복 등록 방지."""
+    """Reuses existing logger if name matches. Prevents duplicate handler registration."""
     logger = logging.getLogger(name)
     if getattr(logger, "_qadmet_initialized", False):
         return logger

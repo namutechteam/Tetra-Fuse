@@ -1,7 +1,7 @@
-"""SharedPrecomputeBase: 옛 6 종 precompute 스크립트의 ~80% 보일러플레이트 통합.
+"""SharedPrecomputeBase: Consolidates ~80% of boilerplate from the 6 legacy precompute scripts.
 
-각 modality builder 는 ``compute_batch(smiles: list[str]) -> dict[str, np.ndarray]`` 만
-구현하면 된다. resume / parquet IO / multiprocessing 은 본 베이스가 처리.
+Each modality builder ``compute_batch(smiles: list[str]) -> dict[str, np.ndarray]`` only
+needs to implement this. resume / parquet IO / multiprocessing are handled by this base.
 """
 
 from __future__ import annotations
@@ -21,18 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 class PrecomputeBase(ABC):
-    """feature 사전 계산 베이스.
+    """Feature precomputation base.
 
-    Subclass 가 정의해야 할 것:
-    - ``column_prefix``: 출력 컬럼 prefix (예: "rd_", "mf_", "um_").
-    - ``output_dim``: 한 SMILES 당 feature 차원.
-    - ``compute_batch(smiles)``: SMILES 배치 → ``{smi: np.ndarray(output_dim,)}``.
+    Things the subclass must define:
+    - ``column_prefix``: output column prefix (e.g. "rd_", "mf_", "um_").
+    - ``output_dim``: feature dimension per SMILES.
+    - ``compute_batch(smiles)``: SMILES batch → ``{smi: np.ndarray(output_dim,)}``.
 
-    Subclass 가 옵션으로 override:
-    - ``columns``: 컬럼 이름 리스트. 기본은 ``f"{prefix}{i:03d}"``.
-    - ``default_batch_size``: 기본 외부 batch (compute_batch 호출 단위).
-    - ``default_checkpoint_every``: parquet 중간 저장 주기.
-    - ``run_parallel``: 멀티프로세싱 여부 (기본 False — subclass 가 자체 구현).
+    Optional overrides for subclass:
+    - ``columns``: list of column names. Defaults to ``f"{prefix}{i:03d}"``.
+    - ``default_batch_size``: default outer batch (unit of compute_batch calls).
+    - ``default_checkpoint_every``: interval for intermediate parquet saves.
+    - ``run_parallel``: whether to use multiprocessing (default False — subclass implements its own).
     """
 
     name: str = ""
@@ -47,7 +47,7 @@ class PrecomputeBase(ABC):
 
     @abstractmethod
     def compute_batch(self, smiles: list[str]) -> dict[str, np.ndarray]:
-        """SMILES 배치 → {smi: vector}. 실패한 SMILES 는 dict 에서 제외하거나 zeros 로 채움."""
+        """SMILES batch → {smi: vector}. Failed SMILES are either excluded from the dict or filled with zeros."""
 
     # ------------------------------------------------------------------ run
     def run(
@@ -59,14 +59,14 @@ class PrecomputeBase(ABC):
         batch_size: int | None = None,
         checkpoint_every: int | None = None,
     ) -> ParquetStore:
-        """SMILES 전체에 대해 feature 계산 + parquet 저장.
+        """Compute features for all SMILES + save to parquet.
 
         Args:
-            smiles: 입력 SMILES (중복 허용, 내부에서 정렬·dedupe).
-            output_path: 저장 위치.
-            resume: True 면 기존 parquet 의 SMILES 는 재계산 없이 건너뜀.
-            batch_size: ``compute_batch`` 한 번에 넘길 SMILES 수.
-            checkpoint_every: 이 만큼 누적될 때마다 parquet 중간 저장.
+            smiles: input SMILES (duplicates allowed, sorted/deduped internally).
+            output_path: save location.
+            resume: if True, SMILES already in the existing parquet are skipped without recomputation.
+            batch_size: number of SMILES passed to ``compute_batch`` at once.
+            checkpoint_every: save intermediate parquet each time this many accumulate.
         """
         if batch_size is None:
             batch_size = self.default_batch_size
@@ -101,7 +101,7 @@ class PrecomputeBase(ABC):
 
     # --------------------------------------------------------------- internal
     def _flush(self, store: ParquetStore, results: dict[str, np.ndarray]) -> None:
-        """누적된 결과를 store 에 upsert (멱등)."""
+        """Upsert accumulated results into the store (idempotent)."""
         cols = self.columns
         smis = list(results.keys())
         mat = np.stack([results[s] for s in smis], axis=0)

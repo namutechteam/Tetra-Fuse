@@ -1,16 +1,16 @@
 """precompute runner: FeatureSpec → builder → parquet artifact.
 
-recipe 예::
+recipe example::
 
     name: precompute_rdkit2d
     kind: precompute
     features:
       descriptors: [rdkit2d]
-    notes: TDC ADMET 22 union SMILES 의 200-dim RDKit 2D descriptor
+    notes: 200-dim RDKit 2D descriptor of TDC ADMET 22 union SMILES
 
-여러 descriptors/embeddings 를 한 recipe 에 나열하면 순차 실행한다 (각각 별도
-artifact 로 저장). 같은 modality 를 여러 옵션(예: token len) 으로 만들고 싶다면
-recipe 를 분리하는 게 명확하다.
+Listing multiple descriptors/embeddings in one recipe runs them sequentially (each separate
+artifact). If you want to create the same modality with multiple options (e.g. token len),
+it is clearer to separate the recipe.
 """
 
 from __future__ import annotations
@@ -28,9 +28,9 @@ logger = get_logger("qadmet.runners.precompute")
 
 
 def _collect_smiles(seeds: Sequence[int] = (0,), task_set: str = "tdc_admet_22") -> list[str]:
-    """task_set union SMILES. 외부 호출(인터넷 + tdc/HF 캐시) 필요.
+    """task_set union SMILES. Requires external calls (internet + tdc/HF cache).
 
-    PXR 분기: ``pxr_*`` 접두사면 PXR HF dataset 의 train+test SMILES 를 반환.
+    PXR branch: if prefixed with ``pxr_*``, returns train+test SMILES from the PXR HF dataset.
     """
     if task_set.startswith("polaris_fang"):
         from qadmet.datasets.polaris_fang import collect_polaris_fang_smiles
@@ -47,16 +47,16 @@ def run_precompute(
     *, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path
 ) -> Artifact:
     spec.validate()
-    if spec.features is None:  # __post_init__ 가 잡지만 명시 가드.
-        raise ValueError("precompute recipe 에 features 섹션이 필요합니다.")
+    if spec.features is None:  # __post_init__ catches this but explicit guard.
+        raise ValueError("precompute recipe requires a features section.")
 
     modalities = list(spec.features.descriptors) + list(spec.features.embeddings)
     if not modalities:
-        raise ValueError("features.descriptors 또는 features.embeddings 가 비어있습니다.")
+        raise ValueError("features.descriptors or features.embeddings is empty.")
 
     artifact = store.create(spec, repo_root=repo_root)
 
-    # dataset.name 으로 task_set 분기 (PXR vs TDC)
+    # Branch task_set by dataset.name (PXR vs TDC)
     task_set_name = spec.dataset.name if spec.dataset is not None else "tdc_admet_22"
     smiles = _collect_smiles(task_set=task_set_name)
     logger.info(
@@ -67,7 +67,7 @@ def run_precompute(
     for mod in modalities:
         builder = FEATURE_BUILDERS.get(mod)()
         if getattr(builder, "output_format", "parquet") == "lmdb":
-            # LMDB builder: 고정 경로에 출력 (artifact dir 밖)
+            # LMDB builder: outputs to fixed path (outside artifact dir)
             rel = getattr(builder, "default_output_relpath", f"data/embeddings/{mod}.lmdb")
             out_path = repo_root / rel
             builder.run(smiles, out_path, resume=True)

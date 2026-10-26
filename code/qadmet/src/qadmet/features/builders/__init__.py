@@ -1,12 +1,12 @@
-"""각 modality builder 모듈은 import-time 에 ``FEATURE_BUILDERS`` 에 등록된다.
+"""Each modality builder module registers itself to ``FEATURE_BUILDERS`` at import-time.
 
-이 패키지를 import 하면 7 개 builder (rdkit2d / xtb / gfn_missing_vector / molformer
-/ molformer_tokens / unimol2 / unimol2_lmdb) 가 모두 등록된다. heavy 의존성
-(descriptastorus / xtb 바이너리 / transformers / unimol_v2)은 builder 클래스의
-메서드 안에서만 import 하므로 import-time cost 는 가볍다.
+Importing this package registers all 7 builders (rdkit2d / xtb / gfn_missing_vector / molformer
+/ molformer_tokens / unimol2 / unimol2_lmdb). heavy dependencies
+(descriptastorus / xtb binary / transformers / unimol_v2) are only imported inside the builder class's
+methods, so the import-time cost is light.
 """
 
-from qadmet.features.builders import (  # noqa: F401  — import-time 등록
+from qadmet.features.builders import (  # noqa: F401  — import-time registration
     chemeleon_frozen,
     gfn_missing_vector,
     graphmvp_frozen,

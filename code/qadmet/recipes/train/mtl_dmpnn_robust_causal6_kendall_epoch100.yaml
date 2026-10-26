@@ -1,18 +1,18 @@
 name: mtl_dmpnn_robust_causal6_kendall
 kind: train
 
-# DMPNN (from-scratch, descriptor 없음) + Kendall UW + causal6.
-# mtl_chemeleon_robust_causal6_kendall.yaml 와 동일 옵션 — backbone(DMPNN) 만 차이 (descriptor 0).
-# per-modality 비교 세트(ch/gm/um/mf) 의 dmpnn graph-only 축. (옛 mtl_dmpnn_grouped 의 현재-옵션 버전)
+# DMPNN (from-scratch, no descriptor) + Kendall UW + causal6.
+# Same options as mtl_chemeleon_robust_causal6_kendall.yaml — only backbone(DMPNN) differs (descriptor 0).
+# dmpnn graph-only axis of the per-modality comparison set (ch/gm/um/mf). (current-option version of the old mtl_dmpnn_grouped)
 #
-# ★ scratch 모델 예외: max_epochs 50 / patience 7 (pretrain warm start 없음 → 수렴 여유).
-# 그 외(loss / head / dataset / precision / LR / batch)는 base 와 동일.
+# ★ scratch model exception: max_epochs 50 / patience 7 (no pretrain warm start → allow more room to converge).
+# Otherwise (loss / head / dataset / precision / LR / batch) same as base.
 
 dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # ← 6-group causal
 
 features:
   graph: dmpnn
-  descriptors: []                  # graph-only (rdkit/xtb 변형의 하한 baseline)
+  descriptors: []                  # graph-only (lower-bound baseline for rdkit/xtb variants)
   embeddings: []
   missing_policy: mask_token
 
@@ -26,23 +26,23 @@ model:
     routing: taskset_grouping
     kwargs:
       trunk_hidden: 128
-      dropout: 0.4                 # ← base 와 동일
+      dropout: 0.4                 # ← same as base
 
 loss:
   type: mixed_task_uncertainty     # Kendall UW
   classification: bce_with_logits
   regression: masked_mae
-  task_weighting: null             # ← base 와 동일 (mixed_kendall include 의 kendall_uncertainty 아님)
+  task_weighting: null             # ← same as base (not the kendall_uncertainty of mixed_kendall include)
   kwargs:
     freeze_log_vars: false
 
 trainer:
   seeds: [0, 1, 2, 3, 4]
-  max_epochs: 100                   # as trained (run 63cabbaf3772); scratch 모델
+  max_epochs: 100                   # as trained (run 63cabbaf3772); scratch model
   patience: 15                      # as trained (run 63cabbaf3772)
   precision: bf16-mixed
   early_stopping: true
-  batch_size: 16                   # base 와 동일 축 정렬 (DMPNN 은 상향 가능한 free knob)
+  batch_size: 16                   # aligned with base axis (DMPNN is a free knob that can be increased)
   lr: 0.0005                       # constant LR
   init_lr: 0.0005
   final_lr: 0.0005
@@ -54,10 +54,10 @@ trainer:
     gradient_clip_val: 1.0
 
 notes: |
-  DMPNN(scratch, graph-only) + Kendall UW + causal6. mtl_chemeleon_robust_causal6_kendall 와
-  동일 옵션이며 backbone(DMPNN) 만 다르고 descriptor 는 없음.
-  (옛 mtl_dmpnn_grouped = tdc_admet_22 / default trainer 의 현재-옵션 변환 버전; 원본은 보존)
+  DMPNN(scratch, graph-only) + Kendall UW + causal6. Same options as mtl_chemeleon_robust_causal6_kendall,
+  only backbone(DMPNN) differs, and there is no descriptor.
+  (old mtl_dmpnn_grouped = current-option converted version of tdc_admet_22 / default trainer; original preserved)
 
-  scratch 예외: max_epochs 50 / patience 7 (pretrain warm start 없음).
-  ⚠ chemeleon(pretrained) 런은 const-LR 5e-4 에서 best epoch 2~4 로 매우 빨리 수렴 →
-    scratch DMPNN 도 50 상한 안에서 early-stop 으로 종료될 가능성 높음 (warmup 0 초기 불안정 주시).
+  scratch exception: max_epochs 50 / patience 7 (no pretrain warm start).
+  ⚠ chemeleon(pretrained) runs converge very quickly at const-LR 5e-4, with best epoch 2~4 →
+    scratch DMPNN is also likely to terminate via early-stop within the 50 upper bound (watch for initial instability with warmup 0).

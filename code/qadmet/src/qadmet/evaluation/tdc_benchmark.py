@@ -1,24 +1,24 @@
-"""신규 artifact 의 ``predictions.parquet`` → 옛 phase result CSV 와 같은
+"""New artifact's ``predictions.parquet`` → same as old phase result CSV
 ``[dataset, metric, mean, std, ensemble_mean, ensemble_median, n_seeds, n_test]``
-표를 만든다.
+produces the table.
 
-옛 ``pipeline_mtl.py:1800-1900`` 이 ``tdc.benchmark_group.admet_group.evaluate_many``
-+ prediction-level ensemble (mean/median) 으로 만들던 CSV 와 같은 모양을, 신규
-long-format parquet 한 장에서 만든다. TDC 인터넷 의존성이 없는 self-contained
-재현이 목적.
+Old ``pipeline_mtl.py:1800-1900`` used ``tdc.benchmark_group.admet_group.evaluate_many``
++ prediction-level ensemble (mean/median) to build a CSV of the same shape; from the new
+single long-format parquet. Self-contained without TDC internet dependency,
+reproduction is the goal.
 
-- ``mean`` / ``std`` = seed 별 metric 의 평균/표준편차 (sklearn metric 기준)
-- ``ensemble_mean`` / ``ensemble_median`` = seed 차원으로 prediction 을 평균/중앙값
-  취한 뒤의 metric (옛 "Step 1 신규" prediction-level ensemble)
-- ``n_seeds`` / ``n_test`` = 진단용 (seed 수, ensemble SMILES 교집합 크기)
+- ``mean`` / ``std`` = mean/std of the metric per seed (based on sklearn metric)
+- ``ensemble_mean`` / ``ensemble_median`` = averaging/median of predictions along the seed dimension,
+  metric after taking that (old "Step 1 new" prediction-level ensemble)
+- ``n_seeds`` / ``n_test`` = for diagnostics (number of seeds, size of ensemble SMILES intersection)
 
-NaN-마스킹·sigmoid 등은 신규 train/stack runner 가 이미 적용한 상태 (분류는
-prob, 회귀는 unscaled 원 단위). 본 모듈은 추가 변환을 하지 않는다.
+NaN-masking, sigmoid, etc. have already been applied by the new train/stack runner (classification is
+prob, regression is unscaled original units). This module performs no additional transformation.
 
 History:
-    Step 3.7 시점에는 ``parity._metrics`` 에서 살았으나 Step 5 에서 evaluation
-    런너가 동일 함수를 사용하면서 본 위치로 이동. ``parity._metrics`` 는 본
-    모듈의 함수를 re-export 하는 호환 shim 이 된다.
+    Lived in ``parity._metrics`` as of Step 3.7, but as of Step 5, the evaluation
+    runner moved it to this location while using the same function. ``parity._metrics`` is this
+    module's compatibility shim that re-exports its functions.
 """
 
 from __future__ import annotations
@@ -40,24 +40,24 @@ REQUIRED_COLUMNS = {"seed", "task", "split", "smiles", "y_true", "y_pred"}
 
 
 def load_predictions(parquet_path: Path, *, split: str = "test") -> pd.DataFrame:
-    """``predictions.parquet`` 로드 + split 필터 + 필수 컬럼 검증."""
+    """Load ``predictions.parquet`` + filter split + validate required columns."""
     df = pd.read_parquet(parquet_path)
     missing = REQUIRED_COLUMNS - set(df.columns)
     if missing:
         raise ValueError(
-            f"predictions.parquet 필수 컬럼 누락: {sorted(missing)} — got {list(df.columns)}"
+            f"predictions.parquet missing required columns: {sorted(missing)} — got {list(df.columns)}"
         )
     sub = df[df["split"] == split].copy()
     if sub.empty:
-        raise ValueError(f"split={split!r} 행 없음 (전체 split: {sorted(df['split'].unique())})")
+        raise ValueError(f"split={split!r} no rows (all splits: {sorted(df['split'].unique())})")
     return sub
 
 
 def _resolve_tasks(predictions: pd.DataFrame, task_set: str | None) -> list[str]:
-    """비교 대상 task 목록 결정.
+    """Determine the list of tasks to compare.
 
-    task_set 이 주어지면 ``TASK_SETS`` 의 순서를 그대로 사용하고, 없으면 parquet
-    에 등장한 task 중 ``TASK_REGISTRY`` 에 등록된 것만 정렬해서 사용한다.
+    If task_set is given, use the order of ``TASK_SETS`` as is; otherwise, from the parquet
+    use only the tasks that appear and are registered in ``TASK_REGISTRY``, sorted.
     """
     if task_set is not None:
         ts = TASK_SETS.get(task_set)
@@ -71,20 +71,20 @@ def per_task_metric_df(
     *,
     task_set: str | None = None,
 ) -> pd.DataFrame:
-    """seed 별 metric 평균/표준편차 + prediction-level ensemble metric.
+    """Mean/std of metric per seed + prediction-level ensemble metric.
 
     Args:
-        predictions: ``predictions.parquet`` 의 한 split 부분 (load_predictions 결과).
-        task_set: ``TASK_SETS`` 키 (예: "tdc_admet_22"). None 이면 parquet 의 task 자동.
+        predictions: a single-split portion of ``predictions.parquet`` (result of load_predictions).
+        task_set: ``TASK_SETS`` key (e.g. "tdc_admet_22"). None means auto-detect task from parquet.
 
     Returns:
         ``[dataset, metric, mean, std, ensemble_mean, ensemble_median, n_seeds, n_test]``
-        — 옛 phase result CSV 와 컬럼 모양 일치 (+ 진단용 두 컬럼 추가).
+        — matches the column shape of the old phase result CSV (+ two additional diagnostic columns).
 
     Note:
-        같은 (seed, task, smiles) 행이 여럿이면 마지막 값을 채택 (groupby last).
-        seed 마다 SMILES 집합이 달라도 prediction-level ensemble 은 SMILES 교집합에서만
-        평균한다 (옛 코드와 동일 — 옛 코드는 같은 fold 라 항상 일치한 가정).
+        If there are multiple rows with the same (seed, task, smiles), take the last value (groupby last).
+        Even if the SMILES set differs per seed, prediction-level ensemble averages only over the SMILES
+        intersection (same as the old code — the old code assumed they always matched since it was the same fold).
     """
     rows: list[dict] = []
     tasks = _resolve_tasks(predictions, task_set)
@@ -104,13 +104,13 @@ def per_task_metric_df(
 
         seed_ids = sorted(sub["seed"].unique())
         per_seed_score: list[float] = []
-        # SMILES 별 (seed → y_pred) 누적. y_true 는 seed 간 동일 가정.
+        # Accumulate (seed → y_pred) per SMILES. Assumes y_true is identical across seeds.
         y_true_by_smi: dict[str, float] = {}
         seed_pred_by_smi: dict[int, dict[str, float]] = {s: {} for s in seed_ids}
 
         for s in seed_ids:
             seed_sub = sub[sub["seed"] == s]
-            # 같은 (seed, smiles) 가 중복이면 마지막 행 채택.
+            # If (seed, smiles) is duplicated, take the last row.
             seed_sub = seed_sub.drop_duplicates(subset=["smiles"], keep="last")
             yt = seed_sub["y_true"].to_numpy()
             yp = seed_sub["y_pred"].to_numpy()
@@ -121,7 +121,7 @@ def per_task_metric_df(
                 y_true_by_smi.setdefault(smi, float(t))
                 seed_pred_by_smi[s][smi] = float(p)
 
-        # 모든 seed 가 공통으로 가진 SMILES 만 ensemble.
+        # Ensemble only the SMILES common to all seeds.
         common = sorted(set.intersection(*(set(d) for d in seed_pred_by_smi.values()))) \
             if seed_pred_by_smi else []
         if common:
@@ -158,7 +158,7 @@ def per_task_metric_df(
 
 
 def metric_direction(metric: str) -> int:
-    """+1 = 클수록 좋음, -1 = 작을수록 좋음. 미등록 metric 은 +1."""
+    """+1 = higher is better, -1 = lower is better. Unregistered metrics default to +1."""
     return -1 if metric.lower() == "mae" else +1
 
 
@@ -171,24 +171,24 @@ def evaluate_artifact(
     split: str = "test",
     task_set: str | None = None,
 ) -> pd.DataFrame:
-    """artifact 의 ``predictions.parquet`` → 7-컬럼 metric DataFrame.
+    """artifact's ``predictions.parquet`` → 7-column metric DataFrame.
 
-    train / stack / predict 어떤 kind 든 ``predictions.parquet`` 만 있으면 동작.
+    Works for any kind — train / stack / predict — as long as ``predictions.parquet`` exists.
 
     Args:
-        name: artifact 이름 (recipe ``name``).
-        kind: artifact kind (``"train"`` | ``"stack"`` | ``"predict"`` 등).
-        store: ArtifactStore. 미지정 시 default store 사용.
-        run_id: 명시 시 해당 run, 미지정 시 latest.
-        split: ``predictions.parquet`` 의 split 컬럼 값 (보통 ``"test"``).
-        task_set: 비교 task 묶음 (``TASK_SETS`` 키). None 이면 parquet 의 등장 task.
+        name: artifact name (recipe ``name``).
+        kind: artifact kind (``"train"`` | ``"stack"`` | ``"predict"`` etc.).
+        store: ArtifactStore. Uses the default store if unspecified.
+        run_id: the specified run if given, otherwise latest.
+        split: value of the split column in ``predictions.parquet`` (usually ``"test"``).
+        task_set: comparison task group (``TASK_SETS`` key). None means tasks appearing in the parquet.
 
     Returns:
-        per_task_metric_df 결과 DataFrame.
+        per_task_metric_df result DataFrame.
 
     Raises:
-        FileNotFoundError: artifact 또는 ``predictions.parquet`` 없음.
-        ValueError: split 행 없음·필수 컬럼 누락.
+        FileNotFoundError: artifact or ``predictions.parquet`` not found.
+        ValueError: no rows for split · missing required columns.
     """
     from qadmet.core.artifacts import ArtifactStore
 
@@ -199,9 +199,9 @@ def evaluate_artifact(
     else:
         artifact = store.latest(kind, name)
         if artifact is None:
-            raise FileNotFoundError(f"artifact 없음: {kind}/{name}")
+            raise FileNotFoundError(f"artifact not found: {kind}/{name}")
     parquet = artifact.data_dir / "predictions.parquet"
     if not parquet.exists():
-        raise FileNotFoundError(f"predictions.parquet 없음: {parquet}")
+        raise FileNotFoundError(f"predictions.parquet not found: {parquet}")
     preds = load_predictions(parquet, split=split)
     return per_task_metric_df(preds, task_set=task_set)

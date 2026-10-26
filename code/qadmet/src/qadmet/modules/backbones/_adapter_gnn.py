@@ -1,24 +1,24 @@
 """AdapterGNNBlock — paper-faithful AdapterGNN (Li et al., AAAI'24).
 
-논문 Eq. (7):
+Paper Eq. (7):
     A(x) = BN(W_up(ReLU(W_down(x))))
 
-본 구현은 학습 가능한 scalar ``s`` (=γ, init=0) 를 추가로 곱해서 반환:
+This implementation additionally multiplies by a learnable scalar ``s`` (=γ, init=0) before returning:
 
     forward(x) = s · BN(W_up(ReLU(W_down(x))))
 
-즉 **internal residual 없음**. 논문 Eq. (8) 의 parallel branch 합산:
+i.e., **no internal residual**. Sum of parallel branches per paper Eq. (8):
 
     h_l = BN(MLP(MP(x_l))) + s1·A1(x_l) + s2·A2(MP(x_l))
 
-은 backbone 측 forward 에서 frozen 경로 + 두 어댑터 출력을 element-wise 더해
-구현. 어댑터는 ``s·A(x)`` (= delta) 만 반환하고 residual 합산은 caller 가 함.
+is implemented in the backbone-side forward by adding the frozen path + two adapter outputs element-wise
+implemented. The adapter only returns ``s·A(x)`` (= delta); the residual sum is done by the caller.
 
-설계 포인트:
-    - BN1d(d) — 논문: graph over-smoothing 완화에 BN 유리 (LN 대비).
-    - ``s`` (=γ, learnable scalar, init=0) — 학습 초기에 backbone-only 분포 보존,
-      task knowledge 비율을 모델이 동적으로 게이팅 (catastrophic forgetting 완화).
-    - ``up.weight`` zero-init 은 사용 안 함 (γ=0 만으로 초기 출력 0 이 보장됨).
+Design points:
+    - BN1d(d) — paper: BN is advantageous for mitigating graph over-smoothing (vs. LN).
+    - ``s`` (=γ, learnable scalar, init=0) — preserves backbone-only distribution early in training,
+      the model dynamically gates the task knowledge ratio (mitigates catastrophic forgetting).
+    - ``up.weight`` zero-init is not used (γ=0 alone guarantees zero initial output).
 """
 
 from __future__ import annotations
@@ -32,8 +32,8 @@ class AdapterGNNBlock(nn.Module):
 
     Args:
         d: input/output feature dim (frozen backbone hidden dim).
-        r: bottleneck dim (보통 d 보다 훨씬 작음).
-        dropout: BN+scale 직후의 dropout 확률.
+        r: bottleneck dim (typically much smaller than d).
+        dropout: dropout probability immediately after BN+scale.
 
     Attributes:
         d, r, gamma (learnable scalar ``s``, init=0).
@@ -55,11 +55,11 @@ class AdapterGNNBlock(nn.Module):
         """Compute ``s · BN(W_up(ReLU(W_down(x))))`` (NO residual added).
 
         Args:
-            x: ``(*, d)`` — 마지막 축이 ``d`` 인 임의 shape. ``BatchNorm1d`` 호환을 위해
-                내부에서 ``(N, d)`` 로 reshape 후 결과를 원형 복원.
+            x: ``(*, d)`` — arbitrary shape whose last axis is ``d``. For ``BatchNorm1d`` compatibility,
+                reshape internally to ``(N, d)`` then restore the result to its original shape.
 
         Returns:
-            ``s · A(x)`` (same shape as ``x``). caller 가 frozen path 와 element-wise 합산.
+            ``s · A(x)`` (same shape as ``x``). The caller sums it element-wise with the frozen path.
         """
         orig_shape = x.shape
         if x.dim() != 2:

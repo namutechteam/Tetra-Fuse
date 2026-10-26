@@ -1,14 +1,14 @@
-"""GraphMVP GIN encoder — paper port (state_dict 호환 보장).
+"""GraphMVP GIN encoder — paper port (state_dict compatibility guaranteed).
 
 GraphMVP/src_regression/models_complete_feature/molecule_gnn_model.py:62-125
-의 ``GNNComplete`` 와 ``GINConv`` 를 그대로 옮긴 형태. 모듈 이름/구조를 변경하면
-사전학습 가중치 (``.pth`` 의 ``"model"`` key state_dict) 가 strict load 되지 않으므로
-**모듈 키는 paper 코드와 동일** 하게 유지한다 (``atom_encoder``, ``gnns[i].mlp``,
+Form directly ported from ``GNNComplete`` and ``GINConv``. If the module names/structure are changed,
+the pretrained weights (``.pth`` 's ``"model"`` key state_dict) will not strict load, so
+**module keys must be kept identical** to the paper code (``atom_encoder``, ``gnns[i].mlp``,
 ``gnns[i].eps``, ``gnns[i].bond_encoder``, ``batch_norms[i]``).
 
 Lazy import:
-    ``ogb`` / ``torch_geometric`` 은 본 모듈 top-level 에서 import — backbone 측이
-    이미 lazy import 후 호출하는 흐름이라 추가 격리 불필요.
+    ``ogb`` / ``torch_geometric`` are imported at this module's top-level — the backbone side
+    already follows a lazy-import-then-call flow, so no additional isolation is needed.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ from torch_geometric.nn import MessagePassing
 
 
 class GINConv(MessagePassing):
-    """GraphMVP src_regression GINConv 동등 (paper:12-30)."""
+    """Equivalent to GraphMVP src_regression GINConv (paper:12-30)."""
 
     def __init__(self, emb_dim: int, aggr: str = "add") -> None:
         super().__init__(aggr=aggr)
@@ -53,17 +53,17 @@ class GINConv(MessagePassing):
 
 
 class GraphMVPGIN(nn.Module):
-    """GraphMVP src_regression ``GNNComplete`` 동등 (paper:62-125).
+    """Equivalent to GraphMVP src_regression ``GNNComplete`` (paper:62-125).
 
-    이름만 ``GNNComplete -> GraphMVPGIN`` 으로 변경 — sub-module 키는 동일 유지.
-    forward 는 명시 인자 (x, edge_index, edge_attr) 만 받음 (PyG Data 인터페이스는
-    backbone 래퍼 측에서 풀어 호출).
+    Only the name changed to ``GNNComplete -> GraphMVPGIN`` — sub-module keys kept identical.
+    forward takes only explicit arguments (x, edge_index, edge_attr) (the PyG Data interface
+    is unpacked and called on the backbone wrapper side).
 
     Args:
-        num_layer: GIN 레이어 수 (paper 기본 5).
-        emb_dim: hidden / output 차원 (paper 기본 300).
-        JK: jumping-knowledge 모드 — 'last' / 'concat' / 'max' / 'sum'.
-        drop_ratio: 각 레이어 출력 dropout 확률 (frozen 사용 시 0 권장).
+        num_layer: number of GIN layers (paper default 5).
+        emb_dim: hidden / output dimension (paper default 300).
+        JK: jumping-knowledge mode — 'last' / 'concat' / 'max' / 'sum'.
+        drop_ratio: dropout probability for each layer's output (0 recommended when frozen).
     """
 
     def __init__(

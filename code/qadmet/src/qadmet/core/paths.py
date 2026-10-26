@@ -1,13 +1,13 @@
-"""파일시스템 경로 단일 진실원.
+"""Single source of truth for filesystem paths.
 
-환경변수 override 를 지원하여 사용자별/CI 별로 위치를 바꿀 수 있다.
+Supports environment variable override to change location per user/CI.
 
-기본 레이아웃:
+Default layout:
     QADMET_ROOT (= /nas/tk_ahn/ADMET-MTL/qadmet by default)
-        ├── data/         원본 데이터 + 사전 계산 parquet
+        ├── data/         raw data + precomputed parquet
         ├── recipes/      YAML recipe
-        ├── artifacts/    runner 산출물 (kind/name/run_id/...)
-        ├── checkpoints*/ 옛 학습 산출물 (parity 기준, 손대지 않음)
+        ├── artifacts/    runner output (kind/name/run_id/...)
+        ├── checkpoints*/ legacy training artifacts (parity baseline, do not touch)
         └── logs/
 """
 
@@ -16,12 +16,12 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-# repo 루트 추정: 본 파일 위치의 4 단계 위 (src/qadmet/core/paths.py → repo).
+# Repo root estimation: 4 levels above this file's location (src/qadmet/core/paths.py → repo).
 _DEFAULT_ROOT = Path(__file__).resolve().parents[3]
 
 
 def root() -> Path:
-    """qadmet repo 루트. ``QADMET_ROOT`` 환경변수가 우선."""
+    """qadmet repo root. ``QADMET_ROOT`` environment variable takes precedence."""
     env = os.environ.get("QADMET_ROOT")
     return Path(env).resolve() if env else _DEFAULT_ROOT
 
@@ -43,7 +43,7 @@ def logs_dir() -> Path:
 
 
 def ensure(path: Path) -> Path:
-    """디렉토리가 없으면 만든 뒤 절대경로 반환."""
+    """Create the directory if it does not exist, then return the absolute path."""
     path = Path(path)
     path.mkdir(parents=True, exist_ok=True)
     return path

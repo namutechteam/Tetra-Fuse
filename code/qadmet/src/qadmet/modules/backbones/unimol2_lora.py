@@ -1,21 +1,21 @@
 """UniMol2LoRABackbone — Uni-Mol2 84M + PEFT LoRA fine-tune.
 
-옛 ``run_stl_unimol2_lora.UniMol2STL`` 의 LoRA 설정을 단일 backbone 으로 분리한다.
-vendored ``_vendor.unimol_v2`` (옛 ``scripts-old/qw/backbones/unimol_v2.py`` 와 byte-identical)
-를 사용한다.
+Separates the LoRA config of the old ``run_stl_unimol2_lora.UniMol2STL`` into a single backbone.
+vendored ``_vendor.unimol_v2`` (byte-identical to the old ``scripts-old/qw/backbones/unimol_v2.py``)
+uses it.
 
 Why target_modules=["linear_q", "linear_v"]:
-    Uni-Mol2 의 attention 모듈명은 ``linear_q`` / ``linear_v`` 이다 (MoLFormer 와 다름).
+    Uni-Mol2's attention module names are ``linear_q`` / ``linear_v`` (different from MoLFormer).
 
 Lazy import:
-    peft 는 ``__init__`` 안에서만 import. vendored unimol_v2 는 도메인 특화 코드라
-    이미 모듈 import 시 같이 로드되어도 큰 비용은 없으나 일관성을 위해 함수 안에서
-    import 한다.
+    peft is imported only inside ``__init__``. Since vendored unimol_v2 is domain-specific code,
+    there is little cost even if it is loaded together at module import time, but for consistency it is
+    imported inside the function.
 
 Checkpoint:
-    실제 가중치 로딩은 ``ckpt_path`` 가 None 이 아닐 때만 수행된다. 테스트나 random
-    초기화 비교에는 ``ckpt_path=None`` 으로 인스턴스화 가능.
-    옛 경로: ``data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt``.
+    Actual weight loading is performed only when ``ckpt_path`` is not None. For tests or random
+    initialization comparisons, it can be instantiated with ``ckpt_path=None``.
+    Old path: ``data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt``.
 """
 
 from __future__ import annotations
@@ -34,20 +34,20 @@ UNIMOL2_DIM = 768
 
 @BACKBONES.register("unimol2_lora")
 class UniMol2LoRABackbone(nn.Module):
-    """Uni-Mol2 base + LoRA wrapper. forward 는 vendored 모델 dict 입력을 받아 cls_repr 반환.
+    """Uni-Mol2 base + LoRA wrapper. forward takes vendored model dict input and returns cls_repr.
 
     Args:
-        ckpt_path: 사전학습 가중치 ``.pt`` 경로. None 이면 랜덤 초기화 (테스트용).
-        model_size: vendored ``UniMolV2Model`` 의 size key (기본 ``"84m"``).
-        lora_rank: LoRA r (기본 16).
-        lora_alpha: LoRA alpha (기본 32).
-        lora_dropout: LoRA dropout (기본 0.1).
-        target_modules: LoRA 적용 모듈 (기본 ``("linear_q", "linear_v")``).
-        strict_load: ``load_unimol2_weights(strict=...)`` 인자.
+        ckpt_path: Pretrained weights ``.pt`` path. If None, random initialization (for testing).
+        model_size: size key of vendored ``UniMolV2Model`` (default ``"84m"``).
+        lora_rank: LoRA r (default 16).
+        lora_alpha: LoRA alpha (default 32).
+        lora_dropout: LoRA dropout (default 0.1).
+        target_modules: Modules to apply LoRA to (default ``("linear_q", "linear_v")``).
+        strict_load: Argument for ``load_unimol2_weights(strict=...)``.
 
     Note:
-        forward 는 ``collate_unimolv2`` 가 만든 dict 를 그대로 받는다.
-        키 중 ``__y__`` / ``__smi__`` 같이 leading double-underscore 는 제외된다.
+        forward receives the dict created by ``collate_unimolv2`` as-is.
+        Keys with a leading double-underscore, such as ``__y__`` / ``__smi__``, are excluded.
     """
 
     output_dim: int = UNIMOL2_DIM

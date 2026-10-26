@@ -7,7 +7,7 @@ evaluation:
   kwargs:
     target: mtl_dmpnn_robust_causal6_kendall
     target_kind: train
-    target_run_id: 63cabbaf3772   # ← train 출력 run_id 붙여넣기
+    target_run_id: 63cabbaf3772   # ← train output run_id paste
     split: test
     task_set: tdc_admet_22
     column: ensemble_mean

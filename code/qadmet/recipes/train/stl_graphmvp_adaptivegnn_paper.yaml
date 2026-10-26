@@ -2,8 +2,8 @@ name: stl_graphmvp_adaptivegnn_paper
 kind: train
 
 # STL paper-faithful AdapterGNN (Li et al., AAAI'24):
-#   - adapter_kind="paper" → GraphMVP num_layer=5 의 각 layer 마다
-#     pre/post AdapterGNNBlock 쌍 (atom-level, d=emb_dim=300, r=64). 총 5+5=10 adapter.
+#   - adapter_kind="paper" → for each of GraphMVP's num_layer=5 layers
+#     a pre/post AdapterGNNBlock pair (atom-level, d=emb_dim=300, r=64). Total 5+5=10 adapters.
 #   - Eq.(7) A(x) = BN(W_up(ReLU(W_down(x)))), Eq.(8) parallel wiring.
 #   → docs/sessions/2026-05-20_adaptergnn_paper_faithful_rewrite.md
 
@@ -25,10 +25,10 @@ model:
       num_layer: 5
       emb_dim: 300
       JK: last
-      adapter_kind: paper          # AAAI'24 paper-faithful (default 이지만 명시)
+      adapter_kind: paper          # AAAI'24 paper-faithful (default, but stated explicitly)
       adapter_bottleneck: 64
       adapter_dropout: 0.0
-      # use_edge_attr 는 paper 모드에서 무시 (lora_gin 내부 mini-GIN 에서만 의미)
+      # use_edge_attr is ignored in paper mode (only meaningful inside lora_gin's internal mini-GIN)
       pool: mean
   fusion: null
   head:
@@ -48,52 +48,52 @@ trainer:
 
 notes: |
   STL GraphMVP + AdapterGNN paper-faithful (Li et al., AAAI'24).
-  stl_graphmvp_adaptivegnn.yaml (legacy outer-only LoRA-GIN 시절 hyperparam
-  유지: r=64, use_edge_attr=true) 와의 차이점만 명시:
+  stl_graphmvp_adaptivegnn.yaml (legacy outer-only LoRA-GIN era hyperparam
+  kept: r=64, use_edge_attr=true) — only the differences from this are stated:
 
   Backbone:
     - graphmvp_hybrid.pth (regression variant) frozen, 5-layer GIN.
-    - adapter_kind="paper": 각 GIN layer 마다 pre/post AdapterGNNBlock 쌍
-      (atom-level, d=emb_dim=300, r=64). 총 5+5 = 10 adapter.
-      각 block = down → ReLU → up → BN → γ·scale (γ init=0)
-      → dropout → delta (NO internal residual). caller 가 frozen path 와 합산.
+    - adapter_kind="paper": a pre/post AdapterGNNBlock pair for each GIN layer
+      (atom-level, d=emb_dim=300, r=64). Total 5+5 = 10 adapters.
+      each block = down → ReLU → up → BN → γ·scale (γ init=0)
+      → dropout → delta (NO internal residual). The caller sums it with the frozen path.
     - parallel wiring (Eq.8): h_l = BN(MLP(MP(x_l))) + s1·A1(x_l) + s2·A2(MP(x_l)).
-      GIN layer 내부를 분해 호출: MP(x_l) = (1+eps)*x + propagate(...), 그 다음
-      BN(MLP(MP)) 가 frozen path. A1 은 x_l 입력, A2 는 MP(x_l) (mlp 이전) 받음.
-    - γ=0 초기엔 frozen-only baseline 과 비트 단위 동등 (smoke test 검증).
+      Calls into the decomposed internals of the GIN layer: MP(x_l) = (1+eps)*x + propagate(...), then
+      BN(MLP(MP)) is the frozen path. A1 receives x_l as input, A2 receives MP(x_l) (before mlp).
+    - At γ=0 init, bit-for-bit equivalent to the frozen-only baseline (verified by smoke test).
     - trainable post-pool Linear self.proj[0] (emb_dim=300 → d_h=300) + ReLU.
 
   vs legacy stl_graphmvp_adaptivegnn.yaml:
-    - 명시적으로 adapter_kind="paper" (legacy 도 default 가 paper 라 동일 동작
-      이었으나, 본 recipe 는 의도 분명히 함).
-    - use_edge_attr 제거 (paper 모드에서 무시). frozen GIN 내부 edge_attr 는
-      그대로 사용됨 — adapter 측만 atom-only.
-    - adapter_bottleneck 64 유지 (mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6
-      과 동일). r=64 × d=300 × 10 block ≈ 384K params trainable.
+    - Explicitly adapter_kind="paper" (legacy also defaults to paper, so the behavior is identical
+      , but this recipe makes the intent explicit).
+    - use_edge_attr removed (ignored in paper mode). edge_attr inside the frozen GIN is
+      used as-is — only the adapter side is atom-only.
+    - adapter_bottleneck kept at 64 (same as mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6
+      ). r=64 × d=300 × 10 blocks ≈ 384K params trainable.
 
   STL collate:
-    - graphmvp 는 STL 의 **primary** backbone — fusion 없음 → embeddings=[] 로
-      두고 ``consumes`` 도 비워둔다 (MTL 처럼 extra_backbone 으로 들어갈 때만
-      consumes 사용).
-    - collate (``prepare_stl_graphmvp_loaders``) 가 SMILES → PyG Batch 를
-      ``batch['graphmvp_data']`` 최상위 키에 넣고, graphmvp adapter 가 그걸
-      받는 구조. invalid SMILES 는 1-atom placeholder + presence=False (STL
-      단일 backbone 에선 presence mask 무의미; forward 는 안전).
+    - graphmvp is the **primary** backbone for STL — no fusion → set embeddings=[]
+      and leave ``consumes`` empty too (only used when entering as an extra_backbone like in MTL
+      is consumes used).
+    - collate (``prepare_stl_graphmvp_loaders``) converts SMILES → PyG Batch and
+      puts it into the top-level key ``batch['graphmvp_data']``, which the graphmvp adapter
+      receives. Invalid SMILES become a 1-atom placeholder + presence=False (in STL
+      with a single backbone the presence mask is meaningless; forward is still safe).
 
   Loss / Optim:
     - single_task (loss/_base/single_task.yaml): regression=masked_mae,
-      classification=bce_with_logits, STL 이므로 task weighting 무관.
-    - AdapterGNN paper-faithful + linear head 만 학습 → lr=1e-3 단일.
-    - max_epochs=100, patience=15 — adapter 학습 신호 약함 보완. (as trained,
-      run 898dfd67a49b; legacy 변형은 patience 20 이었음)
+      classification=bce_with_logits, task weighting is irrelevant since this is STL.
+    - Only AdapterGNN paper-faithful + linear head are trained → single lr=1e-3.
+    - max_epochs=100, patience=15 — compensates for weak adapter training signal. (as trained,
+      run 898dfd67a49b; the legacy variant had patience 20)
 
-  비교 대상:
-    - stl_graphmvp_adaptivegnn.yaml (동일 paper 모드 default).
+  Comparison target:
+    - stl_graphmvp_adaptivegnn.yaml (same paper mode default).
     - MTL paper-faithful: mtl_graphmvp_adaptivegnn_gradnorm_lastlinear_causal6.yaml
-      (동일 backbone/r=64, head=grouped, loss=mixed_task_gradnorm) → MTL ↔ STL
-      fair 비교용.
+      (same backbone/r=64, head=grouped, loss=mixed_task_gradnorm) → for MTL ↔ STL
+      fair comparison.
     - Backbone family STL: stl_chemeleon_adaptivegnn_paper.yaml (d_h=2048, depth=3,
       bond-level adapter r=128 × 4).
 
-  ⚠ 가중치 다운로드 필요 (data/weights/graphmvp/graphmvp_hybrid.pth — 없으면
-    random-init warning 후 smoke 모드).
+  ⚠ Weight download required (data/weights/graphmvp/graphmvp_hybrid.pth — if missing,
+    falls back to smoke mode after a random-init warning).

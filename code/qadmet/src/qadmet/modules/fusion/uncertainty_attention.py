@@ -1,11 +1,11 @@
 """UncertaintyAttentionFusion — RobustAttention + task uncertainty coupling.
 
-설계:
-    - RobustAttention 을 상속.
-    - 추가로 modality 별 learned precision (log_precision_k) 파라미터.
-    - gate logits 에 precision bias 추가: logits += log_precision.
-    - MixedTaskUncertaintyLoss 의 sigma 신호를 받아 tau 에 반영
-      (sigma 높으면 tau 올려 균등 분포 유도, low-uncertainty modality 자동 집중).
+Design:
+    - Inherits from RobustAttention.
+    - Additionally, per-modality learned precision (log_precision_k) parameter.
+    - Add precision bias to gate logits: logits += log_precision.
+    - Receives sigma signal from MixedTaskUncertaintyLoss and reflects it in tau
+      (if sigma is high, raise tau to induce uniform distribution; automatically focus on low-uncertainty modality).
 """
 
 from __future__ import annotations
@@ -19,11 +19,11 @@ from .robust_attention import RobustAttentionFusion
 
 @FUSIONS.register("uncertainty_attention")
 class UncertaintyAttentionFusion(RobustAttentionFusion):
-    """RobustAttention + learned modality precision (MixedTaskUncertaintyLoss 연동).
+    """RobustAttention + learned modality precision (integrates with MixedTaskUncertaintyLoss).
 
-    부모 인자는 RobustAttentionFusion 과 동일.
-    추가 인자:
-        None (precision 은 자동 초기화).
+    Parent arguments are identical to RobustAttentionFusion.
+    Additional arguments:
+        None (precision is auto-initialized).
     """
 
     def __init__(
@@ -47,22 +47,22 @@ class UncertaintyAttentionFusion(RobustAttentionFusion):
             modality_dropout=modality_dropout,
             residual=residual,
         )
-        # modality 별 learned precision (log scale).
-        # gate logits 폭주(=alpha collapse) 방어를 위해 [-2, 2] clamp 적용.
+        # per-modality learned precision (log scale).
+        # Apply [-2, 2] clamp to guard against gate logits blow-up (=alpha collapse).
         self.log_precision = nn.Parameter(torch.zeros(self.K))
         self.log_precision_min = float(log_precision_min)
         self.log_precision_max = float(log_precision_max)
 
     def set_sigma_signal(self, sigma_mean: float) -> None:
-        """Task 평균 uncertainty 신호를 받아 tau 에 반영.
+        """Receives task-averaged uncertainty signal and reflects it in tau.
 
-        sigma 가 높으면 (고 불확실도) tau 를 올려 modality 간 균등 분포 유도.
-        sigma 가 낮으면 (저 불확실도) tau 를 내려 winner-take-all 선호.
+        If sigma is high (high uncertainty), raise tau to induce uniform distribution across modalities.
+        If sigma is low (low uncertainty), lower tau to favor winner-take-all.
 
         Args:
-            sigma_mean: MixedTaskUncertaintyLoss log_vars.exp().sqrt().mean() 값.
+            sigma_mean: MixedTaskUncertaintyLoss log_vars.exp().sqrt().mean() value.
         """
-        # sigma_mean ∈ [0.5, 3.0] 범위로 clamp
+        # clamp sigma_mean to the range ∈ [0.5, 3.0]
         sigma_signal = torch.tensor(sigma_mean, dtype=torch.float32)
         sigma_clamped = torch.clamp(sigma_signal, 0.5, 3.0)
         # tau_effective = tau_init * sigma_clamped
@@ -70,17 +70,17 @@ class UncertaintyAttentionFusion(RobustAttentionFusion):
         self.tau = tau_effective
 
     def forward(self, embeddings: list[Tensor]) -> tuple[Tensor, Tensor]:
-        """K 개 embedding 을 fusion (precision bias 포함).
+        """Fuse K embeddings (including precision bias).
 
         Args:
-            embeddings: 길이 K 의 tensor 리스트.
+            embeddings: tensor list of length K.
 
         Returns:
             z_fused: (B, output_dim)
-            alpha: (B, K) softmax weights (precision bias 포함)
+            alpha: (B, K) softmax weights (including precision bias)
         """
         if len(embeddings) != self.K:
-            raise ValueError(f"K={self.K} 개 embedding 필요, 받은 수: {len(embeddings)}")
+            raise ValueError(f"K={self.K} embeddings required, received: {len(embeddings)}")
 
         projected = [proj(e) for proj, e in zip(self.projs, embeddings)]
 
@@ -91,7 +91,7 @@ class UncertaintyAttentionFusion(RobustAttentionFusion):
         stacked = torch.stack(projected, dim=1)  # (B, K, D)
         B, K, D = stacked.shape
 
-        # gate logits + precision bias (clamp 로 폭주 차단)
+        # gate logits + precision bias (blow-up blocked via clamp)
         cat = torch.cat(projected, dim=-1)  # (B, K*D)
         lp = self.log_precision.clamp(min=self.log_precision_min, max=self.log_precision_max)
         logits = self.gate(cat) + lp  # (B, K) + (K,) → broadcast

@@ -1,31 +1,31 @@
-"""STL train runner — task 별 독립 모델 + per-seed 학습.
+"""STL train runner — per-task independent model + per-seed training.
 
-옛 ``run_stl_dmpnn_rdkit.py`` / ``run_stl_molformer_lora.py`` /
-``run_stl_unimol2_lora.py`` 세 변종을 ``ExperimentSpec(kind="train",
-model.type="singletask")`` 단일 진입점으로 통합한다 (+ chemeleon / graphmvp
-adaptor STL 추가).
+Legacy ``run_stl_dmpnn_rdkit.py`` / ``run_stl_molformer_lora.py`` /
+``run_stl_unimol2_lora.py`` three variants into ``ExperimentSpec(kind="train",
+model.type="singletask")`` consolidated into a single entry point (+ chemeleon / graphmvp
+adaptor STL added).
 
-실행 흐름:
+Execution flow:
     1. spec.dataset.name → TaskSet → task_names + task_types.
-    2. backbone type 으로 fold loader 분기:
+    2. Branch fold loader by backbone type:
         - ``dmpnn`` / ``chemeleon``: ``prepare_fold_loaders`` (task_names=[t])
-          — chemprop 경로 (둘 다 ``MPNN.fingerprint(bmg, V_d, X_d)`` 인터페이스).
+          — chemprop path (both use the ``MPNN.fingerprint(bmg, V_d, X_d)`` interface).
         - ``molformer_lora``: ``prepare_stl_molformer_loaders`` — token parquet.
         - ``unimol2_lora``: ``prepare_stl_unimol2_loaders`` — LMDB.
         - ``graphmvp``: ``prepare_stl_graphmvp_loaders`` — synthetic
-          (collate 가 SMILES → PyG Batch).
-    3. (task_name × seed) 별로 ``MultitaskLitModule(n_tasks=1, loss=single_task)``
-       빌드 → fit → test 예측.
-    4. predictions long parquet + per-(task,seed) metrics 누적.
+          (collate converts SMILES → PyG Batch).
+    3. For each (task_name × seed), build ``MultitaskLitModule(n_tasks=1, loss=single_task)``
+       → fit → test prediction.
+    4. Accumulate predictions long parquet + per-(task,seed) metrics.
 
-Why (다른 collate/loader path):
-    LoRA STL backbone (MoLFormer/UniMol2) 은 chemprop 그래프가 필요 없다 — 토큰 또는
-    원시 3D feature dict 를 직접 입력으로 받는다. 옛 코드와 동일한 방식으로 dataset
-    구성을 분기한다.
+Why (different collate/loader path):
+    LoRA STL backbone (MoLFormer/UniMol2) does not need a chemprop graph — it takes tokens or
+    raw 3D feature dict directly as input. In the same way as the legacy code, dataset
+    construction is branched.
 
 Lazy import:
-    chemprop / lightning / transformers / peft / lmdb 모두 본 모듈 호출 시점에만
-    import 된다 (모두 ``run_train_stl`` 내부 또는 호출되는 sub-loader 안에서).
+    chemprop / lightning / transformers / peft / lmdb are all imported only at the point this module is called
+    (all within ``run_train_stl`` or inside the sub-loader it calls).
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ logger = get_logger("qadmet.runners.train_stl")
 
 
 def _resolve_lmdb_path(spec: ExperimentSpec, repo_root: Path) -> Path:
-    """unimol2 LMDB 경로 — recipe.dataset.kwargs.lmdb_path 우선, 기본 옛 경로."""
+    """unimol2 LMDB path — recipe.dataset.kwargs.lmdb_path takes priority, default legacy path."""
     kw = dict(spec.dataset.kwargs) if spec.dataset is not None else {}
     raw = kw.get("lmdb_path", "data/embeddings/unimol2_features.lmdb")
     p = Path(raw)
@@ -55,7 +55,7 @@ def _resolve_lmdb_path(spec: ExperimentSpec, repo_root: Path) -> Path:
 
 
 def _resolve_tokens_parquet(spec: ExperimentSpec, repo_root: Path) -> Path:
-    """molformer_tokens parquet 경로 — recipe.dataset.kwargs.parquet_paths 또는 컨벤션."""
+    """molformer_tokens parquet path — recipe.dataset.kwargs.parquet_paths or convention."""
     kw = dict(spec.dataset.kwargs) if spec.dataset is not None else {}
     explicit = dict(kw.get("parquet_paths", {}))
     if "molformer_tokens" in explicit:
@@ -77,31 +77,31 @@ def _build_stl_lit_module(
     lr: float,
     lr_lora: float | None = None,
 ):
-    """STL LitModule 빌드 — n_tasks=1, loss=single_task.
+    """Build STL LitModule — n_tasks=1, loss=single_task.
 
     Args:
-        modality_dims: embeddings 만의 ``{name: D}`` (descriptors 는 backbone X_d 로
-            흐르므로 LitModule 의 modality 검증 대상에서 제외).
-        descriptor_dim_total: descriptors 합 차원 — DMPNN backbone 의 d_xd 자동 주입.
-            non-DMPNN STL (LoRA) 은 0.
+        modality_dims: ``{name: D}`` for embeddings only (descriptors flow through backbone X_d,
+            so they're excluded from LitModule's modality validation target).
+        descriptor_dim_total: sum dimension of descriptors — auto-injected into DMPNN backbone's d_xd.
+            non-DMPNN STL (LoRA) is 0.
 
     Why:
-        MTL ``_build_lit_module`` (runners/train.py) 와 분리한다. STL 은
-        head=linear / inverse_freq 미사용 / kendall 미사용으로 메타가 다르다.
+        Separated from MTL ``_build_lit_module`` (runners/train.py). STL
+        has different metadata with head=linear / inverse_freq unused / kendall unused.
     """
     from qadmet.modules.multitask.lit_module import MultitaskLitModule
 
     if spec.loss is None:
-        raise ValueError("STL: loss spec 필수")
+        raise ValueError("STL: loss spec required")
     if spec.loss.type != "single_task":
         raise ValueError(
-            f"STL: loss.type='single_task' 이어야 함 (받음: {spec.loss.type!r})"
+            f"STL: loss.type must be 'single_task' (received: {spec.loss.type!r})"
         )
     if spec.model is None:
-        raise ValueError("STL: model spec 필수")
+        raise ValueError("STL: model spec required")
     if spec.model.head.type not in {"linear", "bottleneck"}:
         raise ValueError(
-            f"STL: head.type ∈ {{'linear','bottleneck'}} 만 지원 (받음: {spec.model.head.type!r})"
+            f"STL: head.type ∈ {{'linear','bottleneck'}} only supported (received: {spec.model.head.type!r})"
         )
 
     from qadmet.runners.train import _inject_d_xd
@@ -136,7 +136,7 @@ def _predict_loader(trainer, model, loader) -> np.ndarray:
     out = [t for t in out if t is not None]
     if not out:
         return np.zeros(0, dtype=np.float32)
-    # bf16-mixed precision 시 predict 출력이 BFloat16 → numpy 미지원이라 float 로 캐스트.
+    # Under bf16-mixed precision, predict output is BFloat16 → cast to float since numpy doesn't support it.
     arr = torch.cat(out, dim=0).float().cpu().numpy()
     if arr.ndim == 2 and arr.shape[1] == 1:
         arr = arr[:, 0]
@@ -146,10 +146,10 @@ def _predict_loader(trainer, model, loader) -> np.ndarray:
 def _unscale_regression(
     preds: np.ndarray, output_scaler: tuple | None, log_task: bool
 ) -> np.ndarray:
-    """regression 예측을 원본 스케일로 복원.
+    """Restore regression predictions to the original scale.
 
-    1. StandardScaler.inverse_transform (학습 시 정규화 했으므로).
-    2. log1p 적용 task 면 expm1.
+    1. StandardScaler.inverse_transform (since normalization was applied during training).
+    2. expm1 if the task had log1p applied.
     """
     if output_scaler is not None:
         scaler, _ = output_scaler
@@ -165,14 +165,14 @@ def _unscale_regression(
 def run_train_stl(
     *, spec: ExperimentSpec, store: ArtifactStore, repo_root: Path, force: bool = False,
 ) -> Artifact:
-    """STL train recipe 한 건 실행 → artifact.
+    """Execute a single STL train recipe → artifact.
 
-    산출물 (artifact.data_dir):
-        - ``{task}/seed_{N}/best.ckpt``: per-(task,seed) 체크포인트.
-        - ``predictions.parquet``: long 포맷
+    Outputs (artifact.data_dir):
+        - ``{task}/seed_{N}/best.ckpt``: per-(task,seed) checkpoint.
+        - ``predictions.parquet``: long format
             ``[task, seed, split, smiles, y_true, y_pred]`` (split ∈ {"val", "test"}).
-            val 예측은 OOF stacking base 로 사용 가능.
-        - ``manifest.yaml``: metrics 에 task 별 best_val_loss 누적.
+            val predictions can be used as an OOF stacking base.
+        - ``manifest.yaml``: accumulates per-task best_val_loss in metrics.
     """
     spec.validate()
     if (
@@ -182,7 +182,7 @@ def run_train_stl(
         or spec.loss is None
         or spec.trainer is None
     ):
-        raise ValueError("STL train recipe: dataset/features/model/loss/trainer 모두 필요")
+        raise ValueError("STL train recipe: dataset/features/model/loss/trainer all required")
 
     from qadmet.datasets.loaders import (
         prepare_fold_loaders,
@@ -198,25 +198,25 @@ def run_train_stl(
     )
     from qadmet.tasks import TASK_SETS
     from qadmet.training import build_trainer, extract_best_val_loss
-    import qadmet.modules  # noqa: F401  — registry 등록 트리거.
+    import qadmet.modules  # noqa: F401  — triggers registry registration.
 
     task_set = TASK_SETS.get(spec.dataset.name)
     task_names: list[str] = list(task_set.tasks)
     task_types_all: list[str] = task_set.task_types()
     task_type_map = dict(zip(task_names, task_types_all))
 
-    # 선택적 ``dataset.kwargs.task_filter``: resume / GPU 분할 실행을 위한 subset 지정.
-    # 원본 ALL_TASKS 순서를 유지한 채 지정 task 만 학습. spec 해시에 포함되므로 filter 별
-    # 별도 artifact dir 가 생성된다.
+    # Optional ``dataset.kwargs.task_filter``: specifies a subset for resume / split-GPU runs.
+    # Trains only the specified tasks while preserving the original ALL_TASKS order. Since it's included in the spec hash, a separate
+    # artifact dir is created per filter.
     _task_filter = spec.dataset.kwargs.get("task_filter") if spec.dataset.kwargs else None
     if _task_filter is not None:
         wanted = set(_task_filter)
         unknown = wanted - set(task_names)
         if unknown:
-            raise ValueError(f"task_filter: 알 수 없는 task {sorted(unknown)}")
+            raise ValueError(f"task_filter: unknown task {sorted(unknown)}")
         task_names = [t for t in task_names if t in wanted]
         if not task_names:
-            raise ValueError("task_filter 가 모든 task 를 제외함")
+            raise ValueError("task_filter excludes all tasks")
 
     artifact = store.create(spec, repo_root=repo_root, force=force)
     feature_spec: FeatureSpec = spec.features
@@ -228,11 +228,11 @@ def run_train_stl(
     )
     if backbone_type not in SUPPORTED_STL_BACKBONES:
         raise NotImplementedError(
-            f"STL backbone {backbone_type!r} — 지원: {SUPPORTED_STL_BACKBONES}"
+            f"STL backbone {backbone_type!r} — supported: {SUPPORTED_STL_BACKBONES}"
         )
 
-    # 백본별 사전 자원 경로 (없으면 fail).
-    # chemeleon 은 dmpnn 과 동일 chemprop 그래프 경로를 사용 → parquet 경로 처리도 공유.
+    # Per-backbone prerequisite resource path (fails if missing).
+    # chemeleon uses the same chemprop graph path as dmpnn → parquet path handling is also shared.
     parquet_root: Path | None = None
     parquet_paths: dict[str, Path] = {}
     tokens_parquet: Path | None = None
@@ -245,22 +245,22 @@ def run_train_stl(
         for name, path in parquet_paths.items():
             if not path.exists():
                 raise FileNotFoundError(
-                    f"modality {name!r} parquet 누락: {path}\n"
-                    f"  recipe.dataset.kwargs.parquet_paths 또는 parquet_root 확인."
+                    f"modality {name!r} parquet missing: {path}\n"
+                    f"  check recipe.dataset.kwargs.parquet_paths or parquet_root."
                 )
     elif backbone_type == "molformer_lora":
         tokens_parquet = _resolve_tokens_parquet(spec, repo_root)
         if not tokens_parquet.exists():
             raise FileNotFoundError(
-                f"molformer_tokens parquet 누락: {tokens_parquet}\n"
+                f"molformer_tokens parquet missing: {tokens_parquet}\n"
                 f"  qadmet precompute --recipe recipes/precompute/molformer_tokens.yaml"
             )
     elif backbone_type == "unimol2_lora":
         lmdb_path = _resolve_lmdb_path(spec, repo_root)
         if not lmdb_path.exists():
             raise FileNotFoundError(
-                f"unimol2 LMDB 누락: {lmdb_path}\n"
-                f"  옛 unimol2_features LMDB (atomic feature dict) 가 필요합니다."
+                f"unimol2 LMDB missing: {lmdb_path}\n"
+                f"  legacy unimol2_features LMDB (atomic feature dict) is required."
             )
 
     seeds = list(trainer_spec.seeds)
@@ -282,11 +282,11 @@ def run_train_stl(
 
             fold = load_fold(spec.dataset.name, seed=seed)
 
-            # ---- backbone 별 loader 빌드 ----
+            # ---- build loader per backbone ----
             if backbone_type in ("dmpnn", "chemeleon"):
-                # chemeleon 은 chemprop ``MPNN.fingerprint`` 를 그대로 사용 →
-                # dmpnn 과 동일 loader 경로. chemeleon adapter 도 batch['bmg']/V_d/X_d
-                # 를 받는다.
+                # chemeleon uses chemprop ``MPNN.fingerprint`` as-is →
+                # Same loader path as dmpnn. chemeleon adapter also takes batch['bmg']/V_d/X_d
+                # as input.
                 sub_fold = filter_fold_to_task(fold, task_name)
                 loaders = prepare_fold_loaders(
                     sub_fold, feature_spec,
@@ -302,13 +302,13 @@ def run_train_stl(
                 train_loader = loaders.train_loader
                 val_loader = loaders.val_loader
                 test_loader, test_smis, test_y_true = loaders.test_loaders[task_name]
-                # val OOF stacking 용: prepare_fold_loaders 가 task 별 val_loaders dict
-                # 를 만든다 (test_loaders 와 동일한 single-task 패턴, SMILES + y_true
-                # 보존). 학습용 ``val_loader`` 와 별개의 predict 전용 loader.
+                # For val OOF stacking: prepare_fold_loaders builds a per-task val_loaders dict
+                # (same single-task pattern as test_loaders, preserving SMILES + y_true
+                # ). A predict-only loader separate from the training ``val_loader``.
                 val_loader_for_predict, val_smis, val_y_true = loaders.val_loaders[task_name]
                 output_scaler = loaders.output_scaler
                 log_task = task_name in loaders.log_tasks
-                # embeddings 만 LitModule 검증 대상 (descriptors 는 X_d 흐름).
+                # Only embeddings are the LitModule validation target (descriptors flow via X_d).
                 modality_dims = {
                     k: loaders.modality_dims[k]
                     for k in feature_spec.embeddings
@@ -391,9 +391,9 @@ def run_train_stl(
                 lr=trainer_spec.lr,
                 lr_lora=trainer_spec.lr_lora,
             )
-            # CSVLogger 활성화 — epoch 별 train_loss/val_loss(및 alpha/peft 진단)을
-            # seed_dir/metrics/version_*/metrics.csv 로 영구 저장. log_dir=None 이면
-            # logger 가 꺼져 self.log() 값이 progress bar 에만 남고 파일로 안 남는다.
+            # Enable CSVLogger — persists per-epoch train_loss/val_loss (and alpha/peft diagnostics)
+            # to seed_dir/metrics/version_*/metrics.csv. If log_dir=None,
+            # the logger is disabled, so self.log() values remain only in the progress bar and are not saved to a file.
             trainer = build_trainer(
                 trainer_spec, ckpt_dir=seed_dir, log_dir=seed_dir / "metrics",
                 monitor="val_loss", mode="min",
@@ -405,9 +405,9 @@ def run_train_stl(
             if task_type == "regression":
                 test_preds = _unscale_regression(test_preds, output_scaler, log_task)
             elif task_type == "classification":
-                # head 가 logits 출력 — sigmoid 로 prob 변환 (단, predict_step 미커스텀 시
-                # logit 그대로 나올 수 있음. SingleTaskLoss 학습 시 BCE-with-logits 이므로
-                # 사용 측이 sigmoid 적용 필요 — 일관 위해 여기서 변환).
+                # head outputs logits — converted to prob via sigmoid (however, if predict_step isn't customized,
+                # the logit may come out as-is. Since SingleTaskLoss trains with BCE-with-logits,
+                # the consumer needs to apply sigmoid — converted here for consistency).
                 test_preds = 1.0 / (1.0 + np.exp(-test_preds.astype(np.float64))).astype(
                     np.float32,
                 )
@@ -422,9 +422,9 @@ def run_train_stl(
                     "y_pred": float(yp),
                 })
 
-            # val 예측 — STL 도 OOF stacking base 로 쓸 수 있도록 SMILES + y_true 와
-            # 함께 저장한다 (DMPNN/LoRA 모두 동일 경로). val_loader_for_predict 는
-            # 학습에 사용된 ``val_loader`` 와 별개의 predict 전용 loader.
+            # val prediction — saved together with SMILES + y_true so STL can also serve as an OOF stacking base
+            # (same path for both DMPNN/LoRA). val_loader_for_predict is
+            # a predict-only loader separate from the ``val_loader`` used for training.
             if len(val_smis) > 0:
                 val_preds = _predict_loader(trainer, model, val_loader_for_predict)
                 if task_type == "regression":
@@ -450,7 +450,7 @@ def run_train_stl(
                 extra={"payload": {"task": task_name, "seed": seed, "metrics": metrics}},
             )
 
-    # ---- predictions.parquet 저장 ----
+    # ---- save predictions.parquet ----
     pred_df = pd.DataFrame(pred_rows)
     out_pq = artifact.data_dir / "predictions.parquet"
     pred_df.to_parquet(out_pq, index=False)

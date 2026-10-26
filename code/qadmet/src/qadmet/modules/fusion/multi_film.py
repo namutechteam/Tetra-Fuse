@@ -1,49 +1,49 @@
 """Multi-primary FiLM + cross-attention late fusion (symmetric FiLM).
 
 Why:
-    단일-primary ``film`` (CheMeleon main + 보조 concat → γ/β) 은 primary 선택이
-    결과를 좌우하고 보조 modality 가 1급 시민이 아니다. ``multi_film`` 은 K 개
-    modality 를 *각각 한 번씩 primary* 로 두고 (자기 self-anchor residual + 나머지
-    modality 들로 affine modulation) K 개 branch 표현을 만든 뒤, modality-as-token
-    cross-attention 으로 **늦게(late)** 한 번 섞는다.
+    Single-primary ``film`` (CheMeleon main + auxiliary concat → γ/β) has primary selection
+    dominate the outcome, and auxiliary modality is not a first-class citizen. ``multi_film`` treats each of K
+    modalities as primary exactly once (self-anchor residual + affine modulation from remaining
+    modalities) to produce K branch representations, then via modality-as-token
+    cross-attention mixes them **late**, once.
 
-    ⚠ 완전 대칭(모든 layer 상호 조건화) 융합은 분자표현 문헌에서 modality collapse·
-    불안정 최적화로 알려져 있다 (MuMo, arXiv:2510.23640 등은 의도적으로 asymmetric
-    선택). 본 모듈은 그 위험을 줄이기 위해 "약한 대칭"으로 설계:
-      - 각 branch 가 self-residual(``+x_i``) 로 자기 primary 를 앵커 (washout 방지).
-      - 상호작용은 마지막 cross-attention 한 군데로 late fusion (layer 마다 상호
-        조건화하지 않음).
-      - identity-init + γ clamp + condition dropout + branch dropout 으로
-        변조 폭주·branch collapse 차단.
+    ⚠ Fully symmetric (mutual conditioning at every layer) fusion is known in molecular representation literature for modality collapse ·
+    unstable optimization (MuMo, arXiv:2510.23640, etc. deliberately choose asymmetric
+    design). This module is designed with "weak symmetry" to reduce that risk:
+      - Each branch anchors its own primary via self-residual (``+x_i``) (prevents washout).
+      - Interaction is late-fused at a single final cross-attention (not mutual
+        conditioning at every layer).
+      - identity-init + γ clamp + condition dropout + branch dropout to
+        block modulation blowup · branch collapse.
 
-설계:
-    1. branch i (각 modality 가 primary):
+Design:
+    1. branch i (each modality as primary):
          x_i = primary_proj_i(norm_i(e_i))                         ∈ R^D
-         각 conditioner j≠i 에 대해 (γ_ij, β_ij) = film_gen_ij(cond_proj_ij(e_j))
+         for each conditioner j≠i, (γ_ij, β_ij) = film_gen_ij(cond_proj_ij(e_j))
          γ_ij = clamp(1 + γ_pre_ij, [gamma_min, gamma_max])
-         delta_i = mean_{j≠i}(γ_ij ⊙ x_i + β_ij)        ← 병렬 합산(평균: scale 안정)
+         delta_i = mean_{j≠i}(γ_ij ⊙ x_i + β_ij)        ← parallel summation (mean: stable scale)
          z_i = x_i + delta_i                              ← self-anchor residual
     2. stack(z_0..z_{K-1}) → (B, K, D)
     3. cross-attention mixer: TransformerEncoderLayer × N (norm_first/gelu,
-       modality-as-token self-attn). GR-MF(group_routed) 와 동일 패턴.
-       presence/branch-dropout 는 ``src_key_padding_mask`` 로 차단.
+       modality-as-token self-attn). Same pattern as GR-MF (group_routed).
+       presence/branch-dropout is blocked via ``src_key_padding_mask``.
     4. masked mean pool over branch tokens → (B, D).
     5. (optional) output_proj (Linear D→D, identity-init).
 
-Anti-collapse 장치:
-    - condition dropout: training 중 각 conditioner 를 sample-별 zero-out.
-    - branch dropout: training 중 mixer 입력 branch token 을 sample-별 mask
-      (최소 1개 active 보장) — 한 branch 로의 attention collapse 방어.
-    - presence mask: 누락 modality → 그 conditioner contribution 0 + 그 modality 의
+Anti-collapse mechanisms:
+    - condition dropout: zero-out each conditioner per-sample during training.
+    - branch dropout: mask mixer input branch tokens per-sample during training
+      (guarantees at least 1 active) — defends against attention collapse onto a single branch.
+    - presence mask: missing modality → its conditioner contribution becomes 0 + that modality's
       branch token mask.
-    - warmup: 처음 N epoch film_gen/cond_proj freeze + modulation identity →
-      mixer 가 raw primary 들만 섞음 (backbone 적응 시간 확보).
-    - identity-init: film_gen 마지막 Linear=0 → γ≈1, β≈0 시작.
+    - warmup: freeze film_gen/cond_proj for the first N epochs + modulation identity →
+      mixer only mixes raw primaries (secures backbone adaptation time).
+    - identity-init: film_gen final Linear=0 → starts at γ≈1, β≈0.
 
 Note:
-    forward 시그니처 통일을 위해 alpha 는 uniform ``(B, K)`` 반환 (cross-attention
-    attn weight 는 nn.TransformerEncoder 에서 직접 노출되지 않음 — 진단 의미 약함).
-    entropy_weight 는 0 으로 두는 게 자연스럽다.
+    for forward signature uniformity, alpha returns a uniform ``(B, K)`` (cross-attention
+    attn weight is not directly exposed by nn.TransformerEncoder — weak diagnostic meaning).
+    it is natural to leave entropy_weight at 0.
 """
 
 from __future__ import annotations
@@ -59,26 +59,26 @@ class MultiFilmFusion(nn.Module):
     """Multi-primary FiLM branches + cross-attention late fusion.
 
     Args:
-        input_dims: 길이 K. 각 modality 의 입력 차원. K 개 modality 가 각각 한 번씩
-            primary 가 되어 K 개 branch 를 만든다. K ≥ 2 필수.
-        output_dim: branch projection / modulation 차원 (= head 입력 차원).
-        cond_hidden: 각 conditioner projection 차원 (film_gen 입력).
-        condition_dropout: training 중 각 conditioner 의 sample-wise zero-out 확률.
-        film_init_identity: film_gen 마지막 Linear 0-init → γ≈1, β≈0 시작.
-        pre_norm: per-modality 입력 LayerNorm (modality scale 비대칭 흡수).
-        gamma_min / gamma_max: γ clamp 범위. residual 과 함께면 x 계수 하한 보장 →
-            primary washout 차단. 권장 0.3 / 3.0. 둘 다 None 이면 clamp 미적용.
-        warmup_epochs: 처음 N epoch film_gen/cond_proj freeze + modulation identity.
-            lit_module ``on_train_epoch_start`` 가 ``set_warmup_active`` 토글.
-        cross_modal_layers: mixer TransformerEncoderLayer 수. 0 이면 mixer 없이
-            branch 평균 pool.
-        cross_modal_heads: mixer nhead. ``output_dim % heads == 0`` 필요.
+        input_dims: length K. Input dimension of each modality. Each of K modalities becomes
+            primary once, producing K branches. K ≥ 2 required.
+        output_dim: branch projection / modulation dimension (= head input dimension).
+        cond_hidden: each conditioner projection dimension (film_gen input).
+        condition_dropout: sample-wise zero-out probability for each conditioner during training.
+        film_init_identity: film_gen final Linear 0-init → starts at γ≈1, β≈0.
+        pre_norm: per-modality input LayerNorm (absorbs modality scale asymmetry).
+        gamma_min / gamma_max: γ clamp range. Combined with residual, guarantees a lower bound on the x coefficient →
+            blocks primary washout. Recommended 0.3 / 3.0. If both are None, clamp is not applied.
+        warmup_epochs: freeze film_gen/cond_proj for the first N epochs + modulation identity.
+            lit_module ``on_train_epoch_start`` toggles ``set_warmup_active``.
+        cross_modal_layers: number of mixer TransformerEncoderLayers. If 0, without mixer
+            branch average pool.
+        cross_modal_heads: mixer nhead. ``output_dim % heads == 0`` required.
         cross_modal_ffn_mult: mixer FFN hidden = output_dim * mult.
         cross_modal_dropout: mixer dropout.
-        branch_dropout: training 중 mixer 입력 branch token 의 sample-wise mask 확률
-            (최소 1개 active 보장). branch collapse 방어.
-        use_output_proj: 마지막 Linear(D, D, identity-init) 1 단. GradNorm
-            shared_layer 후보 (모든 task forward 통과, 항상 trainable).
+        branch_dropout: sample-wise mask probability for mixer input branch tokens during training
+            (guarantees at least 1 active). Defends against branch collapse.
+        use_output_proj: one final Linear(D, D, identity-init) stage. GradNorm
+            shared_layer candidate (passed through by all task forwards, always trainable).
     """
 
     def __init__(
@@ -103,13 +103,13 @@ class MultiFilmFusion(nn.Module):
         self.K = len(input_dims)
         if self.K < 2:
             raise ValueError(
-                f"MultiFilmFusion 은 K>=2 modality 필요 (각 modality 가 primary 1회), "
+                f"MultiFilmFusion requires K>=2 modality (each modality as primary once), "
                 f"K={self.K}."
             )
         if cross_modal_layers > 0 and output_dim % cross_modal_heads != 0:
             raise ValueError(
-                f"output_dim({output_dim}) 가 cross_modal_heads({cross_modal_heads}) "
-                "로 나눠떨어지지 않음."
+                f"output_dim({output_dim}) must be divisible by cross_modal_heads({cross_modal_heads}) "
+                "but is not."
             )
         self.output_dim = output_dim
         self.condition_dropout = condition_dropout
@@ -120,7 +120,7 @@ class MultiFilmFusion(nn.Module):
         self._warmup_active = False
         self._presence_mask: Tensor | None = None
 
-        # 각 branch i 의 conditioner index (자기 제외).
+        # conditioner index for each branch i (excluding itself).
         self._cond_idx: list[list[int]] = [
             [j for j in range(self.K) if j != i] for i in range(self.K)
         ]
@@ -132,13 +132,13 @@ class MultiFilmFusion(nn.Module):
         else:
             self.input_norms = None
 
-        # branch i 의 primary projection: d_i → output_dim
+        # primary projection for branch i: d_i → output_dim
         self.primary_projs = nn.ModuleList(
             [nn.Linear(input_dims[i], output_dim) for i in range(self.K)]
         )
 
-        # branch i 의 conditioner j 별 (cond_proj, film_gen).
-        # 중첩 ModuleList: cond_projs[i][local_j], film_gens[i][local_j].
+        # (cond_proj, film_gen) per conditioner j of branch i.
+        # nested ModuleList: cond_projs[i][local_j], film_gens[i][local_j].
         self.cond_projs = nn.ModuleList()
         self.film_gens = nn.ModuleList()
         for i in range(self.K):
@@ -159,7 +159,7 @@ class MultiFilmFusion(nn.Module):
             self.cond_projs.append(cps)
             self.film_gens.append(fgs)
 
-        # cross-attention mixer (modality-as-token). GR-MF 와 동일 패턴.
+        # cross-attention mixer (modality-as-token). Same pattern as GR-MF.
         if cross_modal_layers > 0:
             enc_layer = nn.TransformerEncoderLayer(
                 d_model=output_dim,
@@ -185,7 +185,7 @@ class MultiFilmFusion(nn.Module):
             self.output_proj = None
 
     def set_warmup_active(self, active: bool) -> None:
-        """Warmup 토글. active=True → 모든 film_gen/cond_proj freeze + modulation identity."""
+        """Warmup toggle. active=True → freeze all film_gen/cond_proj + modulation identity."""
         self._warmup_active = active
         for mlist in (self.film_gens, self.cond_projs):
             for branch in mlist:
@@ -194,28 +194,28 @@ class MultiFilmFusion(nn.Module):
                         p.requires_grad = not active
 
     def set_presence_mask(self, mask: Tensor) -> None:
-        """다음 forward 1회에 한해 modality presence (B, K) bool 적용.
+        """Apply modality presence (B, K) bool for the next forward call only.
 
-        ``mask[:, i]`` False → modality i 가 그 sample 에서 누락. branch i 의
-        primary 로서의 token 은 mixer 에서 mask 되고, 다른 branch 의 conditioner
-        로서의 contribution 은 0 이 된다.
+        ``mask[:, i]`` False → modality i is missing for that sample. branch i's
+        token as primary is masked in the mixer, and as conditioner for other branches
+        the contribution becomes 0.
         """
         self._presence_mask = mask
 
     def forward(self, embeddings: list[Tensor]) -> tuple[Tensor, Tensor]:
         if len(embeddings) != self.K:
-            raise ValueError(f"K={self.K} 개 embedding 필요, 받은 수: {len(embeddings)}")
+            raise ValueError(f"K={self.K} embeddings required, received: {len(embeddings)}")
 
         if self.input_norms is not None:
             embeddings = [norm(e) for norm, e in zip(self.input_norms, embeddings)]
 
-        x = [self.primary_projs[i](embeddings[i]) for i in range(self.K)]  # 각 (B, D)
+        x = [self.primary_projs[i](embeddings[i]) for i in range(self.K)]  # each (B, D)
         B, D = x[0].shape
 
         presence = self._presence_mask
         if presence is not None:
             presence = presence.to(device=x[0].device, dtype=torch.bool)
-            # 전부 missing 인 row → 모두 present 로 fallback (NaN 방지).
+            # row where all are missing → fallback to all present (prevents NaN).
             any_present = presence.any(dim=-1, keepdim=True)
             presence = presence | ~any_present
             self._presence_mask = None
@@ -224,7 +224,7 @@ class MultiFilmFusion(nn.Module):
         for i in range(self.K):
             xi = x[i]
             if self._warmup_active:
-                branch_out.append(xi + xi)  # modulation identity + residual (film.py 일치)
+                branch_out.append(xi + xi)  # modulation identity + residual (matches film.py)
                 continue
             deltas: list[Tensor] = []
             for local_j, j in enumerate(self._cond_idx[i]):
@@ -240,23 +240,23 @@ class MultiFilmFusion(nn.Module):
                 if self.gamma_min is not None or self.gamma_max is not None:
                     gamma = gamma.clamp(min=self.gamma_min, max=self.gamma_max)
                 deltas.append(gamma * xi + beta)
-            delta = torch.stack(deltas, dim=0).mean(dim=0)  # 병렬 합산(평균)
+            delta = torch.stack(deltas, dim=0).mean(dim=0)  # parallel summation (mean)
             branch_out.append(xi + delta)  # self-anchor residual
 
         stacked = torch.stack(branch_out, dim=1)  # (B, K, D)
 
-        # mixer key_padding_mask: True = 그 branch token 무시.
+        # mixer key_padding_mask: True = ignore that branch token.
         kpm: Tensor | None = None
         if presence is not None:
             kpm = ~presence  # (B, K)
         if self.training and self.branch_dropout > 0:
             keep = torch.rand(B, self.K, device=stacked.device) > self.branch_dropout
             any_keep = keep.any(dim=-1, keepdim=True)
-            keep = keep | ~any_keep  # 전부 drop 된 row → 전부 keep
+            keep = keep | ~any_keep  # row where all are dropped → keep all
             drop = ~keep
             kpm = drop if kpm is None else (kpm | drop)
         if kpm is not None:
-            # 전부 pad 된 row 방어 (presence + dropout 동시) → 전부 unmask.
+            # guard against rows that are fully padded (presence + dropout simultaneously) → unmask all.
             all_pad = kpm.all(dim=-1, keepdim=True)
             kpm = kpm & ~all_pad
 
@@ -275,6 +275,6 @@ class MultiFilmFusion(nn.Module):
         if self.output_proj is not None:
             z = self.output_proj(z)
 
-        # alpha sidecar (진단용 uniform — cross-attn weight 미노출).
+        # alpha sidecar (diagnostic uniform — cross-attn weight not exposed).
         alpha = torch.full((B, self.K), 1.0 / self.K, device=z.device, dtype=z.dtype)
         return z, alpha

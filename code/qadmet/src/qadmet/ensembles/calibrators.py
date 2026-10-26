@@ -1,16 +1,16 @@
-"""``Calibrator`` ABC + Platt / Isotonic 구현.
+"""``Calibrator`` ABC + Platt / Isotonic implementation.
 
-본 모듈은 분류 task 의 prob 예측을 보정하는 도구다. 옛 ``run_stacking_v6_hybrid`` 의
-v6 hybrid blend 단계가 base 출력 분포 정렬을 필요로 했고, 신규 ``HybridBlendStrategy``
-및 future stacking 파이프라인 (per-base prob 보정) 에서 사용된다.
+This module provides tools for calibrating prob predictions of classification tasks. The old ``run_stacking_v6_hybrid``'s
+v6 hybrid blend stage required aligning base output distributions, and the new ``HybridBlendStrategy``
+and future stacking pipelines (per-base prob calibration) use it.
 
-상태 (Step 4.6):
+Status (Step 4.6):
     - ``Calibrator`` ABC + ``CALIBRATORS`` registry.
-    - ``PlattCalibrator`` (sklearn ``LogisticRegression`` 1D) — sigmoid 보정.
-    - ``IsotonicCalibrator`` (sklearn ``IsotonicRegression``) — 단조 piecewise constant.
-    - sklearn 은 lazy import (``import qadmet.ensembles`` 시 sys.modules 미등록).
+    - ``PlattCalibrator`` (sklearn ``LogisticRegression`` 1D) — sigmoid calibration.
+    - ``IsotonicCalibrator`` (sklearn ``IsotonicRegression``) — monotonic piecewise constant.
+    - sklearn is lazy-imported (not registered in sys.modules on ``import qadmet.ensembles``).
 
-사용 패턴:
+Usage pattern:
     >>> cal = CALIBRATORS.build_with_kwargs("platt")
     >>> cal.fit(probs_val, y_val)
     >>> probs_test_calibrated = cal.transform(probs_test)
@@ -27,21 +27,21 @@ from qadmet.ensembles.registry import CALIBRATORS
 
 
 class Calibrator(ABC):
-    """분류 prob 보정기의 공통 인터페이스.
+    """Common interface for classification prob calibrators.
 
     Why:
-        v6 hybrid blend 와 stacking 파이프라인은 base 별로 prob 분포가 다른
-        (sigmoid 출력 / soft-label / 학습된 prob) 점을 정렬해야 한다. 회귀 task
-        는 보정이 필요 없으므로 본 ABC 는 분류 전용으로 가정한다.
+        v6 hybrid blend and stacking pipelines need to align the fact that prob distributions
+        differ per base (sigmoid output / soft-label / learned prob). Regression tasks
+        do not require calibration, so this ABC assumes classification-only usage.
 
-    구현 책임:
-        - ``fit(p, y)``: 1D prob 배열 ``p`` (값 ∈ [0, 1]) + 0/1 라벨 ``y`` 로 학습.
-        - ``transform(p)``: 입력 prob 를 보정된 prob 로 변환 (출력 ∈ [0, 1]).
+    Implementation responsibilities:
+        - ``fit(p, y)``: train on 1D prob array ``p`` (values ∈ [0, 1]) + 0/1 labels ``y``.
+        - ``transform(p)``: convert input prob to calibrated prob (output ∈ [0, 1]).
 
-    공통 검증:
-        - ``p``, ``y`` 1D + 길이 일치.
-        - ``y`` 는 0/1 정수 (또는 정수 캐스트 가능).
-        - ``p`` 는 [0, 1] 범위 (NaN 허용 — fit 시 finite mask, transform 시 NaN 통과).
+    Common validation:
+        - ``p``, ``y`` must be 1D + matching length.
+        - ``y`` must be 0/1 integer (or castable to integer).
+        - ``p`` must be in [0, 1] range (NaN allowed — finite mask at fit, NaN passthrough at transform).
     """
 
     @abstractmethod
@@ -56,68 +56,68 @@ class Calibrator(ABC):
 def _validate_fit_inputs(
     p: np.ndarray, y: np.ndarray
 ) -> tuple[np.ndarray, np.ndarray]:
-    """``(p, y)`` 1D ndarray 변환 + 형태/값 검증.
+    """Convert ``(p, y)`` to 1D ndarray + validate shape/values.
 
     Returns:
-        finite mask 적용 전의 ``(p_arr, y_arr)``. NaN 처리는 호출부 책임.
+        ``(p_arr, y_arr)`` before finite mask is applied. NaN handling is the caller's responsibility.
     """
     p_arr = np.asarray(p, dtype=np.float64).ravel()
     y_arr = np.asarray(y).ravel()
     if p_arr.shape != y_arr.shape:
         raise ValueError(
-            f"p, y 길이 불일치: p={p_arr.shape} y={y_arr.shape}"
+            f"p, y length mismatch: p={p_arr.shape} y={y_arr.shape}"
         )
     if p_arr.size == 0:
-        raise ValueError("빈 입력 (p/y 길이 0).")
-    # y 0/1 검증.
+        raise ValueError("Empty input (p/y length 0).")
+    # Validate y is 0/1.
     y_int = y_arr.astype(np.int64)
     if not np.array_equal(y_int, y_arr):
         raise ValueError(
-            "Calibrator: y 가 0/1 정수가 아님 (분류 라벨 필요)."
+            "Calibrator: y is not 0/1 integer (classification label required)."
         )
     uniq = set(np.unique(y_int).tolist())
     if not uniq.issubset({0, 1}):
         raise ValueError(
-            f"Calibrator: y 는 {{0, 1}} 만 허용. 실제={sorted(uniq)}"
+            f"Calibrator: y allows only {{0, 1}}. actual={sorted(uniq)}"
         )
-    # p 범위 — NaN 은 통과시키고 fit 시 finite mask 로 처리.
+    # p range — NaN is passed through and handled via finite mask at fit.
     finite = np.isfinite(p_arr)
     if finite.any():
         if (p_arr[finite] < 0.0).any() or (p_arr[finite] > 1.0).any():
             raise ValueError(
-                "Calibrator: p 는 [0, 1] 범위여야 합니다 (NaN 허용)."
+                "Calibrator: p must be in [0, 1] range (NaN allowed)."
             )
     return p_arr, y_int.astype(np.float64)
 
 
 @CALIBRATORS.register("platt")
 class PlattCalibrator(Calibrator):
-    """Platt scaling — ``sigmoid(a * logit(p) + b)`` 학습.
+    """Platt scaling — train ``sigmoid(a * logit(p) + b)``.
 
     Why:
-        sklearn ``CalibratedClassifierCV(method='sigmoid')`` 와 동등 — base prob 의
-        logit 을 단일 feature 로 LogisticRegression 1D 학습. base 가 학습 셋에서
-        과확신/저확신일 때 (`a` 가 1 이 아닐 때) 보정 효과가 크다.
+        Equivalent to sklearn ``CalibratedClassifierCV(method='sigmoid')`` — train
+        LogisticRegression 1D using the logit of base prob as a single feature. When base is
+        over/under-confident on the training set (when `a` is not 1), the calibration effect is large.
 
     Args:
-        eps: ``logit`` 변환 시 0/1 클립용 마진. 기본 ``1e-6``.
-        C: sklearn LogisticRegression 의 역-정규화 강도. 기본 ``1e10`` — 거의 비-정규화
-            (Platt 의 원본 의도). 작게 두면 약한 정규화로 보정 곡선이 평탄해진다.
+        eps: margin for 0/1 clipping during ``logit`` conversion. Default ``1e-6``.
+        C: inverse regularization strength of sklearn LogisticRegression. Default ``1e10`` — nearly unregularized
+            (Platt's original intent). Setting it smaller applies weak regularization, flattening the calibration curve.
 
-    학습 산출물:
-        ``coef_``, ``intercept_`` — sklearn 모델 파라미터 사본 (디버그용).
+    Training artifacts:
+        ``coef_``, ``intercept_`` — copies of sklearn model parameters (for debugging).
 
     Note:
-        - 학습 데이터에 한 클래스만 있으면 LogisticRegression 이 실패 → fit 이
-          명시 ValueError.
-        - transform 시 입력 NaN 은 NaN 그대로 통과.
+        - If the training data has only one class, LogisticRegression fails → fit
+          raises an explicit ValueError.
+        - At transform, input NaN passes through as NaN unchanged.
     """
 
     def __init__(self, *, eps: float = 1e-6, C: float = 1e10) -> None:
         if not (0.0 < float(eps) < 0.5):
-            raise ValueError(f"eps 는 (0, 0.5) 범위여야 합니다: {eps!r}")
+            raise ValueError(f"eps must be in (0, 0.5) range: {eps!r}")
         if float(C) <= 0.0:
-            raise ValueError(f"C 는 양수여야 합니다: {C!r}")
+            raise ValueError(f"C must be positive: {C!r}")
         self.eps = float(eps)
         self.C = float(C)
         self._model: Any | None = None
@@ -125,7 +125,7 @@ class PlattCalibrator(Calibrator):
         self._intercept: float | None = None
 
     def _logit(self, p: np.ndarray) -> np.ndarray:
-        """``logit(p)`` — ``p`` 를 ``[eps, 1-eps]`` 로 clip 후 변환."""
+        """``logit(p)`` — convert after clipping ``p`` to ``[eps, 1-eps]``."""
         clipped = np.clip(p, self.eps, 1.0 - self.eps)
         return np.log(clipped / (1.0 - clipped))
 
@@ -136,16 +136,16 @@ class PlattCalibrator(Calibrator):
         finite = np.isfinite(p_arr)
         if finite.sum() < 2:
             raise ValueError(
-                "PlattCalibrator.fit: finite (p, y) 행이 2 미만입니다."
+                "PlattCalibrator.fit: finite (p, y) rows are fewer than 2."
             )
         p_fin = p_arr[finite]
         y_fin = y_arr[finite].astype(np.int64)
         if len(set(y_fin.tolist())) < 2:
             raise ValueError(
-                "PlattCalibrator.fit: y 에 한 클래스만 존재해 학습 불가."
+                "PlattCalibrator.fit: cannot train because y has only one class."
             )
         z = self._logit(p_fin).reshape(-1, 1)
-        # solver='lbfgs' default, max_iter 보수적.
+        # solver='lbfgs' default, max_iter conservative.
         model = LogisticRegression(C=self.C, solver="lbfgs", max_iter=1000)
         model.fit(z, y_fin)
         self._model = model
@@ -156,14 +156,14 @@ class PlattCalibrator(Calibrator):
     def transform(self, p: np.ndarray) -> np.ndarray:
         if self._model is None:
             raise RuntimeError(
-                "PlattCalibrator: fit 을 먼저 호출하세요."
+                "PlattCalibrator: call fit first."
             )
         p_arr = np.asarray(p, dtype=np.float64).ravel()
         out = np.full_like(p_arr, np.nan)
         finite = np.isfinite(p_arr)
         if finite.any():
             z = self._logit(p_arr[finite]).reshape(-1, 1)
-            # predict_proba 가 (n, 2) → P(y=1) 두번째 열.
+            # predict_proba is (n, 2) → P(y=1) is the second column.
             out[finite] = self._model.predict_proba(z)[:, 1]
         return out
 
@@ -178,27 +178,27 @@ class PlattCalibrator(Calibrator):
 
 @CALIBRATORS.register("isotonic")
 class IsotonicCalibrator(Calibrator):
-    """Isotonic regression 보정 — 단조증가 piecewise constant 매핑.
+    """Isotonic regression calibration — monotonically increasing piecewise constant mapping.
 
     Why:
-        sklearn ``CalibratedClassifierCV(method='isotonic')`` 와 동등. Platt 보다
-        유연하나 over-fit 위험 — 일반적으로 데이터 ≥ 1000 일 때 권장.
+        Equivalent to sklearn ``CalibratedClassifierCV(method='isotonic')``. More
+        flexible than Platt but has over-fit risk — generally recommended when data ≥ 1000.
 
     Args:
-        out_of_bounds: 학습 범위 밖 입력 처리.
-            - ``"clip"`` (기본): 학습 prob 의 [min, max] 로 clip 후 매핑.
-            - ``"nan"``: 범위 밖은 NaN 으로 출력.
-        y_min: 출력 하한. 기본 ``0.0``.
-        y_max: 출력 상한. 기본 ``1.0``.
+        out_of_bounds: handling of inputs outside the training range.
+            - ``"clip"`` (default): clip to the training prob's [min, max] then map.
+            - ``"nan"``: outputs NaN for out-of-range values.
+        y_min: output lower bound. Default ``0.0``.
+        y_max: output upper bound. Default ``1.0``.
 
-    학습 산출물:
-        ``X_thresholds_``, ``y_thresholds_`` — sklearn IsotonicRegression 의 학습된
-        매핑점 사본 (디버그용).
+    Training artifacts:
+        ``X_thresholds_``, ``y_thresholds_`` — sklearn IsotonicRegression's trained
+        mapping point copies (for debugging).
 
     Note:
-        - transform 시 입력 NaN 은 NaN 그대로 통과.
-        - 학습 데이터에 한 클래스만 있으면 IsotonicRegression 자체는 학습되나
-          매핑이 의미 없으므로 명시 ValueError 로 거부.
+        - At transform, input NaN passes through as NaN unchanged.
+        - If training data has only one class, IsotonicRegression itself trains, but
+          the mapping is meaningless, so it is rejected with an explicit ValueError.
     """
 
     def __init__(
@@ -210,11 +210,11 @@ class IsotonicCalibrator(Calibrator):
     ) -> None:
         if out_of_bounds not in {"clip", "nan"}:
             raise ValueError(
-                f"out_of_bounds 는 'clip' | 'nan' 중 하나: {out_of_bounds!r}"
+                f"out_of_bounds must be one of 'clip' | 'nan': {out_of_bounds!r}"
             )
         if not (0.0 <= float(y_min) < float(y_max) <= 1.0):
             raise ValueError(
-                f"y_min < y_max 이고 [0, 1] 안: y_min={y_min!r} y_max={y_max!r}"
+                f"y_min < y_max and within [0, 1]: y_min={y_min!r} y_max={y_max!r}"
             )
         self.out_of_bounds = out_of_bounds
         self.y_min = float(y_min)
@@ -228,13 +228,13 @@ class IsotonicCalibrator(Calibrator):
         finite = np.isfinite(p_arr)
         if finite.sum() < 2:
             raise ValueError(
-                "IsotonicCalibrator.fit: finite (p, y) 행이 2 미만입니다."
+                "IsotonicCalibrator.fit: finite (p, y) rows are fewer than 2."
             )
         p_fin = p_arr[finite]
         y_fin = y_arr[finite]
         if len(set(y_fin.astype(np.int64).tolist())) < 2:
             raise ValueError(
-                "IsotonicCalibrator.fit: y 에 한 클래스만 존재해 학습 불가."
+                "IsotonicCalibrator.fit: cannot train because y has only one class."
             )
         model = IsotonicRegression(
             y_min=self.y_min,
@@ -249,7 +249,7 @@ class IsotonicCalibrator(Calibrator):
     def transform(self, p: np.ndarray) -> np.ndarray:
         if self._model is None:
             raise RuntimeError(
-                "IsotonicCalibrator: fit 을 먼저 호출하세요."
+                "IsotonicCalibrator: call fit first."
             )
         p_arr = np.asarray(p, dtype=np.float64).ravel()
         out = np.full_like(p_arr, np.nan)

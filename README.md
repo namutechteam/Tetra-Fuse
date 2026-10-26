@@ -118,23 +118,30 @@ seed 20261002).
 | Figure 4 | Tetra-Fuse vs deployable single models: paired Wilcoxon forest plot |
 | Figure 5 | Validation→test transfer over all 1,023 subsets, endpoint-specific member strengths and the loss decomposition (S, O, S − O) |
 | Figure 6 | LateFusion-k5 vs every public submission on the 6 Polaris ADME-Fang leaderboards |
-| Figures S1–S8 | Per-backbone and aggregation heatmaps (S1–S3), inter-member correlation (S4), member roles by LOO and Shapley (S5), per-task box plots vs TDC leaderboard best (S6), leaderboard coverage vs mean rank (S7), same-encoder five-run control (S8) |
-| Figures S9–S12 | Error decomposition (S9), gain by similarity quintile (S10), uncertainty quality (S11), MAP vs its constituent encoders (S12) |
+| Figures S1–S5 | MAP vs its three constituent encoders (S1), per-task heatmap and win counts across aggregation rules (S2), validation-only choice of the ensemble size (S3), per-task held-out-test scores against the TDC leaderboard best (S4), leaderboard coverage vs mean rank (S5) |
+| Figures S6–S9 | Full correlation matrices among the five members (S6), decomposition of the loss reduction by task (S7), gain by similarity quintile (S8), uncertainty quality of heterogeneous vs same-encoder ensembles (S9) |
 | Tables 1–3 | Comparison with prior fusion and ensemble studies; effects of model combination (Table 2); per-task results with summary rows (Table 3) |
-| Tables S1–S10 | Per-backbone detail; representation aggregation; k-sweep; inter-member correlation; reproducibility; Polaris datasets; dataset provenance; ensemble-vs-baseline significance; same-encoder five-run control; controlled comparisons (S10a per-task, S10b contrasts incl. STL-only/MTL-only pools, S10c S(m, d) grid); mechanism-informed task grouping (S11) |
+| Tables S1–S11 | Per-backbone detail (S1); fusion strategies per task (S2); ensemble-size sweep (S3) and single-model validation scores (S3b); per-member contributions (S4); reproducibility summary (S5); Polaris datasets (S6); dataset provenance (S7); ensemble-vs-baseline significance (S8); same-encoder five-run controls (S9); controlled comparisons (S10a per-task, S10b contrasts incl. the STL-only, MTL-only and validation-stronger pools, S10c S(m, d) grid); mechanism-informed task grouping (S11) |
 
 ### Figure and table numbering
 
-Release 1.1.0 (the ChemRxiv version) numbered the figures differently. Mapping from the
-1.1.0 files to this release: Figure 2A, B → Figure S12 (redrawn on the Table S2 basis),
-Figure 2C → Figure 3 (redrawn at matched member count), Figure 3 → 4, Figure 4 → 5,
-Figure 5 → 6, Figure 6 → 7; Table 2 → Table S11; Tables 3 and 4 → Table 3 (summary rows
-appended to the per-task table); Table 5 → Table 4. Figure 2, Table 2, Figures S9–S11 and
-Table S10 are new, and Table 1 was rewritten to the current manuscript. Ensemble norm_scores
-entering the significance tests are now compared with the baselines at full precision
-(Table S8, Fig. 5, Table S9).
+Release 1.1.0 (the ChemRxiv version) numbered the figures and tables differently. Mapping
+from the 1.1.0 files to this release: Figure 2A, B → Figure S1 (redrawn on the Table S2
+basis), Figure 2C → Figure 3 (redrawn at matched member count), Figure 3 → Figure S3,
+Figure 4 → Figure 4, Figure 5 → Figure 5 (which gains panel C, the loss decomposition),
+Figure 6 → Figure 6; the former Supplementary Figures S2, S6, S7, S4, S9, S10 and S11
+become Figures S2, S4, S5, S6, S7, S8 and S9. Table 2 → Table S11; Tables 3 and 4 → Table 3
+(summary rows appended to the per-task table); Table 5 → Table S4, and the former
+correlation summary is now `tables/extra_inter_model_corr.csv`. Figure 2, Table 2,
+Tables S3b and S10, and Supplementary Figures S7–S9 are new, and Table 1 was rewritten to
+the current manuscript. Ensemble norm_scores entering the significance tests are compared
+with the baselines at full precision (Table S8, Figure 4, Table S9).
 
-Manuscript v3-1 renumbering (this commit): Figure 4 → Figure S3; Figures 5–7 → 4–6, with Figure 5 gaining panel C (loss decomposition); Table 4 → Table S4 (the former correlation summary Table S4 is now `tables/extra_inter_model_corr.csv`); Figures S12, S2, S6, S7, S4, S9, S10 and S11 → Figures S1–S9 in that order. The former Figures S1, S3, S5 and S8 duplicate Table S2, Figure S2, Table S4 and Figure 2C/Table S9 and are still written, as `figures/extra_*.png`. Figure 1B now shows the four encoder values as points.
+Four figures that the manuscript now covers numerically rather than graphically are still
+written, as `figures/extra_*.png`: the MAP-vs-backbone heatmap (Table S2), the
+aggregation heatmap without Late-3 (Figure S2), the member-role plot (Table S4) and the
+same-encoder control plot (Figure 2C and Table S9).
+
 
 ---
 
@@ -271,7 +278,7 @@ authors under their own terms, which is why axis B asks you to download them dir
   checkpoint. In every published GraphMVP and MAP model this (4→5, 300) table kept its
   random initialization and stayed frozen; the trained table is stored in the released
   PEFT weights and restored on loading, so predictions are unaffected
-  (`code/verify_inference.py`). The backbone option `vocab_fill` controls the behaviour:
+  (`code/verify_inference.py`). The backbone option `vocab_fill` controls the behavior:
   `"random"` (default, the published setting) or `"pretrained_rows"`, which copies the four
   checkpoint rows and initializes only the extra row — recommended for new training. On
   the 46,202 TDC ADMET molecules, OGB chirality indices 3 and 4 never occur, so with

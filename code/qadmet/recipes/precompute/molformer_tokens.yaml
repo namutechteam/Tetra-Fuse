@@ -4,8 +4,8 @@ features:
   embeddings:
     - molformer_tokens
 notes: |
-  TDC ADMET 22 union SMILES 의 MoLFormer-XL token_ids + attention_mask (각 MAX_LEN=202).
-  LoRA fine-tune 시 매 batch tokenize 비용 제거용. 출력 컬럼은
-  tok_000..tok_201 + msk_000..msk_201 (모두 int32).
-  scripts-old/precompute_molformer_tokens.py 의 logic 을 PrecomputeBase 위에 재구성.
+  TDC ADMET 22 union SMILES's MoLFormer-XL token_ids + attention_mask (each MAX_LEN=202).
+  For eliminating per-batch tokenize cost during LoRA fine-tune. Output columns are
+  tok_000..tok_201 + msk_000..msk_201 (all int32).
+  Restructured the logic of scripts-old/precompute_molformer_tokens.py on top of PrecomputeBase.
   parity check: parity/check_precompute.py molformer_tokens

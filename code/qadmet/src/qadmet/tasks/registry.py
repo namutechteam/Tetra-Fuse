@@ -1,7 +1,7 @@
-"""TaskRegistry: task 한 건의 메타데이터(타입·메트릭·로그변환 여부 등) 보관.
+"""TaskRegistry: stores metadata for a single task (type, metric, log-transform flag, etc.).
 
-TaskSet 은 task 들의 묶음 + grouping 정의. recipe 에서 ``dataset.name`` 으로
-참조한다 (예: ``tdc_admet_22``).
+TaskSet is a bundle of tasks + grouping definition. Referenced via ``dataset.name`` in the recipe
+(e.g., ``tdc_admet_22``).
 """
 
 from __future__ import annotations
@@ -14,14 +14,14 @@ from qadmet.core.registry import Registry
 
 @dataclass(frozen=True)
 class Task:
-    """ADMET task 한 건의 메타데이터.
+    """Metadata for a single ADMET task.
 
     Attributes:
-        name: TDC 데이터셋 이름 (예: "Caco2_Wang"). leaderboard·체크포인트 키.
+        name: TDC dataset name (e.g., "Caco2_Wang"). Key for leaderboard/checkpoint.
         type: "classification" | "regression".
-        metric: TDC group.evaluate_many() 에 넘길 metric key (예: "mae", "auroc").
-        log_transform: True 면 학습 전 ``np.log1p`` 적용 (heavy-tail 회귀에 사용).
-        notes: 자유 메모.
+        metric: metric key to pass to TDC group.evaluate_many() (e.g., "mae", "auroc").
+        log_transform: if True, applies ``np.log1p`` before training (used for heavy-tail regression).
+        notes: free-form notes.
     """
 
     name: str
@@ -32,15 +32,15 @@ class Task:
 
     def __post_init__(self) -> None:
         if self.type not in ("classification", "regression"):
-            raise ValueError(f"Task.type 은 classification|regression 이어야 합니다: {self.type!r}")
+            raise ValueError(f"Task.type must be classification|regression: {self.type!r}")
 
 
 @dataclass(frozen=True)
 class TaskSet:
-    """task 들의 묶음 + (선택) grouping 정의.
+    """A bundle of tasks + (optional) grouping definition.
 
-    grouping 은 ``{group_name: [task_name, ...]}`` 매핑. learned_grouping 등
-    동적 그룹 전략은 ``initial_grouping`` 으로 사용된다.
+    grouping is a ``{group_name: [task_name, ...]}`` mapping. learned_grouping and other
+    dynamic grouping strategies are used as ``initial_grouping``.
     """
 
     name: str
@@ -72,7 +72,7 @@ TASK_SETS: Registry[TaskSet] = Registry("task_sets")
 
 
 def register_task(task: Task) -> Task:
-    """Task 인스턴스를 등록하고 반환."""
+    """Registers and returns a Task instance."""
     TASK_REGISTRY.register(task.name)(task)  # type: ignore[arg-type]
     return task
 
@@ -83,5 +83,5 @@ def register_task_set(ts: TaskSet) -> TaskSet:
 
 
 def resolve_task_types(task_names: Sequence[str]) -> list[str]:
-    """이름 목록 → 타입 리스트 (registry 미등록 시 ValueError)."""
+    """Name list → type list (raises ValueError if not registered in registry)."""
     return [TASK_REGISTRY.get(t).type for t in task_names]

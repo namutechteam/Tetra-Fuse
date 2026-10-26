@@ -1,12 +1,12 @@
-"""Recipe: YAML ↔ ExperimentSpec 변환.
+"""Recipe: YAML ↔ ExperimentSpec conversion.
 
-기능:
-- ``!include path`` 태그로 다른 YAML 을 인라인 (DRY 컴포지션).
-- CLI override (dot-notation) 을 spec dict 에 머지.
-- dict → 중첩 dataclass(spec) 빌드.
+Features:
+- Inline other YAML via the ``!include path`` tag (DRY composition).
+- Merge CLI override (dot-notation) into spec dict.
+- Build nested dataclass(spec) from dict.
 
-비-목표:
-- 환경변수 치환·동적 표현식. Recipe 는 정적 선언으로 유지한다.
+Non-goals:
+- Environment variable substitution / dynamic expressions. Recipe stays as a static declaration.
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from qadmet.core.specs import (
 # ---------------------------------------------------------------------------- !include
 
 class _IncludeLoader(yaml.SafeLoader):
-    """!include 태그를 지원하는 SafeLoader."""
+    """SafeLoader supporting the !include tag."""
 
     base_dir: Path
 
@@ -52,7 +52,7 @@ class _IncludeLoader(yaml.SafeLoader):
 def _construct_include(loader: _IncludeLoader, node: yaml.Node) -> Any:
     raw = loader.construct_scalar(node)  # type: ignore[arg-type]
     candidate = Path(raw)
-    # 절대경로 / recipes 루트 상대경로 / 현재 yaml 위치 상대경로 순으로 탐색.
+    # Search in order: absolute path / path relative to recipes root / path relative to current yaml location.
     search = [
         candidate if candidate.is_absolute() else None,
         recipes_dir() / candidate,
@@ -61,7 +61,7 @@ def _construct_include(loader: _IncludeLoader, node: yaml.Node) -> Any:
     for p in search:
         if p is not None and p.exists():
             return load_yaml(p)
-    raise FileNotFoundError(f"!include 대상 없음: {raw} (탐색: {[str(s) for s in search if s]})")
+    raise FileNotFoundError(f"!include target not found: {raw} (searched: {[str(s) for s in search if s]})")
 
 
 _IncludeLoader.add_constructor("!include", _construct_include)
@@ -69,10 +69,10 @@ _IncludeLoader.base_dir = recipes_dir()
 
 
 def load_yaml(path: str | Path) -> Any:
-    """YAML 파일을 dict 로 로드 (!include 처리 포함)."""
+    """Load a YAML file as a dict (including !include handling)."""
     p = Path(path).resolve()
     if not p.exists():
-        raise FileNotFoundError(f"recipe 파일 없음: {p}")
+        raise FileNotFoundError(f"recipe file not found: {p}")
     with p.open("r", encoding="utf-8") as f:
         return yaml.load(f, Loader=_IncludeLoader)
 
@@ -81,21 +81,21 @@ def load_yaml(path: str | Path) -> Any:
 
 
 def apply_overrides(data: dict, overrides: list[str] | None) -> dict:
-    """CLI override 를 dict 에 머지한다.
+    """Merge CLI overrides into a dict.
 
-    형식: ``["trainer.max_epochs=2", "trainer.seeds=[0,1]"]``.
-    값은 yaml.safe_load 로 파싱 → 정수/리스트/문자열 자동 추론.
+    Format: ``["trainer.max_epochs=2", "trainer.seeds=[0,1]"]``.
+    Values are parsed via yaml.safe_load → int/list/string auto-inferred.
 
     Why:
-        같은 recipe 를 smoke test, sweep 등 다양한 컨텍스트에서 재사용할 수 있도록
-        파일을 매번 복제하지 않고 in-place 덮어쓴다.
+        So that the same recipe can be reused across different contexts such as smoke test, sweep, etc.,
+        overwrite in-place instead of duplicating the file each time.
     """
     if not overrides:
         return data
     out = copy.deepcopy(data)
     for item in overrides:
         if "=" not in item:
-            raise ValueError(f"override 형식이 'key=value' 가 아닙니다: {item!r}")
+            raise ValueError(f"override format is not 'key=value': {item!r}")
         key, raw_val = item.split("=", 1)
         keys = key.strip().split(".")
         try:
@@ -106,7 +106,7 @@ def apply_overrides(data: dict, overrides: list[str] | None) -> dict:
         for k in keys[:-1]:
             cursor = cursor.setdefault(k, {})
             if not isinstance(cursor, dict):
-                raise TypeError(f"override 경로 충돌: {key!r} 중간 값이 dict 가 아님")
+                raise TypeError(f"override path conflict: intermediate value of {key!r} is not a dict")
         cursor[keys[-1]] = value
     return out
 
@@ -139,7 +139,7 @@ def _build_model(d: dict | None) -> ModelSpec | None:
         return None
     backbone = _build_backbone(d.get("backbone"))
     if backbone is None:
-        raise ValueError("model.backbone 은 필수입니다.")
+        raise ValueError("model.backbone is required.")
     raw_extras = d.get("extra_backbones") or ()
     extras = tuple(BackboneSpec(**e) for e in raw_extras)
     return ModelSpec(
@@ -153,9 +153,9 @@ def _build_model(d: dict | None) -> ModelSpec | None:
 
 
 def dict_to_spec(data: dict) -> ExperimentSpec:
-    """recipe dict → ExperimentSpec 변환."""
+    """Convert recipe dict → ExperimentSpec."""
     if not isinstance(data, dict):
-        raise TypeError(f"recipe 최상위는 dict 여야 합니다: {type(data)}")
+        raise TypeError(f"recipe top level must be a dict: {type(data)}")
     spec = ExperimentSpec(
         name=data["name"],
         kind=data["kind"],
@@ -173,7 +173,7 @@ def dict_to_spec(data: dict) -> ExperimentSpec:
 
 
 def load_recipe(path: str | Path, *, overrides: list[str] | None = None) -> ExperimentSpec:
-    """YAML 경로 → ExperimentSpec (with override 적용)."""
+    """YAML path → ExperimentSpec (with override applied)."""
     data = load_yaml(path)
     data = apply_overrides(data, overrides)
     return dict_to_spec(data)

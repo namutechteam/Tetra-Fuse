@@ -1,4 +1,4 @@
-"""HEADS registry — HeadSpec.type 으로 lookup."""
+"""HEADS registry — lookup by HeadSpec.type."""
 
 from __future__ import annotations
 

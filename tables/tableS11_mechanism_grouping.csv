@@ -2,6 +2,6 @@ Mechanism group,TDC tasks,Rationale
 Oral uptake,Solubility_AqSolDB; Caco2_Wang; HIA_Hou; Bioavailability_Ma,Solubility to intestinal absorption and systemic availability
 Distribution / CNS,Lipophilicity_AstraZeneca; PPBR_AZ; BBB_Martins; VDss_Lombardo,Physicochemical distribution and CNS exposure
 Interaction liabilities,Pgp_Broccatelli; hERG; CYP(2C9/2D6/3A4)_Veith,"Transporter, ion-channel, and enzyme interaction risks"
-Metabolic turnover,CYP(2C9/2D6/3A4)_Substrate_CarboMangels; Clearance_(Hepatocyte/Microsome)_AZ,Substrate recognition and hepatic elimination
+Metabolic turnover,CYP(2C9/2D6/3A4)_Substrate_CarbonMangels; Clearance_(Hepatocyte/Microsome)_AZ,Substrate recognition and hepatic elimination
 Distal safety,AMES; DILI; LD50_Zhu,"Mutagenicity, organ toxicity, and acute toxicity"
 Composite exposure,Half_Life_Obach,Composite endpoint isolated to reduce gradient conflict

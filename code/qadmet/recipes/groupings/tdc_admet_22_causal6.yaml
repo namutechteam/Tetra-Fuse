@@ -1,15 +1,15 @@
-# 6-group causal-chain 재편 (2026-05-20).
-# tdc_admet_22_mech 와 달리 partitioning_physchem 을 해체하고 물성을 인과 사슬 끝에 배치:
-#   - Solubility_AqSolDB → oral_uptake (수용성 → 막투과 → 장흡수 → 생체이용률 인과 사슬)
-#   - Lipophilicity_AstraZeneca → distribution_cns (logP → PPBR/BBB/VDss 분포 축 드라이버)
-# 나머지 4 그룹 (interaction_liabilities, metabolic_turnover, distal_safety,
-# composite_exposure) 은 tdc_admet_22_mech 와 동일.
+# 6-group causal-chain reorganization (2026-05-20).
+# Unlike tdc_admet_22_mech, dismantle partitioning_physchem and place physical properties at the end of the causal chain:
+#   - Solubility_AqSolDB → oral_uptake (solubility → membrane permeation → intestinal absorption → bioavailability causal chain)
+#   - Lipophilicity_AstraZeneca → distribution_cns (logP → PPBR/BBB/VDss distribution axis driver)
+# The remaining 4 groups (interaction_liabilities, metabolic_turnover, distal_safety,
+# composite_exposure) are identical to tdc_admet_22_mech.
 name: tdc_admet_22_causal6
 tasks: tdc_admet_22
 notes: >-
   TDC ADMET leaderboard 22-task, causal-chain 6-group (2026-05-20).
-  tdc_admet_22_mech 의 partitioning_physchem 을 해체해 Solubility→oral_uptake,
-  Lipophilicity→distribution_cns 로 재배치.
+  Dismantle partitioning_physchem of tdc_admet_22_mech and relocate into Solubility→oral_uptake,
+  Lipophilicity→distribution_cns.
 groups:
   oral_uptake:
     [Solubility_AqSolDB, Caco2_Wang, HIA_Hou, Bioavailability_Ma]

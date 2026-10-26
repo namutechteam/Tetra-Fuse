@@ -1,7 +1,7 @@
-"""target column transform (log1p 등).
+"""target column transform (log1p etc.).
 
-옛 ``LOG_TRANSFORM_TASKS`` 셋이 hardcoded 였던 부분을 Task 메타데이터 기반으로
-일반화한다 (Task.log_transform=True).
+Generalizes the part where the old ``LOG_TRANSFORM_TASKS`` set was hardcoded, based on Task metadata
+(Task.log_transform=True).
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ import pandas as pd
 
 
 def apply_log1p(df: pd.DataFrame, columns: Sequence[str]) -> pd.DataFrame:
-    """주어진 컬럼에 log1p 를 in-place 적용한 사본을 반환."""
+    """Returns a copy with log1p applied in-place to the given column."""
     out = df.copy()
     for c in columns:
         if c in out.columns:

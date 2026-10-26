@@ -1,4 +1,4 @@
-"""LinearHead: Z (B, input_dim) → (B, n_tasks). 단순 다중 태스크 head."""
+"""LinearHead: Z (B, input_dim) → (B, n_tasks). Simple multi-task head."""
 
 from __future__ import annotations
 
@@ -10,12 +10,12 @@ from .registry import HEADS
 
 @HEADS.register("linear")
 class LinearHead(nn.Module):
-    """공유 trunk 위 단일 Linear projection.
+    """Single Linear projection on top of the shared trunk.
 
     Args:
-        input_dim: Z 차원.
-        n_tasks: task 수 (= 출력 차원).
-        bias: nn.Linear bias 사용 여부.
+        input_dim: Z dimension.
+        n_tasks: number of tasks (= output dimension).
+        bias: whether to use nn.Linear bias.
     """
 
     def __init__(self, input_dim: int, n_tasks: int, bias: bool = True) -> None:

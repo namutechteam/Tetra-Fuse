@@ -1,17 +1,17 @@
-"""TDC ADMET 웹 리더보드 스크레이프 + 24h 캐시.
+"""TDC ADMET web leaderboard scrape + 24h cache.
 
-옛 ``compare_leaderboard.py:62-153`` 의 fetch_leaderboard 를 패키지 안으로 이동.
-사용자 환경에서 인터넷이 없으면 cache 만으로도 동작 (또는 빈 dict 반환).
+Moved fetch_leaderboard from the old ``compare_leaderboard.py:62-153`` into the package.
+Works with cache alone if there's no internet in the user's environment (or returns an empty dict).
 
 Why:
-    sys.modules 에 requests/bs4/numpy/pandas 를 import-time 으로 끌고 들어가지
-    않도록 모든 의존을 함수 내부 lazy import. evaluation 패키지를 가져온다고
-    requests 가 sys.modules 에 자동 등록되면 안 됨 (다른 lazy invariant 와 동일).
+    Avoid pulling requests/bs4/numpy/pandas into sys.modules at import-time;
+    all dependencies are lazy-imported inside functions. Just importing the evaluation package
+    must not auto-register requests in sys.modules (same as other lazy invariants).
 
 Note:
-    리더보드는 TDC 의 정적 웹페이지 구조에 의존. TDC 가 페이지를 바꾸면 본
-    파서가 깨질 수 있다 — 그 때는 ``fetch_leaderboard`` 가 빈 dict 를 반환할
-    뿐 실험 결과 자체에는 영향이 없도록 호출자는 graceful 처리한다.
+    The leaderboard depends on TDC's static webpage structure. If TDC changes the page, this
+    parser can break — in that case ``fetch_leaderboard`` should just return an empty dict,
+    so callers handle it gracefully without affecting the experiment results themselves.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-# DATASET → TDC 페이지 슬러그. 옛 compare_leaderboard.py 의 매핑 그대로.
+# DATASET → TDC page slug. Same mapping as the old compare_leaderboard.py.
 DATASET_URLS: dict[str, str] = {
     "Caco2_Wang": "01caco2",
     "HIA_Hou": "02hia",
@@ -55,7 +55,7 @@ DEFAULT_CACHE_TTL_SEC = 86400  # 24h
 
 
 def default_cache_path() -> Path:
-    """``QADMET_LEADERBOARD_CACHE`` env 우선, 없으면 artifacts 옆 숨김 파일."""
+    """``QADMET_LEADERBOARD_CACHE`` env takes priority; otherwise a hidden file next to artifacts."""
     env = os.environ.get("QADMET_LEADERBOARD_CACHE")
     if env:
         return Path(env).resolve()
@@ -65,12 +65,12 @@ def default_cache_path() -> Path:
 
 
 def _parse_leaderboard_page(url: str) -> tuple[dict[str, dict[str, float]], str, str]:
-    """한 데이터셋 페이지를 파싱.
+    """Parses a single dataset page.
 
     Returns:
-        (models_dict, metric_name, direction). models_dict 는
+        (models_dict, metric_name, direction). models_dict is
         ``{model_name: {"score": float, "std": float}}``.
-        파싱 실패 시 (``{}, "", "")`` 반환.
+        Returns (``{}, "", ""``) on parse failure.
     """
     import requests
     from bs4 import BeautifulSoup
@@ -122,18 +122,18 @@ def fetch_leaderboard(
     cache_ttl_sec: int = DEFAULT_CACHE_TTL_SEC,
     sleep_sec: float = 0.3,
 ) -> dict[str, dict[str, Any]]:
-    """TDC 웹사이트에서 ADMET 리더보드를 파싱.
+    """Parses the ADMET leaderboard from the TDC website.
 
     Args:
-        datasets: 가져올 데이터셋 이름 (DATASET_URLS 키). None 이면 전체 22.
-        use_cache: True 면 캐시 TTL 안이면 네트워크 호출 안 함.
-        cache_path: 캐시 JSON 경로 (None 이면 default_cache_path).
-        cache_ttl_sec: 캐시 유효 기간.
-        sleep_sec: 페이지 사이 sleep (rate-limit 보호).
+        datasets: Dataset names to fetch (DATASET_URLS keys). All 22 if None.
+        use_cache: If True, no network call is made while within the cache TTL.
+        cache_path: Cache JSON path (default_cache_path if None).
+        cache_ttl_sec: Cache validity period.
+        sleep_sec: Sleep between pages (rate-limit protection).
 
     Returns:
         ``{dataset_name: {"metric": str, "direction": str, "models": {model: {...}}}}``.
-        네트워크 실패가 발생한 데이터셋은 스킵.
+        Datasets that encounter network failures are skipped.
     """
     cache_path = cache_path or default_cache_path()
     if use_cache and cache_path.exists():
@@ -164,7 +164,7 @@ def fetch_leaderboard(
                 "direction": direction,
                 "models": models,
             }
-        except Exception:  # noqa: BLE001  — 네트워크/파싱 실패는 데이터셋 단위로 스킵.
+        except Exception:  # noqa: BLE001  — network/parsing failures are skipped per-dataset.
             continue
         if sleep_sec > 0:
             time.sleep(sleep_sec)
@@ -175,15 +175,15 @@ def fetch_leaderboard(
 
 
 def get_rank(models: dict[str, dict[str, float]], score: float, direction: str) -> tuple[int, int]:
-    """리더보드에서 점수의 예상 순위 (1-indexed) + 전체 모델 수.
+    """Expected rank (1-indexed) of the score on the leaderboard + total number of models.
 
     Args:
         models: ``{model_name: {"score": float, "std": float}}``.
-        score: 우리 모델 점수.
-        direction: ``"lower"`` (mae 등 작을수록 좋음) | ``"higher"``.
+        score: Our model's score.
+        direction: ``"lower"`` (lower is better, e.g. mae) | ``"higher"``.
 
     Returns:
-        (rank, total). 동률은 본인보다 명백히 좋은 모델 수 + 1 로 정의.
+        (rank, total). Ties are defined as the number of models strictly better than this one + 1.
     """
     scores = [m["score"] for m in models.values()]
     n_total = len(scores)
@@ -195,24 +195,24 @@ def get_rank(models: dict[str, dict[str, float]], score: float, direction: str) 
 
 
 def compare_to_leaderboard(
-    metric_df,  # pandas.DataFrame; lazy 위해 type annotation 만 문자열.
+    metric_df,  # pandas.DataFrame; type annotation only as a string for laziness.
     *,
     methods: list[str] | None = None,
     use_cache: bool = True,
     cache_path: Path | None = None,
 ):
-    """target metric DataFrame 의 각 task 에 대해 리더보드 순위·비교 모델 점수를
-    합친 DataFrame 을 반환.
+    """For each task in the target metric DataFrame, the leaderboard rank and comparison model scores
+    Returns the combined DataFrame.
 
     Args:
-        metric_df: ``per_task_metric_df`` 출력 (또는 동일 컬럼 모양).
-        methods: 비교할 leaderboard model 이름 (예: ``["Chemprop", "MapLight + GNN"]``).
-            ``"Top"`` 이라는 특수 키는 각 task 의 1 위 모델 + 점수.
-        use_cache / cache_path: ``fetch_leaderboard`` 와 동일.
+        metric_df: Output of ``per_task_metric_df`` (or the same column shape).
+        methods: Leaderboard model names to compare (e.g. ``["Chemprop", "MapLight + GNN"]``).
+            The special key ``"Top"`` refers to the 1st place model + score for each task.
+        use_cache / cache_path: Same as ``fetch_leaderboard``.
 
     Returns:
         ``[dataset, metric, ours, ours_std, rank, n_total, *method_score_cols]``
-        DataFrame. 리더보드 데이터가 없는 task 는 rank/methods 가 NaN.
+        DataFrame. Tasks without leaderboard data have NaN rank/methods.
     """
     import pandas as pd
 

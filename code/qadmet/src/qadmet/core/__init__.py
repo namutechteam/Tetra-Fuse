@@ -1,4 +1,4 @@
-"""qadmet 플랫폼 골격: registry, spec, recipe, artifact, lineage, runner."""
+"""qadmet platform skeleton: registry, spec, recipe, artifact, lineage, runner."""
 
 from qadmet.core.registry import Registry
 from qadmet.core.specs import (

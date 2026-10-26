@@ -1,4 +1,4 @@
-"""DATASETS registry: ``DatasetSpec.name`` 에 등록된 로더를 조회."""
+"""DATASETS registry: Look up the loader registered under ``DatasetSpec.name``."""
 
 from __future__ import annotations
 

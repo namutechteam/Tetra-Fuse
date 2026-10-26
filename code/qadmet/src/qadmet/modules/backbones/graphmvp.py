@@ -1,36 +1,36 @@
-"""GraphMVPBackbone — 사전학습 GraphMVP GIN(frozen) + AdapterGNN(trainable).
+"""GraphMVPBackbone — pretrained GraphMVP GIN(frozen) + AdapterGNN(trainable).
 
-설계:
-    - GraphMVP_hybrid (Eq.8) regression variant 가중치 (OGB 9-d atom / 3-d bond feat 으로
-      학습된 GIN) 를 frozen 으로 로드.
-    - frozen GIN 은 항상 eval 모드 — ``train(mode)`` 호출 시에도 BN running stat 보존.
-    - Pool → trainable ``self.proj`` (Linear + ReLU [+ Dropout]) 로 d_h 차원 출력.
+Design:
+    - Load GraphMVP_hybrid (Eq.8) regression variant weights (GIN trained with OGB 9-d atom /
+      3-d bond feat) as frozen.
+    - frozen GIN is always in eval mode — preserves BN running stats even when ``train(mode)`` is called.
+    - Pool → trainable ``self.proj`` (Linear + ReLU [+ Dropout]) outputs d_h dimension.
 
-Adapter 모드 (``adapter_kind``):
-    - ``"paper"`` (default) — AdapterGNN (Li et al., AAAI'24) 충실 구현.
-        * 각 frozen GIN layer 마다 pre-adapter A1 + post-adapter A2 한 쌍을 **parallel**
-          로 wiring (논문 Eq. 8 그대로):
+Adapter mode (``adapter_kind``):
+    - ``"paper"`` (default) — faithful implementation of AdapterGNN (Li et al., AAAI'24).
+        * For each frozen GIN layer, a pair of pre-adapter A1 + post-adapter A2 is wired
+          in **parallel** (exactly as in paper Eq. 8):
             h_l = BN(MLP(MP(x_l))) + s1·A1(x_l) + s2·A2(MP(x_l))
             x_{l+1} = Dropout(ReLU(h_l))
-        * 각 adapter A: down → ReLU → up → BN (Eq. 7), 외부에서 s 로 스케일.
-        * s1, s2 는 각 adapter 의 ``gamma`` (learnable scalar, init=0). 학습 시작 시점에는
-          어댑터 기여 0 → forward = frozen-only baseline 과 완전 동등.
-        * MP(x_l) 추출을 위해 frozen ``GINConv`` 의 ``mlp/eps/bond_encoder`` 만 인라인 호출.
-    - ``"lora_gin"`` (legacy) — 기존 LoRA-style mini-GIN bottleneck (``AdapterGINBlock``).
-        * 각 frozen GIN layer 출력 뒤에 1개씩 (LayerNorm + down + GIN + up + dropout).
-        * up.weight 0-init 으로 zero-residual.
+        * Each adapter A: down → ReLU → up → BN (Eq. 7), scaled externally by s.
+        * s1, s2 are each adapter's ``gamma`` (learnable scalar, init=0). At the start of training,
+          adapter contribution is 0 → forward is fully equivalent to the frozen-only baseline.
+        * To extract MP(x_l), only ``mlp/eps/bond_encoder`` of the frozen ``GINConv`` are called inline.
+    - ``"lora_gin"`` (legacy) — existing LoRA-style mini-GIN bottleneck (``AdapterGINBlock``).
+        * One per output of each frozen GIN layer (LayerNorm + down + GIN + up + dropout).
+        * zero-residual via up.weight 0-init.
 
 Lazy import:
-    ``ogb`` / ``torch_geometric`` 은 ``__init__`` 안에서만 import (무거운 의존 격리).
+    ``ogb`` / ``torch_geometric`` are imported only inside ``__init__`` (isolating heavy dependencies).
 
-State_dict 호환:
-    GraphMVP paper 의 가중치 파일은
+State_dict compatibility:
+    The GraphMVP paper's weight file is
     ``{'model': GIN_state_dict, 'model_3D': ..., 'AE_2D_3D_model': ..., 'AE_3D_2D_model': ...}``
-    구조. 본 backbone 은 ``'model'`` key 만 추출해 GIN 에 ``strict=False`` 로 로드.
+    structured. This backbone extracts only the ``'model'`` key and loads it into GIN with ``strict=False``.
 
 Backward-compat:
-    - 이전 버전의 ``adaptor_dropout`` kwarg 는 ``adapter_dropout`` 의 alias 로 수용 (deprecation).
-    - ``adapter_kind`` default 가 "paper" 로 바뀜 — 기존 학습 가중치 호환 안 됨, 재학습 필요.
+    - The older ``adaptor_dropout`` kwarg is accepted as an alias of ``adapter_dropout`` (deprecation).
+    - ``adapter_kind`` default changed to "paper" — not compatible with previously trained weights, retraining required.
 """
 
 from __future__ import annotations
@@ -51,27 +51,27 @@ logger = logging.getLogger(__name__)
 
 @BACKBONES.register("graphmvp")
 class GraphMVPBackbone(nn.Module):
-    """GraphMVP 사전학습 GIN(frozen) + AdapterGNN/AdapterGIN(trainable) 래퍼.
+    """GraphMVP pretrained GIN(frozen) + AdapterGNN/AdapterGIN(trainable) wrapper.
 
     Args:
-        d_h: ``self.proj`` 출력 차원 (= ``output_dim``).
-        checkpoint_path: GraphMVP ``.pth`` 가중치 경로. None 이면 random-init smoke.
-        num_layer: GIN 레이어 수 (paper 기본 5).
-        emb_dim: GIN hidden / output 차원 (paper 기본 300).
-        JK: jumping-knowledge 모드 — 현재 ``"last"`` 만 지원.
-        adapter_kind: ``"paper"`` (default, AdapterGNN paper-faithful) 또는
+        d_h: ``self.proj`` output dimension (= ``output_dim``).
+        checkpoint_path: GraphMVP ``.pth`` weight path. If None, random-init smoke.
+        num_layer: number of GIN layers (paper default 5).
+        emb_dim: GIN hidden / output dimension (paper default 300).
+        JK: jumping-knowledge mode — currently only ``"last"`` supported.
+        adapter_kind: ``"paper"`` (default, AdapterGNN paper-faithful) or
             ``"lora_gin"`` (legacy ``AdapterGINBlock``).
-        adapter_bottleneck: adapter 의 bottleneck dim ``r``.
+        adapter_bottleneck: bottleneck dim ``r`` of adapter.
         adapter_dropout: adapter residual branch dropout.
-        use_edge_attr: ``adapter_kind="lora_gin"`` 에서만 의미 — adapter 내부 mini-GIN 이
-            OGB BondEncoder 로 edge_attr 사용. ``"paper"`` 에서는 무시 (MLP-only adapter).
-        proj_dropout: ``self.proj`` 의 dropout (없으면 0).
+        use_edge_attr: only meaningful for ``adapter_kind="lora_gin"`` — the adapter's internal mini-GIN
+            uses edge_attr via OGB BondEncoder. Ignored for ``"paper"`` (MLP-only adapter).
+        proj_dropout: dropout of ``self.proj`` (0 if absent).
         pool: graph-level pooling — ``"mean"`` / ``"sum"`` / ``"max"``.
-        adaptor_dropout: **Deprecated** — ``adapter_dropout`` 의 alias.
+        adaptor_dropout: **Deprecated** — alias of ``adapter_dropout``.
 
     Attributes:
         output_dim: ``d_h``.
-        adapter_kind: 사용한 adapter 모드.
+        adapter_kind: the adapter mode used.
     """
 
     def __init__(
@@ -102,19 +102,19 @@ class GraphMVPBackbone(nn.Module):
 
         if JK != "last":
             raise ValueError(
-                f"GraphMVPBackbone (Adapter variant) 는 JK='last' 만 지원 (받은 값: {JK!r}). "
-                "concat/max/sum 모드는 adapter 삽입 위치가 모호 — out-of-scope."
+                f"GraphMVPBackbone (Adapter variant) only supports JK='last' (received: {JK!r}). "
+                "concat/max/sum modes have ambiguous adapter insertion points — out-of-scope."
             )
 
         if adapter_kind not in ("paper", "lora_gin"):
             raise ValueError(
-                f"adapter_kind 는 'paper' 또는 'lora_gin' (받은 값: {adapter_kind!r})."
+                f"adapter_kind must be 'paper' or 'lora_gin' (received: {adapter_kind!r})."
             )
 
         if adaptor_dropout is not None:
             warnings.warn(
-                "GraphMVPBackbone: `adaptor_dropout` 은 deprecated — `adapter_dropout` 을 사용. "
-                "이번엔 alias 로 매핑.",
+                "GraphMVPBackbone: `adaptor_dropout` is deprecated — use `adapter_dropout`. "
+                "Mapping to alias this time.",
                 DeprecationWarning,
                 stacklevel=2,
             )
@@ -177,7 +177,7 @@ class GraphMVPBackbone(nn.Module):
             if unexpected:
                 logger.warning("GraphMVP GIN weights unexpected keys: %s", unexpected[:8])
         else:
-            logger.info("GraphMVP checkpoint_path=None — random-init smoke 모드")
+            logger.info("GraphMVP checkpoint_path=None — random-init smoke mode")
 
         self.gin = gin
         self.gin.requires_grad_(False)
@@ -196,7 +196,7 @@ class GraphMVPBackbone(nn.Module):
         self.use_edge_attr = use_edge_attr
 
         if adapter_kind == "paper":
-            # ---- paper-faithful: 각 frozen GIN layer 마다 pre/post adapter 쌍 ----
+            # ---- paper-faithful: pre/post adapter pair for each frozen GIN layer ----
             self.pre_adapters = nn.ModuleList(
                 [
                     AdapterGNNBlock(d=emb_dim, r=adapter_bottleneck, dropout=adapter_dropout)
@@ -209,10 +209,10 @@ class GraphMVPBackbone(nn.Module):
                     for _ in range(num_layer)
                 ]
             )
-            # legacy attr (ModuleList 이름 일치 깨도 외부 의존성 없음 — 신규 학습)
+            # legacy attr (no external dependency even if ModuleList name mismatch — new training)
             self.adapter_blocks = nn.ModuleList()
         else:
-            # ---- legacy lora_gin: 각 frozen GIN layer 출력 뒤에 1개 adapter ----
+            # ---- legacy lora_gin: one adapter after each frozen GIN layer output ----
             self.adapter_blocks = nn.ModuleList(
                 [
                     AdapterGINBlock(
@@ -236,10 +236,10 @@ class GraphMVPBackbone(nn.Module):
         self.num_layer = num_layer
 
     def train(self, mode: bool = True):
-        """frozen GIN 은 항상 eval 유지 (Lightning train() 전파 차단).
+        """Keep frozen GIN always in eval (block Lightning train() propagation).
 
         Args:
-            mode: trainable 서브모듈 (adapters / proj) 만 train/eval 토글.
+            mode: toggles train/eval only for trainable submodules (adapters / proj).
 
         Returns:
             self.
@@ -256,7 +256,7 @@ class GraphMVPBackbone(nn.Module):
                 ``batch`` index).
 
         Returns:
-            ``(B, d_h)`` projection 출력.
+            ``(B, d_h)`` projection output.
         """
         x, edge_index, edge_attr = batch.x, batch.edge_index, batch.edge_attr
 
@@ -267,11 +267,11 @@ class GraphMVPBackbone(nn.Module):
             # paper Eq. (8) parallel wiring:
             #   h_l = BN(MLP(MP(x_l))) + A1(x_l) + A2(MP(x_l))
             #   x_{l+1} = ReLU(h_l) for inner layers; raw h_l for the last layer
-            # (drop_ratio=0 으로 init 했으므로 Dropout 생략)
+            # (drop_ratio=0 init so Dropout is omitted)
             for i in range(self.num_layer):
                 xl = h
                 gnn = self.gin.gnns[i]
-                # MP(x_l): GINConv aggregation step (mlp 적용 전)
+                # MP(x_l): GINConv aggregation step (before mlp applied)
                 edge_emb = gnn.bond_encoder(edge_attr)
                 mp_out = (1 + gnn.eps) * xl + gnn.propagate(
                     edge_index, x=xl, edge_attr=edge_emb
@@ -285,7 +285,7 @@ class GraphMVPBackbone(nn.Module):
                 # x_{l+1} = ReLU(h_l) for inner layers (last layer raw)
                 h = F.relu(hl) if i < self.num_layer - 1 else hl
         else:
-            # legacy: frozen GIN layer 출력 뒤에 1개 adapter
+            # legacy: one adapter after each frozen GIN layer output
             for i in range(self.num_layer):
                 h = self.gin.gnns[i](h, edge_index, edge_attr)
                 h = self.gin.batch_norms[i](h)

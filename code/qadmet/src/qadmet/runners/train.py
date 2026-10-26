@@ -1,18 +1,18 @@
-"""train runner: ExperimentSpec(kind="train") → 모델 학습 + test 예측 artifact.
+"""train runner: ExperimentSpec(kind="train") → model training + test prediction artifact.
 
-흐름:
+Flow:
     1. spec.dataset.name → TaskSet → task_names + task_types.
-    2. spec.trainer.seeds 별로:
+    2. For each spec.trainer.seeds:
          a. ``load_fold(seed)`` → TdcAdmetFold.
-         b. ``prepare_fold_loaders(fold, spec.features)`` → 모달리티 stack 된 DataLoader.
-         c. inverse-freq task weights (옛 ``compute_inverse_freq_weights``).
-         d. ``MultitaskLitModule`` 빌드 (spec.model + 위 메타).
+         b. ``prepare_fold_loaders(fold, spec.features)`` → modality-stacked DataLoader.
+         c. inverse-freq task weights (formerly ``compute_inverse_freq_weights``).
+         d. Build ``MultitaskLitModule`` (spec.model + above metadata).
          e. ``build_trainer`` + ``trainer.fit``.
-         f. task 별 ``trainer.predict(ckpt_path="best")`` → predictions parquet.
-    3. seed 결과를 artifact 에 저장 + manifest metrics 갱신.
+         f. Per task, ``trainer.predict(ckpt_path="best")`` → predictions parquet.
+    3. Save seed results to artifact + update manifest metrics.
 
-본 runner 는 actual TDC fold + chemprop dataloader 를 구동한다 (인터넷 + 사전 계산
-parquet + (옵션) GPU 필요). 단위 테스트는 mock fold + 더미 parquet 으로.
+This runner drives actual TDC fold + chemprop dataloader (requires internet + precomputed
+parquet + (optional) GPU). Unit tests use mock fold + dummy parquet.
 """
 
 from __future__ import annotations
@@ -38,9 +38,9 @@ logger = get_logger("qadmet.runners.train")
 def _compute_inverse_freq_weights(
     samples_per_task: Mapping[str, int], task_names: Sequence[str]
 ):
-    """옛 ``pipeline_mtl.compute_inverse_freq_weights`` 와 수치 동등.
+    """Numerically equivalent to legacy ``pipeline_mtl.compute_inverse_freq_weights``.
 
-    inverse-freq + mean=1 정규화. 결과 텐서는 LitModule.task_weights buffer 로.
+    inverse-freq + mean=1 normalization. Resulting tensor becomes LitModule.task_weights buffer.
     """
     import torch
 
@@ -51,7 +51,7 @@ def _compute_inverse_freq_weights(
 
 
 def _resolve_parquet_root(spec: ExperimentSpec, repo_root: Path) -> Path:
-    """recipe dataset.kwargs.parquet_root → 절대경로. default ``data/embeddings``."""
+    """recipe dataset.kwargs.parquet_root → absolute path. default ``data/embeddings``."""
     kw = dict(spec.dataset.kwargs) if spec.dataset is not None else {}
     raw = kw.get("parquet_root", "data/embeddings")
     p = Path(raw)
@@ -63,11 +63,11 @@ def _resolve_parquet_root(spec: ExperimentSpec, repo_root: Path) -> Path:
 def _resolve_parquet_paths(
     spec: ExperimentSpec, repo_root: Path, modalities: Sequence[str]
 ) -> dict[str, Path]:
-    """modality 이름 → parquet 절대경로. dataset.kwargs.parquet_paths 명시 우선.
+    """modality name → parquet absolute path. dataset.kwargs.parquet_paths takes precedence if specified.
 
-    LMDB modality (``lmdb_paths`` 에 등록된) + synthetic modality (collate 단계에서
-    SMILES 즉석 변환 — e.g. ``graphmvp_data``) 는 결과에서 제외 — parquet 존재 검증
-    대상에서 빠진다.
+    LMDB modality (registered in ``lmdb_paths``) + synthetic modality (converted on-the-fly from
+    SMILES during collate — e.g. ``graphmvp_data``) are excluded from the result — parquet existence check
+    is skipped for these.
     """
     from qadmet.datasets.loaders import SYNTHETIC_MODALITY_KEYS
 
@@ -90,7 +90,7 @@ def _resolve_parquet_paths(
 def _resolve_lmdb_paths(
     spec: ExperimentSpec, repo_root: Path, modalities: Sequence[str]
 ) -> dict[str, Path]:
-    """modality 이름 → LMDB 절대경로. dataset.kwargs.lmdb_paths 명시만 (default 없음)."""
+    """modality name → LMDB absolute path. Only dataset.kwargs.lmdb_paths specified (no default)."""
     kw = dict(spec.dataset.kwargs) if spec.dataset is not None else {}
     explicit: dict[str, str] = dict(kw.get("lmdb_paths") or {})
     out: dict[str, Path] = {}
@@ -102,22 +102,22 @@ def _resolve_lmdb_paths(
 
 
 def _inject_d_xd(spec: BackboneSpec, descriptor_dim_total: int) -> BackboneSpec:
-    """DMPNN backbone 의 ``d_xd`` 를 descriptor 합으로 주입한 새 BackboneSpec 반환.
+    """Return a new BackboneSpec with DMPNN backbone's ``d_xd`` injected as the descriptor sum.
 
     Why:
-        chemprop ``MPNN.fingerprint`` 가 ``X_d`` 를 fp 뒤에 concat 한다 →
-        backbone output_dim = ``d_h + d_xd``. 신규 코드는 descriptor 를 X_d 로 흐르게
-        하므로, runner 가 modality dim 합을 알아낸 시점에 backbone 에 자동 전달한다.
-        recipe 에서 d_xd 를 직접 적지 않아도 동작하도록.
+        chemprop ``MPNN.fingerprint`` concatenates ``X_d`` after the fp →
+        backbone output_dim = ``d_h + d_xd``. New code routes descriptors through X_d,
+        so the runner automatically forwards it to the backbone once the modality dim sum is known.
+        so it works without the recipe explicitly specifying d_xd.
 
     Args:
-        spec: 원본 BackboneSpec.
-        descriptor_dim_total: descriptors 차원 합. 0 이면 spec 그대로 반환 (no-op).
+        spec: original BackboneSpec.
+        descriptor_dim_total: sum of descriptor dimensions. If 0, returns spec unchanged (no-op).
 
     Returns:
-        type/consumes 보존, kwargs 에 ``d_xd`` 추가된 새 BackboneSpec.
-        DMPNN 이 아닌 backbone 에 대해서는 spec 그대로 반환 (X_d 미사용).
-        recipe 가 이미 ``d_xd`` 를 명시했다면 사용자 의도 우선 — 덮어쓰지 않는다.
+        New BackboneSpec preserving type/consumes, with ``d_xd`` added to kwargs.
+        For non-DMPNN backbones, returns spec unchanged (X_d unused).
+        If recipe already specifies ``d_xd``, user intent takes precedence — not overwritten.
     """
     if spec.type != "dmpnn" or descriptor_dim_total <= 0:
         return spec
@@ -149,16 +149,16 @@ def _build_lit_module(
     lr_fusion: float | None = None,
     head_warmup_epochs: int = 0,
 ):
-    """ModelSpec + 메타 → ``MultitaskLitModule`` 인스턴스.
+    """ModelSpec + metadata → ``MultitaskLitModule`` instance.
 
     Args:
-        embedding_dims: ``{name: D}`` embeddings 의 차원만 (descriptors 는 X_d 흐름).
-        descriptor_dim_total: descriptors 차원 합 — DMPNN backbone 의 d_xd 자동 주입.
+        embedding_dims: ``{name: D}`` dimensions of embeddings only (descriptors flow through X_d).
+        descriptor_dim_total: sum of descriptor dimensions — auto-injected as d_xd for DMPNN backbone.
 
     Note:
-        head.routing 에 따라 ``task_to_group`` / ``groups`` 를 자동 산출한다
-        (routing 값과 무관하게 ``task_set.initial_grouping`` 을 그대로 사용 —
-        그룹 수는 TaskSet 이 결정한다).
+        Automatically derives ``task_to_group`` / ``groups`` based on head.routing
+        (uses ``task_set.initial_grouping`` as-is regardless of routing value —
+        the number of groups is determined by TaskSet).
     """
     from qadmet.modules.multitask.lit_module import MultitaskLitModule
 
@@ -166,29 +166,29 @@ def _build_lit_module(
     task_to_group: dict[str, str] | None = None
     groups: list[str] | None = None
     if head_spec.type in ("grouped", "grouped_routed"):
-        # routing 은 "groups 를 TaskSet.initial_grouping 에서 그대로 가져온다" 는 뜻일 뿐,
-        # 그룹 구성/수는 routing 값이 아니라 TaskSet 이 결정한다 (causal6=6, mech=7 등).
-        # "admet_7_group" 은 구 manifest/recipe 하위호환용 레거시 별칭.
+        # routing merely means "take groups as-is from TaskSet.initial_grouping",
+        # the group composition/count is determined by TaskSet, not the routing value (causal6=6, mech=7, etc.).
+        # "admet_7_group" is a legacy alias for backward compatibility with old manifest/recipe.
         routing = head_spec.routing or "taskset_grouping"
         if routing not in ("taskset_grouping", "admet_7_group"):
             raise NotImplementedError(
-                f"head.routing={routing!r} 미지원 — 'taskset_grouping' 만 (레거시 별칭: 'admet_7_group')."
+                f"head.routing={routing!r} unsupported — only 'taskset_grouping' (legacy alias: 'admet_7_group')."
             )
-        # grouping_override (그룹 탐색용) 가 있으면 TaskSet 기본 grouping 대신 사용.
+        # If grouping_override (for group search) is present, use it instead of TaskSet's default grouping.
         grouping = grouping_override or task_set.initial_grouping
         if not grouping:
-            raise ValueError(f"TaskSet({task_set.name}) 에 initial_grouping 이 비어있음")
+            raise ValueError(f"TaskSet({task_set.name}) has empty initial_grouping")
         task_to_group = {t: g for g, ts in grouping.items() for t in ts}
         groups = list(grouping.keys())
         if grouping_override is not None:
-            # override 는 task_set 의 모든 task 를 정확히 한 번씩 덮어야 한다.
+            # override must cover every task in task_set exactly once.
             covered = sorted(task_to_group)
             expected = sorted(task_set.tasks)
             if covered != expected:
                 missing = sorted(set(expected) - set(covered))
                 extra = sorted(set(covered) - set(expected))
                 raise ValueError(
-                    f"grouping_override 가 task_set({task_set.name}) 를 정확히 덮지 못함 — "
+                    f"grouping_override does not exactly cover task_set({task_set.name}) — "
                     f"missing={missing}, extra={extra}"
                 )
 
@@ -225,7 +225,7 @@ def _print_task_diagnostics(
     task_names: Sequence[str],
     seed: int,
 ) -> None:
-    """학습 후 per-task σ / inverse-freq coefficient / loss 통계를 로그에 출력한다."""
+    """After training, log per-task σ / inverse-freq coefficient / loss statistics."""
     import numpy as np
 
     lm = model.loss_module
@@ -282,15 +282,15 @@ def _log_seed_test_metrics(
     seed: int,
     task_set_name: str,
 ) -> None:
-    """시드 한 건의 test 예측 → TDC leaderboard metric 표 stdout 출력.
+    """Test prediction for a single seed → print TDC leaderboard metric table to stdout.
 
-    학습이 오래 걸릴 때 시드 끝날 때마다 진단용으로 즉시 결과 확인.
-    final ``predictions.parquet`` + ``per_task_metric_df`` 와 동일 메트릭 사용.
+    When training takes long, check results immediately after each seed finishes, for diagnostics.
+    Uses the same metric as final ``predictions.parquet`` + ``per_task_metric_df``.
     """
     from qadmet.evaluation.tdc_benchmark import per_task_metric_df
 
     if not pred_rows_for_seed:
-        logger.warning("seed test metrics 미출력 — pred_rows 비어있음", extra={"payload": {"seed": seed}})
+        logger.warning("seed test metrics not printed — pred_rows empty", extra={"payload": {"seed": seed}})
         return
     df = pd.DataFrame(pred_rows_for_seed)
     test_df = df[df["split"] == "test"]
@@ -308,7 +308,7 @@ def _log_seed_test_metrics(
         sep,
     ]
     for _, row in metric_df.iterrows():
-        score = row["mean"]  # n_seeds=1 이므로 mean == 그 시드의 score
+        score = row["mean"]  # n_seeds=1, so mean == that seed's score
         score_str = f"{score:>8.4f}" if pd.notna(score) else f"{'NaN':>8}"
         lines.append(
             f"{str(row['dataset']):<{col_w}}  {str(row['metric']):>8}  {score_str}  {int(row['n_test']):>6}"
@@ -318,10 +318,10 @@ def _log_seed_test_metrics(
 
 
 def _build_predict_trainer(runtime: Mapping[str, Any]) -> Any:
-    """Predict 전용 single-device Trainer. DDP fit 후 rank-0 에서만 호출된다.
+    """Predict-only single-device Trainer. Called only on rank-0 after DDP fit.
 
-    callbacks 를 비워 ModelCheckpoint 재생성으로 best.ckpt 덮어쓰기 방지.
-    logger=False 로 CSVLogger 도 막아 추가 디렉토리 생성 없음.
+    Empty callbacks to prevent ModelCheckpoint re-creation from overwriting best.ckpt.
+    logger=False also blocks CSVLogger, so no extra directory is created.
     """
     import lightning as L
 
@@ -358,28 +358,28 @@ def _predict_per_task(
     reg_task_idx_in_scaler: Mapping[int, int],
     ckpt_path: str | None = "best",
 ) -> np.ndarray:
-    """task 한 개의 예측 → 원본 스케일 ``numpy (N,)``.
+    """Prediction for a single task → original-scale ``numpy (N,)``.
 
     Args:
-        loader: per-task DataLoader (val_loaders 또는 test_loaders 의 한 entry).
-        task_idx: 모델 출력 ``(N, n_tasks)`` 에서 해당 task 의 컬럼.
-        task_type: ``"regression"`` 또는 ``"classification"``.
-        log_tasks: ``log1p`` 적용된 regression task 이름 set.
-        output_scaler: ``(StandardScaler, tuple(reg_idx_in_n_tasks))`` 또는 None.
-        reg_task_idx_in_scaler: ``{task_idx: scaler_column_idx}``. regression task 만.
-        ckpt_path: lightning ``predict`` 의 ckpt_path. ``"best"`` 는 학습 trainer 가
-            관리하는 best 모델, 절대경로 문자열은 명시 ckpt (DDP 분리 predict 에 사용).
-            None 이면 현재 model 가중치 그대로.
+        loader: per-task DataLoader (one entry from val_loaders or test_loaders).
+        task_idx: the column for this task in model output ``(N, n_tasks)``.
+        task_type: ``"regression"`` or ``"classification"``.
+        log_tasks: set of regression task names with ``log1p`` applied.
+        output_scaler: ``(StandardScaler, tuple(reg_idx_in_n_tasks))`` or None.
+        reg_task_idx_in_scaler: ``{task_idx: scaler_column_idx}``. Regression tasks only.
+        ckpt_path: ckpt_path for lightning ``predict``. ``"best"`` refers to the model managed by the
+            training trainer's best model; an absolute path string is an explicit ckpt (used for DDP-separated predict).
+            If None, use current model weights as-is.
 
-    후처리:
-        - regression: ``out_unscaled = out * scale_[j] + mean_[j]`` (scaler 가 fit 됐을 때).
-            ``log_tasks`` 면 추가 ``expm1``.
-        - classification: ``sigmoid`` (raw logit → prob, STL runner 와 동일).
+    Post-processing:
+        - regression: ``out_unscaled = out * scale_[j] + mean_[j]`` (when scaler was fit).
+            additionally ``expm1`` if ``log_tasks``.
+        - classification: ``sigmoid`` (raw logit → prob, same as STL runner).
     """
     import torch
 
     preds_list = trainer.predict(model, loader, ckpt_path=ckpt_path)
-    # bf16-mixed precision 학습 시 preds 가 bf16 이라 numpy 직접 변환 불가 → float() 로 fp32 cast.
+    # With bf16-mixed precision training, preds are bf16 so direct numpy conversion fails → cast to fp32 via float().
     preds = torch.cat(preds_list, dim=0).float().cpu().numpy()  # (N, n_tasks)
     out = preds[:, task_idx].astype(np.float64)
     if task_type == "regression":
@@ -406,46 +406,46 @@ def run_train(
     runtime: dict | None = None,
     force: bool = False,
 ) -> Artifact:
-    """train recipe 한 건을 실행하고 artifact 를 반환한다.
+    """Execute a single train recipe and return the artifact.
 
     Dispatch:
-        - ``spec.model.type == "multitask"``: 본 함수의 MTL 경로.
-        - ``spec.model.type == "singletask"``: ``runners.train_stl.run_train_stl`` 위임.
+        - ``spec.model.type == "multitask"``: MTL path of this function.
+        - ``spec.model.type == "singletask"``: delegated to ``runners.train_stl.run_train_stl``.
 
     Args:
-        runtime: DDP 등 실행 환경 메타 (`devices`, `strategy`, `num_nodes`,
-            `accelerator`, `find_unused_parameters`, `world_size`, `cli_args` 등).
-            None 이면 single-device 학습. manifest.runtime 으로 기록 (해시 영향 없음).
+        runtime: execution environment metadata such as DDP (`devices`, `strategy`, `num_nodes`,
+            `accelerator`, `find_unused_parameters`, `world_size`, `cli_args`, etc.).
+            If None, single-device training. Recorded as manifest.runtime (does not affect hash).
 
-    산출물 (artifact.data_dir 기준, MTL 경로):
-        - ``seed_{N}/best.ckpt``: 시드별 lightning 체크포인트.
-        - ``predictions.parquet``: ``[seed, task, split, smiles, y_true, y_pred]`` long 포맷.
-          ``split ∈ {"val", "test"}`` 둘 다 작성한다. val 예측은 OOF stacking
-          (Step 4.2 InverseVariance 등) 의 입력으로 사용된다.
-        - ``manifest.yaml`` (artifact root): metrics 에 시드별 train/val loss 저장.
+    Outputs (relative to artifact.data_dir, MTL path):
+        - ``seed_{N}/best.ckpt``: lightning checkpoint per seed.
+        - ``predictions.parquet``: long format ``[seed, task, split, smiles, y_true, y_pred]``.
+          Both ``split ∈ {"val", "test"}`` are written. val predictions are used as input for OOF stacking
+          (Step 4.2 InverseVariance, etc.).
+        - ``manifest.yaml`` (artifact root): stores per-seed train/val loss in metrics.
 
-    DDP 동작:
-        - 모든 rank 가 동일 spec 으로 진입. `store.create` 는 rank-0 만 호출하고
-          다른 rank 는 barrier 후 동일 경로의 artifact 를 `store.load` 로 회수.
-        - `trainer.fit` 은 모든 rank 참여, `trainer.predict` 는 rank-0 의 별도
-          single-device Trainer 로만 (DistributedSampler 의 padding/reorder 회피).
-        - 시드 간/시드 후 barrier 로 동기화. 종료 시 process group 정리.
+    DDP behavior:
+        - All ranks enter with the same spec. `store.create` is called only by rank-0, and
+          other ranks retrieve the artifact at the same path via `store.load` after the barrier.
+        - `trainer.fit` involves all ranks; `trainer.predict` is run only via a separate
+          single-device Trainer on rank-0 (to avoid DistributedSampler's padding/reorder).
+        - Synchronized via barrier between/after seeds. Process group cleaned up on exit.
     """
     spec.validate()
     if spec.dataset is None or spec.features is None or spec.model is None or spec.loss is None or spec.trainer is None:
-        raise ValueError("train recipe: dataset/features/model/loss/trainer 모두 필요")
+        raise ValueError("train recipe: dataset/features/model/loss/trainer all required")
 
-    # STL 분기 — model.type 으로 dispatch (recipe 의 kind 는 동일하게 "train").
+    # STL branch — dispatch by model.type (recipe's kind remains "train").
     if spec.model.type == "singletask":
         from qadmet.runners.train_stl import run_train_stl
 
         return run_train_stl(spec=spec, store=store, repo_root=repo_root, force=force)
     if spec.model.type != "multitask":
         raise ValueError(
-            f"model.type 은 'multitask' 또는 'singletask': {spec.model.type!r}"
+            f"model.type must be 'multitask' or 'singletask': {spec.model.type!r}"
         )
 
-    # 의존 import 는 run 시점에만.
+    # Dependent imports only at run time.
     from qadmet.core.distributed import (
         barrier_if_distributed,
         cleanup_process_group,
@@ -456,11 +456,11 @@ def run_train(
     from qadmet.datasets.tdc_admet import load_fold
     from qadmet.tasks import TASK_SETS
     from qadmet.training import build_trainer, extract_best_val_loss, run_seed_loop, SeedRun
-    import qadmet.modules  # noqa: F401  — registry 등록 트리거 (backbones / fusion / heads / losses).
+    import qadmet.modules  # noqa: F401  — triggers registry registration (backbones / fusion / heads / losses).
 
     runtime = runtime or {}
-    # rank-zero artifact 생성 전에 process group 을 미리 init — fit 이전 barrier 가
-    # 실제로 동작하려면 필수 (Lightning 은 already-initialized 면 재사용).
+    # Pre-init process group before rank-zero artifact creation — needed for the barrier before fit
+    # to actually work (Lightning reuses it if already-initialized).
     pg_inited = init_process_group_if_torchrun()
     rank0 = is_rank_zero()
     logger.info(
@@ -474,13 +474,13 @@ def run_train(
     n_tasks = len(task_names)
     log_tasks_cfg = frozenset(task_set.log_transform_tasks())
 
-    # artifact 생성 — rank-0 만 디스크 쓰기. 다른 rank 는 barrier 후 같은 path 로
-    # load (run_id 가 deterministic 이라 rank-0 가 만든 manifest 가 같은 위치에 있음).
+    # Artifact creation — only rank-0 writes to disk. Other ranks go to the same path after barrier
+    # to load (since run_id is deterministic, rank-0's manifest is at the same location).
     if rank0:
         artifact = store.create(spec, repo_root=repo_root, runtime=runtime, force=force)
     barrier_if_distributed()
     if not rank0:
-        # rank-0 가 만든 manifest.yaml 을 동일 경로에서 회수.
+        # Retrieve manifest.yaml created by rank-0 from the same path.
         from qadmet.core.artifacts import compute_run_id, git_info
 
         gi = git_info(repo_root)
@@ -494,18 +494,18 @@ def run_train(
     modality_keys = expand_descriptors(feature_spec.descriptors) + list(feature_spec.embeddings)
     parquet_paths = _resolve_parquet_paths(spec, repo_root, modality_keys)
     lmdb_paths = _resolve_lmdb_paths(spec, repo_root, modality_keys)
-    # 학습 시작 전 누락 parquet/LMDB 즉시 fail.
+    # Fail immediately for missing parquet/LMDB before training starts.
     for name, path in parquet_paths.items():
         if not path.exists():
             raise FileNotFoundError(
-                f"modality {name!r} parquet 누락: {path}\n"
-                f"  recipe.dataset.kwargs.parquet_paths 또는 parquet_root 를 확인하세요."
+                f"modality {name!r} parquet missing: {path}\n"
+                f"  Check recipe.dataset.kwargs.parquet_paths or parquet_root."
             )
     for name, path in lmdb_paths.items():
         if not path.exists():
             raise FileNotFoundError(
-                f"modality {name!r} LMDB 누락: {path}\n"
-                f"  recipe.dataset.kwargs.lmdb_paths 를 확인하세요."
+                f"modality {name!r} LMDB missing: {path}\n"
+                f"  Check recipe.dataset.kwargs.lmdb_paths."
             )
 
     pred_rows: list[dict[str, Any]] = []
@@ -533,23 +533,23 @@ def run_train(
             task_weights = None
         else:
             task_weights = _compute_inverse_freq_weights(fold.samples_per_task, task_names)
-        # GradNorm 은 동적 task weight 를 학습 → inverse-freq prior 와 곱하면 해석 모호.
-        # recipe 가 task_weighting!=null 로 지정해 둔 경우를 명시적으로 차단.
+        # GradNorm learns dynamic task weights → multiplying with inverse-freq prior makes interpretation ambiguous.
+        # Explicitly block the case where recipe specifies task_weighting!=null.
         if spec.loss.type == "mixed_task_gradnorm" and task_weights is not None:
             raise ValueError(
-                "loss.type='mixed_task_gradnorm' 은 task_weighting=null (uniform) 만 허용합니다. "
-                f"받음: task_weighting={spec.loss.task_weighting!r}."
+                "loss.type='mixed_task_gradnorm' allows only task_weighting=null (uniform). "
+                f"received: task_weighting={spec.loss.task_weighting!r}."
             )
-        # Kendall UW + PCGrad: 사용자가 GradNorm 대비 ablation 으로 쓰는 경우가 많고
-        # PCGrad 는 weighted gradient 기반이므로 task_weighting=null 강제 (Kendall σ
-        # 가 이미 reweighting 을 담당). recipe 에서 inverse-freq prior 도 켜 두면 두
-        # 가중치가 곱해져 해석 모호. 명시적으로 차단.
+        # Kendall UW + PCGrad: often used by users as an ablation against GradNorm, and
+        # since PCGrad is based on weighted gradients, task_weighting=null is enforced (Kendall σ
+        # already handles reweighting). If the recipe also enables inverse-freq prior, the two
+        # weights get multiplied, making interpretation ambiguous. Explicitly blocked.
         if spec.loss.type == "mixed_task_uncertainty_pcgrad" and task_weights is not None:
             raise ValueError(
-                "loss.type='mixed_task_uncertainty_pcgrad' 은 task_weighting=null 만 허용합니다. "
-                f"Kendall σ 가 이미 reweighting 을 담당. 받음: task_weighting={spec.loss.task_weighting!r}."
+                "loss.type='mixed_task_uncertainty_pcgrad' allows only task_weighting=null. "
+                f"Kendall σ already handles reweighting. received: task_weighting={spec.loss.task_weighting!r}."
             )
-        # descriptors 는 backbone X_d 로 흐르므로 LitModule 의 modality_dims 에서 제외.
+        # Descriptors flow through backbone X_d, so excluded from LitModule's modality_dims.
         embedding_dims = {
             k: loaders.modality_dims[k]
             for k in feature_spec.embeddings
@@ -576,14 +576,14 @@ def run_train(
             lr_fusion=trainer_spec.lr_fusion,
             head_warmup_epochs=trainer_spec.head_warmup_epochs,
         )
-        # predict-only: fit + fit-trainer 생략 (기존 best.ckpt 로 예측만 재생성).
-        # CSVLogger/ModelCheckpoint 를 만드는 fit-trainer 자체를 건너뛰어 기존
-        # csv_logs / best.ckpt 를 건드리지 않는다. 단일 프로세스 실행 전제.
+        # predict-only: skip fit + fit-trainer (only regenerate predictions with existing best.ckpt).
+        # Skip the fit-trainer itself, which creates CSVLogger/ModelCheckpoint, to leave existing
+        # csv_logs / best.ckpt untouched. Assumes single-process execution.
         predict_only = bool(runtime.get("predict_only", False))
         if predict_only:
             trainer = None
             logger.info(
-                "predict-only: fit 생략, 기존 ckpt 로 예측 재생성",
+                "predict-only: skipping fit, regenerating predictions from existing ckpt",
                 extra={"payload": {"seed": seed, "ckpt_dir": str(seed_dir)}},
             )
         else:
@@ -602,11 +602,11 @@ def run_train(
                 save_last=(trainer_spec.predict_ckpt == "last"),
             )
             trainer.fit(model, loaders.train_loader, loaders.val_loader)
-            barrier_if_distributed()  # 모든 rank 가 fit 끝낼 때까지 sync
+            barrier_if_distributed()  # sync until all ranks finish fit
 
-        # predict_ckpt='last' 면 last.ckpt 우선, 없으면 best.ckpt 로 fallback.
-        # 본 옵션은 head warmup + gate-first 학습 시 val_loss 가 epoch 1 에 잡혀
-        # best.ckpt 가 untrained gate 시점을 가리키는 문제를 회피하기 위한 용도.
+        # If predict_ckpt='last', prefer last.ckpt, falling back to best.ckpt if absent.
+        # This option avoids the issue where, during head warmup + gate-first training, val_loss gets
+        # locked in at epoch 1, causing best.ckpt to point to the untrained gate stage.
         use_last = trainer_spec.predict_ckpt == "last"
         last_candidate = seed_dir / "last.ckpt"
         best_candidate = seed_dir / "best.ckpt"
@@ -616,17 +616,17 @@ def run_train(
             ckpt_candidate = best_candidate
         ckpt_path: Path | None = ckpt_candidate if ckpt_candidate.exists() else None
 
-        # rank-0 외 rank 는 predict 스킵하고 barrier 에서 다음 seed 대기.
-        # predict-only(trainer=None) 는 단일 프로세스 → 항상 global zero.
+        # Ranks other than rank-0 skip predict and wait for the next seed at the barrier.
+        # predict-only (trainer=None) is single-process → always global zero.
         if trainer is not None and not trainer.is_global_zero:
-            # 진단 출력은 rank-0 의 _last_task_loss / log_vars 에만 의미 있음.
-            # 다른 rank 는 즉시 다음 seed 로 넘어가도록 placeholder 반환.
+            # Diagnostic output is only meaningful for rank-0's _last_task_loss / log_vars.
+            # Other ranks return a placeholder to move on to the next seed immediately.
             barrier_if_distributed()
             return SeedRun(seed=seed, ckpt_path=None, metrics={})
 
         _print_task_diagnostics(model, task_names, seed)
 
-        # output_scaler: regression task 의 (scaler 컬럼 인덱스) 매핑.
+        # output_scaler: (scaler column index) mapping for regression tasks.
         reg_task_idx_in_scaler: dict[int, int] = {}
         if loaders.output_scaler is not None:
             _, reg_idx_tuple = loaders.output_scaler
@@ -634,18 +634,18 @@ def run_train(
 
         log_tasks_combined = log_tasks_cfg | loaders.log_tasks
 
-        # ---- Predict: rank-0 의 single-device Trainer 로만 ----
-        # DistributedSampler 의 padding/reorder 가 SMILES↔prediction 매핑을 깨뜨리는
-        # 것을 회피한다. fit 의 DDP process group 은 살아있어도 새 Trainer 의
-        # SingleDeviceStrategy 가 자체 dataloader 를 sampler 변조 없이 사용한다.
+        # ---- Predict: only via rank-0's single-device Trainer ----
+        # Avoids DistributedSampler's padding/reorder breaking the SMILES↔prediction mapping.
+        # Even if fit's DDP process group is alive, the new Trainer's
+        # SingleDeviceStrategy uses its own dataloader without sampler modification.
         predict_trainer = _build_predict_trainer(runtime)
         predict_ckpt = str(ckpt_candidate) if ckpt_candidate.exists() else None
 
-        # task 별 val + test 예측.
+        # Per-task val + test prediction.
         for task_idx, task_name in enumerate(task_names):
             task_type = task_types[task_idx]
 
-            # val 예측 (OOF stacking 입력) — val_loaders 에 있는 task 만.
+            # val prediction (OOF stacking input) — only tasks present in val_loaders.
             if task_name in loaders.val_loaders:
                 val_loader, val_smis, val_y_true = loaders.val_loaders[task_name]
                 val_pred = _predict_per_task(
@@ -668,7 +668,7 @@ def run_train(
                         }
                     )
 
-            # test 예측.
+            # test prediction.
             test_loader, smis, y_true = loaders.test_loaders[task_name]
             y_pred = _predict_per_task(
                 trainer=predict_trainer, model=model, loader=test_loader,
@@ -690,7 +690,7 @@ def run_train(
                     }
                 )
 
-        # predict-only 는 fit trainer 가 없어 best metric 을 추출할 수 없음 (NaN).
+        # predict-only has no fit trainer, so best metric cannot be extracted (NaN).
         metrics = {
             "best_val_loss": extract_best_val_loss(trainer)
             if trainer is not None
@@ -698,14 +698,14 @@ def run_train(
         }
         seed_metrics[seed] = metrics
 
-        # 시드 종료 직후 TDC leaderboard metric stdout 출력 (긴 학습용 진단).
+        # Print TDC leaderboard metric to stdout right after seed finishes (diagnostics for long training).
         seed_pred_rows = [r for r in pred_rows if r.get("seed") == seed]
         try:
             _log_seed_test_metrics(seed_pred_rows, seed=seed, task_set_name=spec.dataset.name)
         except Exception as e:  # noqa: BLE001
-            logger.warning(f"seed metric 출력 실패 (학습은 계속): {e}", extra={"payload": {"seed": seed}})
+            logger.warning(f"seed metric output failed (training continues): {e}", extra={"payload": {"seed": seed}})
 
-        barrier_if_distributed()  # rank-0 predict 끝, 다른 rank 동기 해제
+        barrier_if_distributed()  # rank-0 predict done, releasing other ranks' sync
         return SeedRun(
             seed=seed, ckpt_path=ckpt_path, metrics=metrics,
         )
@@ -717,7 +717,7 @@ def run_train(
     )
     logger.info("all seeds done", extra={"payload": {"n_seeds": len(runs)}})
 
-    # 최종 산출물 쓰기 — rank-0 만. non-rank-0 은 pred_rows / seed_metrics 가 비어 있음.
+    # Writing final outputs — rank-0 only. non-rank-0 has empty pred_rows / seed_metrics.
     if rank0:
         pred_df = pd.DataFrame(pred_rows)
         out_pq = artifact.data_dir / "predictions.parquet"
@@ -733,6 +733,6 @@ def run_train(
             },
         )
 
-    barrier_if_distributed()  # 모든 rank 가 종료 동기화 후 process group cleanup
+    barrier_if_distributed()  # process group cleanup after all ranks sync at exit
     cleanup_process_group()
     return artifact

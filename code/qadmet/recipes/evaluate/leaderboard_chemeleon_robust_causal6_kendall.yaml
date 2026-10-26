@@ -17,6 +17,6 @@ evaluation:
       use_cache: true
 
 notes: |
-  CheMeleon uni-backbone (graph primary) + Kendall σ robust_causal6 런의 TDC leaderboard 랭킹 산출.
-  per-modality 비교 세트 (ch / gm / mf / dmpnn...) 의 CheMeleon 축.
-  산출물: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top 점수)
+  CheMeleon uni-backbone (graph primary) + Kendall σ robust_causal6 run's TDC leaderboard ranking computation.
+  per-modality comparison set (ch / gm / mf / dmpnn...)'s CheMeleon axis.
+  Output: data/metrics.csv (per-task), data/leaderboard.csv (rank/n_total + Top score)

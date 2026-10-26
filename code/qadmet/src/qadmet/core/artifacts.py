@@ -1,16 +1,16 @@
-"""Artifact 저장소.
+"""Artifact storage.
 
-레이아웃::
+Layout::
 
     artifacts/{kind}/{name}/{run_id}/
-        ├── manifest.yaml      # ★ recipe + 입력 의존성 + 코드/환경 정보
-        ├── data/              # 실제 산출물 (model.ckpt, predictions.parquet, ...)
-        └── log.jsonl          # 실행 로그
+        ├── manifest.yaml      # ★ recipe + input dependencies + code/environment info
+        ├── data/              # actual outputs (model.ckpt, predictions.parquet, ...)
+        └── log.jsonl          # execution log
 
 run_id::
     sha1(recipe_normalized + git_sha)[:12]
-    같은 recipe + 같은 코드 → 동일 run_id (재현성). seed 등 다중 실행 정보는
-    manifest 안에 outputs 로 누적된다.
+    Same recipe + same code → same run_id (reproducibility). Multiple run info such as seed is
+    accumulated as outputs inside the manifest.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from qadmet.core.paths import artifacts_dir
 from qadmet.core.specs import ExperimentSpec, spec_to_dict
 
 
-# ---------------------------------------------------------------------------- 해시·환경
+# ---------------------------------------------------------------------------- hash/environment
 
 def sha256_file(path: Path, *, chunk: int = 1024 * 1024) -> str:
     h = hashlib.sha256()
@@ -42,7 +42,7 @@ def sha256_file(path: Path, *, chunk: int = 1024 * 1024) -> str:
 
 
 def normalize_for_hash(obj: Any) -> str:
-    """spec dict 를 결정적 JSON 문자열로 변환 (해시 입력)."""
+    """Convert spec dict into a deterministic JSON string (hash input)."""
     return json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str)
 
 
@@ -52,7 +52,7 @@ def compute_run_id(spec: ExperimentSpec, git_sha: str) -> str:
 
 
 def git_info(repo_root: Path) -> dict[str, Any]:
-    """현재 git SHA + dirty 여부. git 없으면 unknown."""
+    """Current git SHA + dirty status. unknown if git is unavailable."""
     info: dict[str, Any] = {"sha": "unknown", "dirty": False}
     try:
         sha = subprocess.run(
@@ -70,21 +70,21 @@ def git_info(repo_root: Path) -> dict[str, Any]:
     return info
 
 
-# ---------------------------------------------------------------------------- 데이터모델
+# ---------------------------------------------------------------------------- data model
 
 @dataclass
 class InputRef:
-    """다른 artifact 참조 (lineage 의존성)."""
+    """Reference to another artifact (lineage dependency)."""
 
     kind: str
     name: str
     run_id: str
-    sha256: str | None = None  # 입력 데이터 파일 해시 (선택)
+    sha256: str | None = None  # input data file hash (optional)
 
 
 @dataclass
 class OutputFile:
-    """산출 파일 한 건."""
+    """A single output file."""
 
     relpath: str
     sha256: str
@@ -93,7 +93,7 @@ class OutputFile:
 
 @dataclass
 class Artifact:
-    """저장된 artifact 핸들."""
+    """Handle to a saved artifact."""
 
     kind: str
     name: str
@@ -110,14 +110,14 @@ class Artifact:
         return self.root / "manifest.yaml"
 
 
-# ---------------------------------------------------------------------------- 저장소
+# ---------------------------------------------------------------------------- storage
 
 class ArtifactStore:
     """Artifact CRUD.
 
     Note:
-        같은 (kind, name, run_id) 가 이미 존재하면 기본적으로 기존 artifact 를
-        반환한다 (멱등). ``force=True`` 로 덮어쓰기.
+        If the same (kind, name, run_id) already exists, by default the existing artifact is
+        returned (idempotent). Use ``force=True`` to overwrite.
     """
 
     def __init__(self, root: Path | None = None) -> None:
@@ -135,13 +135,13 @@ class ArtifactStore:
         root = self.path_for(kind, name, run_id)
         mp = root / "manifest.yaml"
         if not mp.exists():
-            raise FileNotFoundError(f"artifact 없음: {root}")
+            raise FileNotFoundError(f"artifact not found: {root}")
         with mp.open("r", encoding="utf-8") as f:
             manifest = yaml.safe_load(f)
         return Artifact(kind=kind, name=name, run_id=run_id, root=root, manifest=manifest)
 
     def find_by_name(self, kind: str, name: str) -> list[Artifact]:
-        """이름으로 모든 run 조회 (최신순)."""
+        """Look up all runs by name (most recent first)."""
         base = self.root / kind / name
         if not base.exists():
             return []
@@ -166,11 +166,11 @@ class ArtifactStore:
         force: bool = False,
         runtime: dict[str, Any] | None = None,
     ) -> Artifact:
-        """run 디렉토리 + 초기 manifest 작성. 산출 파일은 이후 finalize 에서 등록.
+        """Create run directory + write initial manifest. Output files are registered later via finalize.
 
-        ``runtime`` 은 해시에 들어가지 않는 실행 환경 메타 (DDP devices/strategy 등).
-        ``compute_run_id`` 는 spec + git_sha 만 보므로 runtime 값이 바뀌어도 run_id 는
-        동일하다 — 같은 recipe 를 다른 GPU 수로 돌려도 같은 artifact 에 누적된다.
+        ``runtime`` is execution environment metadata (DDP devices/strategy, etc.) not included in the hash.
+        ``compute_run_id`` only looks at spec + git_sha, so even if runtime values change, run_id stays
+        the same — running the same recipe with a different number of GPUs accumulates into the same artifact.
         """
         gi = git_info(repo_root)
         run_id = compute_run_id(spec, gi["sha"])
@@ -213,10 +213,10 @@ class ArtifactStore:
 
     # ----------------------------------------------------------------- finalize
     def register_output(self, artifact: Artifact, relpath: str) -> OutputFile:
-        """data/ 안에 새로 만든 파일을 manifest 에 기록한다."""
+        """Record newly created files in data/ into the manifest."""
         full = artifact.data_dir / relpath
         if not full.exists():
-            raise FileNotFoundError(f"등록할 출력 파일 없음: {full}")
+            raise FileNotFoundError(f"no output file to register: {full}")
         out = OutputFile(relpath=relpath, sha256=sha256_file(full), bytes=full.stat().st_size)
         outputs = artifact.manifest.setdefault("outputs", [])
         outputs.append({"path": f"data/{relpath}", "sha256": out.sha256, "bytes": out.bytes})
@@ -238,15 +238,15 @@ class ArtifactStore:
 
 
 def _yaml_safe(obj):
-    """tuple/MappingProxyType/Path/torch.TorchVersion 등 yaml.safe_dump 비호환 타입을 정규화.
+    """Normalize types incompatible with yaml.safe_dump such as tuple/MappingProxyType/Path/torch.TorchVersion.
 
-    ``torch.__version__`` 같은 str 서브클래스는 SafeDumper 가 거부하므로
-    원시 타입으로 캐스팅한다.
+    str subclasses like ``torch.__version__`` are rejected by SafeDumper, so
+    cast them to primitive types.
     """
     from types import MappingProxyType
     if obj is None:
         return None
-    if isinstance(obj, bool):  # bool 은 int 하위 → 먼저 분기.
+    if isinstance(obj, bool):  # bool is a subtype of int → branch first.
         return bool(obj)
     if isinstance(obj, str):
         return str(obj)
@@ -263,7 +263,7 @@ def _yaml_safe(obj):
     return str(obj)
 
 
-# ---------------------------------------------------------------------------- 환경 메타
+# ---------------------------------------------------------------------------- environment metadata
 
 def _python_version() -> str:
     import sys
@@ -271,7 +271,7 @@ def _python_version() -> str:
 
 
 def _key_package_versions() -> dict[str, str]:
-    """학습 재현성에 영향이 큰 패키지 버전만 기록."""
+    """Record only package versions that significantly affect training reproducibility."""
     versions: dict[str, str] = {}
     for mod in ("torch", "lightning", "chemprop", "transformers", "peft", "rdkit",
                 "numpy", "pandas", "sklearn", "xgboost"):

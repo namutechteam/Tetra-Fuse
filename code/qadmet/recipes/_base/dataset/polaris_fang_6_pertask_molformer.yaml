@@ -1,8 +1,8 @@
 name: polaris_fang_6_pertask
 split: random_5seed
 seeds: [0, 1, 2, 3, 4]
-# STL(per-task) 변형 — molformer_tokens parquet 참조 (MAP STL 용).
-# precompute_polaris_fang_molformer_tokens 실행 후 symlink 필요:
+# STL(per-task) variant — references molformer_tokens parquet (for MAP STL).
+# symlink required after running precompute_polaris_fang_molformer_tokens:
 #   ln -sf artifacts/precompute/precompute_polaris_fang_molformer_tokens/<hash>/data/molformer_tokens.parquet \
 #          data/embeddings/polaris_fang_molformer_tokens.parquet
 kwargs:

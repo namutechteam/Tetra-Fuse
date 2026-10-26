@@ -1,15 +1,15 @@
-"""Polaris ADME-Fang 6-task fold 로더 (독립 외부 MTL 블록).
+"""Polaris ADME-Fang 6-task fold loader (independent external MTL block).
 
-data/polaris_adme_fang/<stem>_{train_val,test}.csv → SMILES(Drug) outer-merge로
-6-task wide 프레임 생성. 미측정 화합물 target=NaN → presence-mask가 loss에서 무시.
+data/polaris_adme_fang/<stem>_{train_val,test}.csv → via SMILES(Drug) outer-merge
+creates 6-task wide frame. Unmeasured compound target=NaN → presence-mask ignores in loss.
 
-반환 타입은 TdcAdmetFold 동일 → runners/train.py 무변경으로 작동.
+Return type is identical to TdcAdmetFold → works with runners/train.py unchanged.
 
 Val split:
-    train_val.csv를 seed별 random 분할(val_frac=0.125). PXR loader와 동일 규약.
+    Splits train_val.csv randomly per seed (val_frac=0.125). Same convention as PXR loader.
 Test:
-    Polaris가 test target을 숨김 → CSV는 [Drug]만. test_dfs에는 Y=NaN placeholder를
-    넣어 predictions.parquet에 y_pred가 남게 하고, 실제 평가는 Polaris 제출로 수행.
+    Polaris hides test targets → CSV contains only [Drug]. test_dfs has Y=NaN placeholder
+    inserted so y_pred remains in predictions.parquet; actual evaluation is done via Polaris submission.
 """
 
 from __future__ import annotations
@@ -33,8 +33,8 @@ FANG_VAL_FRAC = 0.125
 def _load_fang_task(task_name: str, seed: int, val_frac: float = FANG_VAL_FRAC):
     """data/polaris_adme_fang/<stem>_{train_val,test}.csv → (train, val, test).
 
-    train/val은 seed별 random 분할. test는 target 숨김 → Y=NaN.
-    Returns: (train_df, val_df, test_df) — 각 columns=[Drug, Y].
+    train/val are randomly split per seed. test has hidden targets → Y=NaN.
+    Returns: (train_df, val_df, test_df) — each with columns=[Drug, Y].
     """
     stem = FANG_CSV_STEM[task_name]
     tv = pd.read_csv(FANG_DIR / f"{stem}_train_val.csv")[["Drug", "Y"]]
@@ -51,12 +51,12 @@ def _load_fang_task(task_name: str, seed: int, val_frac: float = FANG_VAL_FRAC):
 
 
 def load_polaris_fang_fold(task_set_name: str, seed: int, *, group=None) -> TdcAdmetFold:
-    """Polaris ADME-Fang 6-task 한 fold 로드.
+    """Loads one fold of Polaris ADME-Fang 6-task.
 
     Args:
-        task_set_name: "polaris_fang_6" 또는 "polaris_fang_6_pertask".
-        seed: train/val random 분할 seed.
-        group: 미사용(TDC admet_group 불필요) — 시그니처 호환용.
+        task_set_name: "polaris_fang_6" or "polaris_fang_6_pertask".
+        seed: train/val random split seed.
+        group: unused (TDC admet_group not needed) — for signature compatibility.
     """
     ts = TASK_SETS.get(task_set_name)
 
@@ -89,7 +89,7 @@ def load_polaris_fang_fold(task_set_name: str, seed: int, *, group=None) -> TdcA
 
 
 def collect_polaris_fang_smiles(task_set_name: str = "polaris_fang_6", *, seeds=(0,)) -> list[str]:
-    """precompute 용 — 6-task 전체 SMILES 합집합 (train_val + test)."""
+    """for precompute — union of SMILES across all 6 tasks (train_val + test)."""
     ts = TASK_SETS.get(task_set_name)
     smis: set[str] = set()
     for task_name in ts.tasks:

@@ -1,20 +1,20 @@
 name: mtl_4modality_robust_causal6_nounimol2
 kind: train
 
-# mtl_4modality_robust_causal6.yaml 에서 UniMol2 modality 만 제외한 3-modality 변형.
+# 3-modality variant excluding only the UniMol2 modality from mtl_4modality_robust_causal6.yaml.
 #
-# 제외 내용 (그 외 모든 축은 부모 recipe 와 동일):
-#   - features.embeddings 에서 unimol2_lmdb 제거 → [molformer_tokens, graphmvp_data]
-#   - extra_backbones 에서 unimol2_lora 엔트리 제거
-# 따라서 fusion 입력 modality = CheMeleon(primary) + MoLFormer-LoRA + GraphMVP (총 3).
-# UniMol2 LoRA 가 빠지므로 DDP static_graph 제약(reducer.cpp 충돌)도 사라짐.
+# Excluded content (all other axes identical to the parent recipe):
+#   - Remove unimol2_lmdb from features.embeddings → [molformer_tokens, graphmvp_data]
+#   - Remove unimol2_lora entry from extra_backbones
+# Therefore fusion input modality = CheMeleon(primary) + MoLFormer-LoRA + GraphMVP (total 3).
+# Since UniMol2 LoRA is removed, the DDP static_graph constraint (reducer.cpp conflict) is also gone.
 
 dataset: !include _base/dataset/tdc_admet_22_causal6.yaml   # 6-group causal
 
 features:
   graph: chemeleon
   descriptors: []
-  embeddings: [molformer_tokens, graphmvp_data]   # ← unimol2_lmdb 제거
+  embeddings: [molformer_tokens, graphmvp_data]   # ← unimol2_lmdb removed
   missing_policy: mask_token
 
 model:
@@ -33,7 +33,7 @@ model:
         lora_rank: 16
         lora_alpha: 32
         lora_dropout: 0.2
-    # ← unimol2_lora 엔트리 제거
+    # ← unimol2_lora entry removed
     - type: graphmvp
       consumes: [graphmvp_data]
       kwargs:
@@ -46,7 +46,7 @@ model:
         pool: mean
   fusion:
     type: robust_attention
-    entropy_weight: 0.01        # alpha 다양성 압박, collapse 방어
+    entropy_weight: 0.01        # alpha diversity pressure, collapse prevention
     kwargs:
       output_dim: 300
       tau_init: 3.0
@@ -54,7 +54,7 @@ model:
       anneal_epochs: 15
       modality_dropout: 0.2
       residual: true
-      pre_norm: true            # 2048/768/300 scale 비대칭 흡수
+      pre_norm: true            # absorb 2048/768/300 scale asymmetry
       warmup_epochs: 1
   head:
     type: grouped
@@ -96,9 +96,9 @@ trainer:
     gradient_clip_val: 1.0
 
 notes: |
-  mtl_4modality_robust_causal6 의 UniMol2 제외 3-modality 변형.
+  3-modality variant of mtl_4modality_robust_causal6 excluding UniMol2.
   modality = CheMeleon(primary) + MoLFormer-LoRA + GraphMVP.
-  robust_attention fusion + grouped head (causal6 6-group), 모든 설정 부모와 동일.
+  robust_attention fusion + grouped head (causal6 6-group), all settings identical to parent.
 
   DDP (2-GPU):
     torchrun --nproc_per_node=2 -m qadmet.cli.main train \

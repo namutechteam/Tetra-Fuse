@@ -1,27 +1,27 @@
-"""GFN2-xTB 실패 분자에 대한 binary missing-mask builder.
+"""Binary missing-mask builder for molecules where GFN2-xTB failed.
 
-xtb builder 가 ETKDG 3D embed 실패 / xtb SCF 발산 / 타임아웃 등으로 실패한 분자는
-xtb parquet 의 4 개 채널 (dipole/homo_lumo_gap/electrons/total_energy) 가 모두 NaN
-이다. 본 builder 는 그 NaN 패턴을 그대로 4-dim binary 마스크로 노출 — 1.0 이면 해당
-xtb 채널이 누락 (분자 단위로는 4 채널 모두 1 또는 모두 0 인 것이 일반적이지만, 부분
-실패 케이스에 대비해 채널별로 보존).
+Molecules that fail in the xtb builder due to ETKDG 3D embed failure / xtb SCF divergence / timeout, etc.
+have all 4 channels of the xtb parquet (dipole/homo_lumo_gap/electrons/total_energy) as NaN
+This builder exposes that NaN pattern directly as a 4-dim binary mask — 1.0 means the corresponding
+xtb channel is missing (per molecule, all 4 channels being either all 1 or all 0 is typical, but for partial
+failure cases, it is preserved per channel).
 
 Why:
-    옛 phase1.3b (D-MPNN + RDKit2D + xTB) 는 xtb 실패 분자를 zeros 로 채워 학습했지만,
-    "xtb 가 실패해서 0 이다" 라는 정보 자체를 모델이 모른다. 본 마스크를 descriptor
-    축에 함께 concat 하면 backbone 이 "이 분자의 xtb 정보는 신뢰할 수 없다" 를
-    명시적 신호로 받을 수 있다 (옛 missing_policy="mask_token" 의 변종).
+    The old phase1.3b (D-MPNN + RDKit2D + xTB) trained by filling xtb-failed molecules with zeros, but
+    the model has no knowledge of the information "it is 0 because xtb failed". Concatenating this mask
+    into the descriptor axis lets the backbone receive "this molecule's xtb information is unreliable"
+    as an explicit signal (a variant of the old missing_policy="mask_token").
 
-데이터 의존성:
-    xtb parquet 가 먼저 사전 계산돼야 한다. 기본 위치는
+Data dependency:
+    The xtb parquet must be precomputed first. The default location is
     ``{QADMET_DATA_DIR}/embeddings/xtb.parquet`` (= ``data/embeddings/xtb.parquet``).
-    다른 위치는 builder 인스턴스화 시 ``xtb_parquet_path`` kwarg 로 override 가능
-    (테스트 또는 비-표준 레이아웃 용).
+    Other locations can be overridden via the ``xtb_parquet_path`` kwarg when instantiating the builder
+    (for tests or non-standard layouts).
 
 Note:
-    precompute runner 는 builder 를 ``FEATURE_BUILDERS.get(name)()`` (kwargs 없음)
-    으로 인스턴스화하므로, 기본 path 는 ``__init__`` 에서 lazy 결정한다 (모듈 import
-    시점에는 path 검사 안 함 — registry 등록만).
+    Since the precompute runner instantiates the builder as ``FEATURE_BUILDERS.get(name)()`` (no kwargs)
+    the default path is determined lazily in ``__init__`` (at module import
+    time, the path is not checked — registry registration only).
 """
 
 from __future__ import annotations
@@ -34,7 +34,7 @@ import numpy as np
 from qadmet.features.registry import FEATURE_BUILDERS
 from qadmet.precompute.base import PrecomputeBase
 
-# xtb builder 의 출력 컬럼 — 본 마스크의 채널 순서를 일치시킨다.
+# Output columns of the xtb builder — align this mask's channel order with them.
 XTB_DESCRIPTOR_COLS: tuple[str, ...] = (
     "dipole",
     "homo_lumo_gap",
@@ -51,21 +51,21 @@ MASK_COLUMNS: tuple[str, ...] = (
 
 @FEATURE_BUILDERS.register("gfn_missing_vector")
 class GfnMissingVectorBuilder(PrecomputeBase):
-    """xtb 채널 4 종의 NaN 여부를 0/1 float 으로 노출하는 4-dim mask builder.
+    """4-dim mask builder exposing NaN status of the 4 xtb channels as 0/1 float.
 
     Args:
-        xtb_parquet_path: xtb builder 산출물 parquet. None 이면
-            ``{QADMET_DATA_DIR}/embeddings/xtb.parquet`` 를 사용 — precompute 표준 위치.
+        xtb_parquet_path: Parquet output of the xtb builder. If None,
+            ``{QADMET_DATA_DIR}/embeddings/xtb.parquet`` — the standard precompute location.
 
     Example:
         >>> builder = GfnMissingVectorBuilder()
         >>> result = builder.compute_batch(["CCO", "FAILED_SMI"])
-        >>> result["FAILED_SMI"]  # xtb 에 없으면 모두 1 (missing).
+        >>> result["FAILED_SMI"]  # All 1 (missing) if not present in xtb.
         array([1., 1., 1., 1.], dtype=float32)
     """
 
     name = "gfn_missing_vector"
-    column_prefix = ""  # 사용 안 함 — columns 직접 지정.
+    column_prefix = ""  # Not used — columns specified directly.
     output_dim = len(MASK_COLUMNS)
     default_batch_size = 4096
     default_checkpoint_every = 50000
@@ -88,18 +88,18 @@ class GfnMissingVectorBuilder(PrecomputeBase):
         return list(MASK_COLUMNS)
 
     def compute_batch(self, smiles: Sequence[str]) -> dict[str, np.ndarray]:
-        """SMILES 배치 → {smi: 4-dim 0/1 float vector}.
+        """SMILES batch → {smi: 4-dim 0/1 float vector}.
 
-        ParquetStore.lookup 결과에서 NaN → 1.0 (missing), finite → 0.0.
-        xtb parquet 에 SMILES 자체가 누락된 경우도 NaN 으로 반환되므로 자동으로 1.0.
+        In the ParquetStore.lookup result, NaN → 1.0 (missing), finite → 0.0.
+        Cases where the SMILES itself is missing from the xtb parquet are also returned as NaN, hence automatically 1.0.
         """
         from qadmet.features.stores import ParquetStore
 
         if not self.xtb_parquet_path.exists():
             raise FileNotFoundError(
-                f"xtb parquet 누락: {self.xtb_parquet_path}\n"
-                f"  먼저 ``qadmet precompute --recipe recipes/precompute/xtb.yaml`` 로 "
-                f"xtb 를 사전 계산하세요."
+                f"xtb parquet missing: {self.xtb_parquet_path}\n"
+                f"  First, using ``qadmet precompute --recipe recipes/precompute/xtb.yaml``, "
+                f"precompute xtb."
             )
         store = ParquetStore(self.xtb_parquet_path)
         arr = store.lookup(list(smiles), list(XTB_DESCRIPTOR_COLS))  # (N, 4) float64.

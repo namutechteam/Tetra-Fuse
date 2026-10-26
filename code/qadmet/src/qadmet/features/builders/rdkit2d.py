@@ -1,7 +1,7 @@
 """RDKit 2D descriptor builder (descriptastorus 200-dim).
 
-옛 ``scripts-old/precompute_rdkit2d.py`` 의 핵심 로직을 ``PrecomputeBase`` 위에 재구성.
-worker subprocess 격리 (한 분자가 worker 를 crash 시켜도 main 생존) 패턴은 유지.
+Rebuild the core logic of old ``scripts-old/precompute_rdkit2d.py`` on top of ``PrecomputeBase``.
+Maintain the worker subprocess isolation pattern (main survives even if a molecule crashes the worker).
 """
 
 from __future__ import annotations
@@ -16,15 +16,15 @@ from qadmet.precompute.base import PrecomputeBase
 
 RDKIT_DIM = 200
 
-# 모듈-전역: subprocess worker 가 fork 시 공유. main 에서는 lazy init.
+# Module-global: shared when subprocess worker forks. Lazy init in main.
 _GENERATOR = None
 
 
 def _worker_init() -> None:
-    """spawn worker 에서 descriptastorus generator 한 번만 만든다.
+    """Create the descriptastorus generator only once in the spawn worker.
 
     Why:
-        descriptastorus 는 main 에서 import 시 multiprocess 경고 출력. worker 에서만 import.
+        Importing descriptastorus in main prints a multiprocess warning. Import only in worker.
     """
     global _GENERATOR
     from descriptastorus.descriptors import rdDescriptors  # type: ignore
@@ -33,7 +33,7 @@ def _worker_init() -> None:
 
 
 def _worker_compute(smi: str) -> tuple[str, np.ndarray]:
-    """SMILES → (smi, 200-dim vector). 실패 시 zeros."""
+    """SMILES → (smi, 200-dim vector). Returns zeros on failure."""
     global _GENERATOR
     try:
         out = _GENERATOR.process(smi)
@@ -49,7 +49,7 @@ def _worker_compute(smi: str) -> tuple[str, np.ndarray]:
 
 @FEATURE_BUILDERS.register("rdkit2d")
 class RDKit2DBuilder(PrecomputeBase):
-    """descriptastorus.RDKit2D 200-dim. spawn-pool 격리."""
+    """descriptastorus.RDKit2D 200-dim. Isolated via spawn-pool."""
 
     name = "rdkit2d"
     column_prefix = "rd_"

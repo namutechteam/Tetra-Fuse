@@ -1,19 +1,19 @@
 """Uni-Mol2 (84M) frozen CLS embedding builder (768-dim).
 
-옛 ``scripts-old/precompute_unimol2_embeddings.py`` 의 RDKit ETKDG → Uni-Mol2 forward
-파이프라인을 ``PrecomputeBase`` 위에 재구성.
+Legacy ``scripts-old/precompute_unimol2_embeddings.py``'s RDKit ETKDG → Uni-Mol2 forward
+pipeline rebuilt on top of ``PrecomputeBase``.
 
-구조:
-    multiprocessing pool (CPU) 가 ETKDG + MMFF + featurize 를 병렬 처리하고,
-    main thread 는 GPU forward 로 cls_repr 를 받는다. 모델은 첫 ``compute_batch`` 호출
-    시 lazy 로드 후 재사용.
+Structure:
+    multiprocessing pool (CPU) processes ETKDG + MMFF + featurize in parallel, and
+    main thread receives cls_repr via GPU forward. The model, on the first ``compute_batch`` call,
+    is lazily loaded and then reused.
 
 Note:
-    - vendored ``qadmet.modules.backbones._vendor.unimol_v2`` 를 사용한다 (scripts-old 의
-      qw/backbones 와 byte-identical).
-    - ETKDG 가 실패하면 모든 채널 0 으로 채운다 (옛 동작과 동일). 하류 missing_policy
-      가 mask/drop 처리.
-    - ckpt 경로는 ``data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt`` 가 기본.
+    - uses vendored ``qadmet.modules.backbones._vendor.unimol_v2`` (byte-identical to scripts-old's
+      qw/backbones).
+    - if ETKDG fails, all channels are filled with 0 (same as legacy behavior). downstream missing_policy
+      handles mask/drop.
+    - ckpt path defaults to ``data/weights/unimol2_84m/modelzoo/84M/checkpoint.pt``.
 """
 
 from __future__ import annotations
@@ -39,9 +39,9 @@ def _featurize_one(smi_idx: tuple[int, str]) -> tuple[int, dict | None]:
     """Worker: SMILES → Uni-Mol2 feature dict (None on failure).
 
     Why:
-        ETKDG embedding + MMFF optimize + featurize 는 분자별로 시간 편차가 크다 —
-        worker process 분산으로 대기시간 평균화. featurize 는 vendored unimol_v2 의
-        ``mol2unimolv2`` 를 사용한다.
+        ETKDG embedding + MMFF optimize + featurize have large per-molecule time variance —
+        worker process distribution averages out wait time. featurize uses vendored unimol_v2's
+        ``mol2unimolv2``.
     """
     idx, smi = smi_idx
     try:
@@ -72,7 +72,7 @@ def _featurize_one(smi_idx: tuple[int, str]) -> tuple[int, dict | None]:
 
 
 def _init_worker() -> None:
-    """SIGINT 무시 — Ctrl+C 가 main 으로만 전파되도록."""
+    """Ignore SIGINT — so that Ctrl+C only propagates to main."""
     signal.signal(signal.SIGINT, signal.SIG_IGN)
 
 
@@ -147,7 +147,7 @@ class UniMol2Builder(PrecomputeBase):
 
             for gi, feat in it:
                 if feat is None:
-                    # 실패 분자는 0 벡터 (옛 동작 유지). missing_policy 가 마스킹 담당.
+                    # failed molecules get a 0 vector (preserving legacy behavior). missing_policy handles masking.
                     out[smiles[gi]] = np.zeros(EMBED_DIM, dtype=np.float32)
                     continue
                 pending.append((smiles[gi], feat))

@@ -8,6 +8,6 @@ features:
   embeddings:
     - molformer_tokens
 notes: |
-  Polaris ADME-Fang 6-task union SMILES 의 MoLFormer-XL token_ids + attention_mask.
-  출력: artifacts/precompute/precompute_polaris_fang_molformer_tokens/<hash>/data/molformer_tokens.parquet
-  → 실행 후 data/embeddings/polaris_fang_molformer_tokens.parquet 로 symlink 권장.
+  Polaris ADME-Fang 6-task union SMILES's MoLFormer-XL token_ids + attention_mask.
+  Output: artifacts/precompute/precompute_polaris_fang_molformer_tokens/<hash>/data/molformer_tokens.parquet
+  → After execution, recommend symlinking to data/embeddings/polaris_fang_molformer_tokens.parquet.
